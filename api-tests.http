@@ -1,0 +1,30 @@
+### Hotel Offer Orchestrator - API Tests
+### REST Client extension: har request ke upar "Send Request" link dikhega, usko click karo
+@baseUrl = http://localhost:3000
+
+### 1. Health Check
+GET {{baseUrl}}/health
+
+### 2. Supplier A - Raw Hotels (Delhi)
+GET {{baseUrl}}/supplierA/hotels?city=delhi
+
+### 3. Supplier B - Raw Hotels (Delhi)
+GET {{baseUrl}}/supplierB/hotels?city=delhi
+
+### 4. Get Hotels - Valid City with Overlaps (Delhi)
+GET {{baseUrl}}/api/hotels?city=delhi
+
+### 5. Get Hotels - City With No Results
+GET {{baseUrl}}/api/hotels?city=nowhere
+
+### 6. Get Hotels - Missing City Param (expect 400)
+GET {{baseUrl}}/api/hotels
+
+### 7. Get Hotels - Filtered by Price Range (Delhi, 5000-10000)
+GET {{baseUrl}}/api/hotels?city=delhi&minPrice=5000&maxPrice=10000
+
+### 8. Get Hotels - Mumbai (Overlap Set 2)
+GET {{baseUrl}}/api/hotels?city=mumbai
+
+### 9. Get Hotels - Goa (Overlap Set 3)
+GET {{baseUrl}}/api/hotels?city=goa

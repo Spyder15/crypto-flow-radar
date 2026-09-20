@@ -1,0 +1,8 @@
+services:
+  hotel-offer-orchestrator:
+    build: .
+    container_name: hotel-offer-orchestrator
+    ports:
+      - "3000:3000"   # API
+      - "7233:7233"   # Temporal gRPC frontend
+      - "8080:8080"   # Temporal Web UI
