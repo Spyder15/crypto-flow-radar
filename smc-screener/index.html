@@ -9,11 +9,11 @@
 <meta property="og:title" content="Crypto Flow Radar">
 <meta property="og:description" content="Free live scanner for Binance perps: trend, EMA setups and sector flow.">
 <meta property="og:url" content="https://spyder15.github.io/crypto-flow-radar/">
-<meta property="og:image" content="https://spyder15.github.io/crypto-flow-radar/og.png?v=2">
+<meta property="og:image" content="https://spyder15.github.io/crypto-flow-radar/og.png?v=3">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Crypto Flow Radar">
 <meta name="twitter:description" content="Free live scanner for Binance perps: trend, EMA setups and sector flow.">
-<meta name="twitter:image" content="https://spyder15.github.io/crypto-flow-radar/og.png?v=2">
+<meta name="twitter:image" content="https://spyder15.github.io/crypto-flow-radar/og.png?v=3">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -28,22 +28,27 @@
     </label>
     <label class="chk"><input type="checkbox" id="auto"> Auto-refresh 2 min</label>
     <label class="chk"><input type="checkbox" id="notif"> 🔔 Alerts</label>
+    <label class="chk"><input type="checkbox" id="favOnly"> ★ only</label>
     <button id="refresh">Scan now</button>
+    <button id="theme" class="ghost" title="Light / dark">◐</button>
   </div>
 </header>
 
 <div id="status" class="status">Press “Scan now”.</div>
+<div id="mkt" class="cards mkt"></div>
 
 <nav id="tabs">
-  <button data-tab="smc" class="on">FVG Setups</button>
-  <button data-tab="trend">Trend</button>
+  <button data-tab="trend" class="on">Trend</button>
+  <button data-tab="smc">FVG Setups</button>
   <button data-tab="ema">EMA</button>
   <button data-tab="sector">Sectors</button>
+  <button data-tab="alerts">Alerts</button>
   <button data-tab="proof">Reality check</button>
+  <span class="ctrl2"><button id="csv" class="ghost" title="Download current table as CSV">⬇ CSV</button><button id="share" class="ghost" title="Copy link with current settings">🔗 Link</button></span>
 </nav>
 
 <main>
-  <section id="tab-smc">
+  <section id="tab-smc" class="hidden">
     <details class="panel" id="smcSettings">
       <summary>Strategy settings (saved in your browser)</summary>
       <div class="grid">
@@ -73,7 +78,7 @@
     <p class="note">WAITING = entry level not touched yet. TRIGGERED = touched within the last 3 closed candles. Click a row for the chart and details.</p>
   </section>
 
-  <section id="tab-trend" class="hidden">
+  <section id="tab-trend">
     <div class="filters">
       <label>Min score <select id="t_min"><option>3</option><option selected>4</option><option>5</option></select></label>
       <label>Side <select id="t_side"><option value="">All</option><option>LONG</option><option>SHORT</option></select></label>
@@ -107,6 +112,28 @@
     <p class="note">Share = sector’s portion of total 24h quote volume across scanned coins, compared with the average share of the previous 7 closed days. Participation = % of coins in the sector that are up in 24h. Sector tags are a static, hand-made list; unlisted coins fall under “Other”.</p>
   </section>
 
+  <section id="tab-alerts" class="hidden">
+    <details class="panel" open>
+      <summary>Alert rules (saved in your browser, checked after every scan)</summary>
+      <div class="rule">
+        <label>Side<select id="a_side"><option value="ANY">Any</option><option>LONG</option><option>SHORT</option></select></label>
+        <label>Min trend score<select id="a_score"><option>0</option><option>3</option><option>4</option><option selected>5</option></select></label>
+        <label>EMA stack<select id="a_ema"><option value="0">Ignore</option><option value="1">Must match side</option></select></label>
+        <label>EMA21 pullback<select id="a_pb"><option value="0">Ignore</option><option value="1">Required</option></select></label>
+        <label>FVG setup<select id="a_setup"><option value="">Ignore</option><option value="ANY">Any</option><option>WAITING</option><option>TRIGGERED</option></select></label>
+        <label>Min vol vs 7d (×)<input type="number" id="a_vol" value="0" min="0" step="0.1"></label>
+        <label>Min ADX<input type="number" id="a_adx" value="0" min="0" max="60"></label>
+        <button id="a_add">Add rule</button>
+      </div>
+      <div id="ruleList"></div>
+    </details>
+    <h2>Matching right now</h2>
+    <div class="tablewrap"><table id="alertTable"></table></div>
+    <h2>New matches log</h2>
+    <div class="tablewrap"><table id="alertLog"></table></div>
+    <p class="note">A coin is logged (and a browser notification sent, if 🔔 is on) once per candle per rule. Alerts only work while this tab is open. These are screener conditions, not trade signals.</p>
+  </section>
+
   <section id="tab-proof" class="hidden">
     <div class="verdict"><b>Verdict:</b> after fixing a lookahead bug and adding fees, none of the setups here showed a reliable edge. Use this site as a <b>market scanner</b> (what is trending, where volume moves) and plan your own entries — not as a signal service.</div>
     <h2>What was tested (lookahead-free, fees included)</h2>
@@ -122,6 +149,11 @@
       <tr><td>Sector flow</td><td>—</td><td>Descriptive only. Never backtested as a signal</td><td class="mid">Unvalidated</td></tr>
     </table></div>
     <p class="note">An earlier version of this page showed +0.4 R. That came from a bug: a candle closing through the zone cancelled the order <i>before</i> checking whether the entry had already been hit, which silently deleted losing trades. It has been fixed in both the engine and these numbers.</p>
+    <h2>Forward test (live, your browser)</h2>
+    <p class="note">Every FVG setup first seen as WAITING is logged with its exact entry/SL/TP and then resolved from later closed candles (strict rules, fees included). This is the honest out-of-sample check — it only grows while this site is open. Stored locally.</p>
+    <div id="fwdCards" class="cards"></div>
+    <div class="row"><button id="fwdReset" class="ghost">Clear forward-test log</button></div>
+    <div class="tablewrap"><table id="fwdTable"></table></div>
     <h2>Run it yourself</h2>
     <p class="note">Re-runs the current settings over the last ~1000 candles of every scanned coin (fees included). It is a sanity check on recent data, not proof.</p>
     <div class="row"><button id="runBT">Run backtest on scanned coins</button> <span id="btStatus"></span></div>
@@ -150,7 +182,10 @@
   <h3 id="mTitle"></h3>
   <div id="tfBar" class="tfbar"></div>
   <canvas id="chart" width="1000" height="460"></canvas>
+  <div class="note">Scroll to zoom · drag to pan · hover for OHLC · double-click to reset</div>
   <div id="mInfo" class="cards"></div>
+  <div id="mDeriv" class="cards"></div>
+  <div id="mMtf" class="mtf"></div>
 </div></div>
 
 <script src="lib.js"></script>

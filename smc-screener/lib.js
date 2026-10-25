@@ -109,6 +109,30 @@
     return { setups: out, bias: res.bias, lastBreak: res.breaks[res.breaks.length - 1] || null, swings: res.swings, breaks: res.breaks, atr: res.atr, ema100: res.ema };
   };
 
+  // Forward-test: advance one logged setup using only closed candles after it was first seen.
+  // Same rules as the backtest: SL is checked first, and on the fill bar only SL is checked.
+  Lib.resolveFwd = (e, d, P) => {
+    if (e.state === "win" || e.state === "loss" || e.state === "expired") return e;
+    P = Object.assign({}, Lib.DEFAULTS, P);
+    const s = e.side === "LONG" ? 1 : -1, risk = Math.abs(e.entry - e.sl), cost = e.entry * 2 * P.fee / 100;
+    for (const x of d) {
+      if (x.t <= (e.lastT || e.seenT)) continue;
+      e.lastT = x.t; e.bars = (e.bars || 0) + 1;
+      const hs = s === 1 ? x.l <= e.sl : x.h >= e.sl;
+      if (e.state === "pending") {
+        const hit = s === 1 ? x.l <= e.entry : x.h >= e.entry;
+        if (hit) { e.state = "open"; e.fillT = x.t; if (hs) { e.state = "loss"; e.r = -1 - cost / risk; return e; } continue; }
+        if (s === 1 ? x.c < e.inval : x.c > e.inval) { e.state = "expired"; return e; }
+        if (e.bars + (e.age0 || 0) > P.maxwait) { e.state = "expired"; return e; }
+      } else {
+        const ht = s === 1 ? x.h >= e.tp : x.l <= e.tp;
+        if (hs) { e.state = "loss"; e.r = -1 - cost / risk; return e; }
+        if (ht) { e.state = "win"; e.r = (Math.abs(e.tp - e.entry) / risk) - cost / risk; return e; }
+      }
+    }
+    return e;
+  };
+
   // ---------------- Trend confirmation / EMA screener (port of crypto_scanner.analyze) ----------------
   Lib.analyze = (d, oi) => {
     const h = d.map((x) => x.h), l = d.map((x) => x.l), c = d.map((x) => x.c), v = d.map((x) => x.v), N = d.length;
