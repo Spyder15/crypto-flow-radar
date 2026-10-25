@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SMC Flow Radar — FVG signals, trend confirmation, EMA &amp; sector flow</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo">◆</span> SMC Flow Radar <small>Binance USDT perps · closed candles only</small></div>
+  <div class="controls">
+    <label>TF
+      <select id="tf"><option>5m</option><option>15m</option><option selected>1h</option><option>4h</option></select>
+    </label>
+    <label>Coins
+      <select id="top"><option>30</option><option>60</option><option selected>100</option><option>150</option></select>
+    </label>
+    <label class="chk"><input type="checkbox" id="auto"> Auto-refresh 2 min</label>
+    <label class="chk"><input type="checkbox" id="notif"> 🔔 Alerts</label>
+    <button id="refresh">Scan now</button>
+  </div>
+</header>
+
+<div id="status" class="status">Press “Scan now”.</div>
+<div id="tfwarn" class="warn hidden">⚠ SMC defaults were tuned on 1H candles. On other timeframes the settings are untested — treat signals as unvalidated.</div>
+
+<nav id="tabs">
+  <button data-tab="smc" class="on">SMC Signals</button>
+  <button data-tab="trend">Trend Confirmation</button>
+  <button data-tab="ema">EMA Screener</button>
+  <button data-tab="sector">Sector Flow</button>
+  <button data-tab="proof">Backtest &amp; Proof</button>
+  <button data-tab="how">How it works</button>
+</nav>
+
+<main>
+  <section id="tab-smc">
+    <details class="panel" id="smcSettings">
+      <summary>Strategy settings (saved in your browser)</summary>
+      <div class="grid">
+        <label>Pivot bars (n)<input type="number" id="p_n" min="1" max="8" step="1"></label>
+        <label>Risk:Reward<input type="number" id="p_rr" min="0.5" max="6" step="0.25"></label>
+        <label>Entry depth in FVG (0=near edge, 1=far edge)<input type="number" id="p_frac" min="0" max="1" step="0.05"></label>
+        <label>SL buffer (× ATR)<input type="number" id="p_buf" min="0" max="3" step="0.1"></label>
+        <label>FVG within N bars of break<input type="number" id="p_lookback" min="1" max="60" step="1"></label>
+        <label>Order valid (bars)<input type="number" id="p_maxwait" min="5" max="200" step="5"></label>
+        <label>Min FVG size (× ATR)<input type="number" id="p_minfvg" min="0" max="2" step="0.1"></label>
+        <label>Fee per side (%)<input type="number" id="p_fee" min="0" max="0.3" step="0.01"></label>
+        <label>Break type<select id="p_only"><option value="">BOS + CHoCH</option><option value="CHoCH">CHoCH only</option><option value="BOS">BOS only</option></select></label>
+        <label>EMA100 trend filter<select id="p_trend"><option value="0">Off</option><option value="1">On</option></select></label>
+      </div>
+      <div class="row"><button id="applySmc">Apply &amp; recompute</button> <button id="resetSmc" class="ghost">Reset to tested defaults</button></div>
+    </details>
+    <div class="filters">
+      <label>Side <select id="f_side"><option value="">All</option><option>LONG</option><option>SHORT</option></select></label>
+      <label>Status <select id="f_status"><option value="">All</option><option>WAITING</option><option>TRIGGERED</option></select></label>
+      <label>Max distance to entry <select id="f_dist"><option value="">Any</option><option value="1">≤ 1%</option><option value="2">≤ 2%</option><option value="3" selected>≤ 3%</option><option value="5">≤ 5%</option></select></label>
+      <label class="chk"><input type="checkbox" id="f_edge"> Only coins with positive own backtest</label>
+      <label class="chk"><input type="checkbox" id="f_trend"> Only aligned with trend score (≥4/5)</label>
+      <input id="f_search" placeholder="Search symbol…">
+    </div>
+    <div id="smcSummary" class="cards"></div>
+    <div class="tablewrap"><table id="smcTable"></table></div>
+    <p class="note">WAITING = limit order level not touched yet. TRIGGERED = entry touched within the last 3 closed candles (check price before chasing). “Coin backtest” is the same rules run over that coin’s last ~1000 candles (in-sample, after fees) — a sanity check, not a promise.</p>
+  </section>
+
+  <section id="tab-trend" class="hidden">
+    <div class="filters">
+      <label>Min score <select id="t_min"><option>3</option><option selected>4</option><option>5</option></select></label>
+      <label>Side <select id="t_side"><option value="">All</option><option>LONG</option><option>SHORT</option></select></label>
+      <input id="t_search" placeholder="Search symbol…">
+    </div>
+    <div class="tablewrap"><table id="trendTable"></table></div>
+    <p class="note">5 checks: DMI (+DI&gt;−DI and +DI&gt;ADX), RSI&gt;EMA(RSI,14), RSI&gt;50, OBV&gt;EMA50, Open Interest rising 2 bars in a row. Score ≥4 = aligned. Our gold backtest of this score showed no reliable edge on its own — use it as a filter, not as a signal.</p>
+  </section>
+
+  <section id="tab-ema" class="hidden">
+    <div class="filters">
+      <label>Strategy
+        <select id="e_mode">
+          <option value="fullbull">Full Bull (9&gt;21&gt;50&gt;200)</option>
+          <option value="fullbear">Full Bear (9&lt;21&lt;50&lt;200)</option>
+          <option value="pbl">Pullback LONG (full bull + EMA21 tag)</option>
+          <option value="pbs">Pullback SHORT (full bear + EMA21 tag)</option>
+          <option value="all">All coins</option>
+        </select>
+      </label>
+      <label>Min ADX <input type="number" id="e_adx" value="0" min="0" max="60" style="width:70px"></label>
+      <input id="e_search" placeholder="Search symbol…">
+    </div>
+    <div class="tablewrap"><table id="emaTable"></table></div>
+    <p class="note">Pullback = full EMA stack, last 3 candles touched EMA21 (within 0.25 ATR) and the latest close is back on the trend side. Our 23-coin 1H backtest of this pullback found no consistent edge (0 of 119 configs positive in all 3 folds) — it is a screener view, not a validated signal.</p>
+  </section>
+
+  <section id="tab-sector" class="hidden">
+    <div id="sectorCards" class="cards"></div>
+    <div class="tablewrap"><table id="sectorTable"></table></div>
+    <p class="note">Share = sector’s portion of total 24h quote volume across scanned coins, compared with the average share of the previous 7 closed days. Participation = % of coins in the sector that are up in 24h. Sector tags are a static, hand-made list; unlisted coins fall under “Other”.</p>
+  </section>
+
+  <section id="tab-proof" class="hidden">
+    <h2>What was actually tested</h2>
+    <div class="tablewrap"><table class="plain">
+      <tr><th>Test</th><th>Data</th><th>Result</th><th>Verdict</th></tr>
+      <tr><td>SMC (BOS/CHoCH → FVG retrace), RR 2.5, entry 0.75</td><td>Gold GC=F 1H, ~2y, cost 0.4pt, 3 folds</td><td>≈ +0.35 / +0.48 / +0.29 R, win ≈40%, PF ≈1.6</td><td class="good">Positive in all folds</td></tr>
+      <tr><td>Same rules, no re-tuning</td><td>19 Binance perps 1H, 3 folds, <b>zero fees</b></td><td>≈ +0.40 / +0.45 / +0.38 R, PF ≈1.7</td><td class="mid">Positive, fees not yet included</td></tr>
+      <tr><td>EMA-stack + score + EMA21 pullback</td><td>23 Binance perps 1H, 3 folds, 120 configs, fee 0.06%</td><td>0 of 119 configs positive in all folds; median −0.04 R</td><td class="bad">No edge</td></tr>
+      <tr><td>Trend-confirmation score</td><td>Gold 1H</td><td>Median expectancy ≈ 0; adds nothing as a filter on SMC</td><td class="bad">No edge</td></tr>
+      <tr><td>GEX levels</td><td>—</td><td>Needs ≥15 daily snapshots; not validated yet</td><td class="mid">Unknown</td></tr>
+    </table></div>
+    <h2>Run it yourself — live backtest in your browser</h2>
+    <p class="note">Runs the current strategy settings over the last ~1000 candles of every coin loaded by the scan (fees included). This is in-sample on recent data.</p>
+    <div class="row"><button id="runBT">Run backtest on scanned coins</button> <span id="btStatus"></span></div>
+    <div id="btCards" class="cards"></div>
+    <div class="tablewrap"><table id="btTable"></table></div>
+    <h2>Honest caveats</h2>
+    <ul class="note">
+      <li>Win rate ≈ 40% at RR 2.5 is normal for this kind of strategy: profit comes from winners being 2.5× the losers, so losing streaks of 6–8 trades will happen.</li>
+      <li>Coins are highly correlated, so 19 coins ≠ 19 independent proofs.</li>
+      <li>Fills are assumed at the limit price; real slippage, funding and missed fills will reduce results.</li>
+      <li>No signal here is financial advice or a guaranteed accuracy figure. Paper-trade first and size small.</li>
+    </ul>
+  </section>
+
+  <section id="tab-how" class="hidden">
+    <h2>Strategy logic</h2>
+    <ol class="note">
+      <li><b>Structure:</b> a swing high/low is confirmed after <i>n</i> candles on each side.</li>
+      <li><b>Break:</b> a close beyond the last swing sets the bias. Same direction as before = <b>BOS</b>, opposite = <b>CHoCH</b>.</li>
+      <li><b>FVG:</b> within <i>N</i> bars of the break, a 3-candle gap in the break direction is the entry zone.</li>
+      <li><b>Order:</b> limit entry at the chosen depth inside the gap. SL = far edge of the gap ± buffer×ATR. TP = RR × risk. One order is dropped if price closes through the zone or it expires.</li>
+    </ol>
+    <h2>Other tabs</h2>
+    <ul class="note">
+      <li><b>Trend Confirmation</b> — Gauls-style 5-check score.</li>
+      <li><b>EMA Screener</b> — Full Bull, Full Bear and Pullback filters.</li>
+      <li><b>Sector Flow</b> — where volume is moving between sectors.</li>
+    </ul>
+    <h2>Deploy</h2>
+    <p class="note">This is a static site. Drag the <code>smc-screener</code> folder onto Netlify Drop (or <code>netlify deploy --dir smc-screener --prod</code>). Data comes straight from Binance’s public API in the visitor’s browser, so there is no server to overload. If Binance is blocked in your region, use a VPN.</p>
+  </section>
+</main>
+
+<div id="modal" class="modal hidden"><div class="modalbox">
+  <button id="closeModal" class="ghost close">✕</button>
+  <h3 id="mTitle"></h3>
+  <canvas id="chart" width="1000" height="460"></canvas>
+  <div id="mInfo" class="cards"></div>
+</div></div>
+
+<script src="lib.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
