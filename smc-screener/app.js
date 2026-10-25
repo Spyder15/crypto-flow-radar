@@ -207,23 +207,45 @@
   }
 
   // ---------- detail modal + chart ----------
+  const DTF = ["1m", "5m", "15m", "30m", "1h", "2h", "4h"], klCache = {};
+  let cur = null;
   function openDetail(x) {
-    const r = x.r; $("modal").classList.remove("hidden");
-    $("mTitle").textContent = `${base(r.sym)}/USDT · ${$("tf").value} · ${r.live.bias === 1 ? "bullish" : r.live.bias === -1 ? "bearish" : "no"} structure bias`;
-    const sel = x.entry != null ? x : null;
-    drawChart(r, sel);
+    cur = { r: x.r, clicked: x.entry != null ? x : null, tf: $("tf").value };
+    $("modal").classList.remove("hidden"); showDetail();
+  }
+  async function showDetail() {
+    const { r, clicked, tf } = cur, scanTf = $("tf").value;
+    $("tfBar").innerHTML = DTF.map((t) => `<button class="${t === tf ? "on" : ""}" data-tf="${t}">${t}</button>`).join("");
+    $("tfBar").querySelectorAll("button").forEach((b) => b.onclick = () => { cur.tf = b.dataset.tf; showDetail(); });
+    let view, sel = null;
+    if (tf === scanTf) { view = { d: r.d, live: r.live }; sel = clicked; }
+    else {
+      $("mTitle").textContent = `${base(r.sym)}/USDT · ${tf} · loading…`;
+      const key = r.sym + tf; let c = klCache[key];
+      if (!c || Date.now() - c.t > 60000) {
+        const k = await api("/fapi/v1/klines", { symbol: r.sym, interval: tf, limit: 1000 });
+        if (!cur || cur.tf !== tf) return;
+        if (!k || k.length < 100) { $("mTitle").textContent = `${base(r.sym)}/USDT · ${tf} · data unavailable`; return; }
+        c = klCache[key] = { t: Date.now(), d: Lib.parseKlines(k.slice(0, -1)) };
+      }
+      view = { d: c.d, live: Lib.liveSetups(c.d, P) };
+      sel = view.live.setups.slice().sort((p, q) => p.age - q.age)[0] || null;
+    }
+    const bias = view.live.bias;
+    $("mTitle").textContent = `${base(r.sym)}/USDT · ${tf} · ${bias === 1 ? "bullish" : bias === -1 ? "bearish" : "no"} structure bias` + (tf !== scanTf ? " · latest setup on this timeframe" : "");
+    drawChart(view, sel);
     const a = r.an;
-    $("mInfo").innerHTML = (sel ? card("Setup", `${sel.side} ${sel.status}`, sel.side === "LONG" ? "good" : "bad") + card("Entry / SL / TP", `${fmtP(sel.entry)} / ${fmtP(sel.sl)} / ${fmtP(sel.tp)}`) + card("RR · Risk · Break", `1:${sel.rr} · ${f1(sel.riskPct)}% · ${sel.kind}`) + card("Order age", sel.age + " bars") : card("Setups", r.live.setups.length ? r.live.setups.length : "none")) +
-      card("Trend score", `${a.bull} bull / ${a.bear} bear`) + card("EMA stack", a.ema) + card("ADX · RSI", `${f1(a.adx, 0)} · ${f1(a.rsi, 0)}`) +
-      card("Coin backtest", r.st.n ? `${r.st.n}t · ${f1(r.st.win * 100, 0)}% · ${sgn(r.st.exp)}R` : "no trades", cls(r.st.exp)) + card("24h", sgn(+r.tk.priceChangePercent) + "%", cls(+r.tk.priceChangePercent));
+    $("mInfo").innerHTML = (sel ? card("Setup", `${sel.side} ${sel.status}`, sel.side === "LONG" ? "good" : "bad") + card("Entry / SL / TP", `${fmtP(sel.entry)} / ${fmtP(sel.sl)} / ${fmtP(sel.tp)}`) + card("RR · Risk · Break", `1:${sel.rr} · ${f1(sel.riskPct)}% · ${sel.kind}`) + card("Order age", sel.age + " bars") : card("Setups", view.live.setups.length || "none on this timeframe")) +
+      card(`Trend score (${scanTf})`, `${a.bull} bull / ${a.bear} bear`) + card("EMA stack", a.ema) + card("ADX · RSI", `${f1(a.adx, 0)} · ${f1(a.rsi, 0)}`) + card("24h", sgn(+r.tk.priceChangePercent) + "%", cls(+r.tk.priceChangePercent));
   }
   function drawChart(r, sel) {
-    const cv = $("chart"), g = cv.getContext("2d"), W = cv.width, H = cv.height, N = 130, d = r.d, s0 = d.length - N, v = d.slice(s0);
+    const cv = $("chart"), g = cv.getContext("2d"), W = cv.width, H = cv.height, d = r.d, N = Math.min(130, d.length), s0 = d.length - N, v = d.slice(s0);
     const c = d.map((x) => x.c), e21 = Lib.ema(c, 21).slice(s0), e50 = Lib.ema(c, 50).slice(s0), e200 = Lib.ema(c, 200).slice(s0);
-    let hi = Math.max(...v.map((x) => x.h)), lo = Math.min(...v.map((x) => x.l));
+    const q = (arr, p) => arr.slice().sort((x, y) => x - y)[Math.floor((arr.length - 1) * p)];
+    let hi = q(v.map((x) => x.h), 0.99), lo = q(v.map((x) => x.l), 0.01); // ignore extreme spikes when scaling
     if (sel) { hi = Math.max(hi, sel.tp, sel.sl, sel.entry); lo = Math.min(lo, sel.tp, sel.sl, sel.entry); }
     const pad = (hi - lo) * 0.05; hi += pad; lo -= pad;
-    const L = 8, R = 78, T = 8, B = 18, cw = (W - L - R) / N, X = (i) => L + (i - s0 + 0.5) * cw, Y = (p) => T + (hi - p) / (hi - lo) * (H - T - B);
+    const L = 8, R = 78, T = 8, B = 18, cw = (W - L - R) / N, X = (i) => L + (i - s0 + 0.5) * cw, Y = (p) => Math.min(H - B, Math.max(T, T + (hi - p) / (hi - lo) * (H - T - B)));
     g.clearRect(0, 0, W, H); g.fillStyle = "#0d1117"; g.fillRect(0, 0, W, H);
     g.strokeStyle = "#1f2630"; g.fillStyle = "#8b95a3"; g.font = "11px sans-serif"; g.textAlign = "left";
     for (let k = 0; k <= 5; k++) { const p = lo + (hi - lo) * k / 5, y = Y(p); g.beginPath(); g.moveTo(L, y); g.lineTo(W - R, y); g.stroke(); g.fillText(fmtP(p), W - R + 6, y + 4); }
