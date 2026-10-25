@@ -108,6 +108,7 @@
       <tr><td>FVG setups on gold</td><td>GC=F 1H, ~2 years, 3 folds</td><td>−0.21 / −0.05 / −0.10 R</td><td class="bad">Loses money</td></tr>
       <tr><td>EMA stack + trend score + EMA21 pullback</td><td>23 perps 1H, 120 configs, 3 folds</td><td>0 of 119 configs positive in all folds</td><td class="bad">No edge</td></tr>
       <tr><td>Trend-confirmation score alone</td><td>Gold 1H</td><td>Median expectancy ≈ 0</td><td class="bad">No edge</td></tr>
+      <tr><td>Funding-rate extremes (fade and follow), cross-sectional 7d/1d momentum and reversal, Donchian 20/40/60-day breakouts</td><td>45 perps, 8H, ~3 years, 3 folds, fees + funding paid included, non-overlapping portfolio returns</td><td>Fading funding and reversal lose in every fold. “Follow” variants and breakouts looked positive per-trade (overlap-inflated), but as portfolios the folds flip sign and t-stats stay below 2 in most</td><td class="bad">No robust edge</td></tr>
       <tr><td>Sector flow</td><td>—</td><td>Descriptive only. Never backtested as a signal</td><td class="mid">Unvalidated</td></tr>
     </table></div>
     <p class="note">An earlier version of this page showed +0.4 R. That came from a bug: a candle closing through the zone cancelled the order <i>before</i> checking whether the entry had already been hit, which silently deleted losing trades. It has been fixed in both the engine and these numbers.</p>
