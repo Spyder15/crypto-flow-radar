@@ -47,10 +47,12 @@
       const keep = [];
       for (const z of pend) {
         if (i <= z.t0 || i - z.t0 > P.maxwait || i <= busy) { if (i - z.t0 <= P.maxwait) keep.push(z); continue; }
-        const { s, top, bot } = z; let ent, st, hit;
-        if (s === -1) { if (c[i] > top) continue; ent = bot + (top - bot) * P.frac; hit = h[i] >= ent; st = top + P.buf * a[i]; }
-        else { if (c[i] < bot) continue; ent = top - (top - bot) * P.frac; hit = l[i] <= ent; st = bot - P.buf * a[i]; }
-        if (hit) { const r = onFill(i, z, ent, st, a[i]); if (r != null) busy = r; continue; }
+        const { s, top, bot } = z; let ent, st, hit; const ai = P.strict === false ? a[i] : a[i - 1];
+        const strict = P.strict !== false;
+        if (s === -1) { if (!strict && c[i] > top) continue; ent = bot + (top - bot) * P.frac; hit = h[i] >= ent; st = top + P.buf * ai; }
+        else { if (!strict && c[i] < bot) continue; ent = top - (top - bot) * P.frac; hit = l[i] <= ent; st = bot - P.buf * ai; }
+        if (hit) { const r = onFill(i, z, ent, st, ai); if (r != null) busy = r; continue; }
+        if (strict && (s === -1 ? c[i] > top : c[i] < bot)) continue; // invalidated by a close through the zone, effective after this bar
         keep.push(z);
       }
       pend = keep;

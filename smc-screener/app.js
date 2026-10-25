@@ -48,7 +48,6 @@
   async function scan() {
     if (busy) return; busy = true; $("refresh").disabled = true;
     const tf = $("tf").value, top = +$("top").value;
-    $("tfwarn").classList.toggle("hidden", tf === "1h");
     try {
       setStatus("Loading tickers…");
       const tk = await api("/fapi/v1/ticker/24hr");
@@ -107,7 +106,7 @@
       out.push(Object.assign({ sym: r.sym, r, score }, s));
     }));
     const side = $("f_side").value, status = $("f_status").value, q = $("f_search").value.trim().toUpperCase();
-    return out.filter((x) => (!side || x.side === side) && (!status || x.status === status) && (!$("f_dist").value || x.status === "TRIGGERED" || Math.abs(x.distPct) <= +$("f_dist").value) && (!q || x.sym.includes(q)) && (!$("f_edge").checked || (x.r.st.n >= 8 && x.r.st.exp > 0)) && (!$("f_trend").checked || x.score >= 4));
+    return out.filter((x) => (!side || x.side === side) && (!status || x.status === status) && (!$("f_dist").value || x.status === "TRIGGERED" || Math.abs(x.distPct) <= +$("f_dist").value) && (!q || x.sym.includes(q)) && (!$("f_trend").checked || x.score >= 4));
   }
   function renderSmc() {
     const data = smcRows(), all = rows.reduce((a, r) => a + r.live.setups.length, 0);
@@ -115,20 +114,16 @@
     const tot = Lib.stats(rows.flatMap((r) => r.bt));
     $("smcSummary").innerHTML = card("Coins scanned", rows.length) + card("Active setups", `${data.length}<span class="dim" style="font-size:12px"> / ${all}</span>`) + card("Triggered now", trig, trig ? "mid" : "") +
       card("Long / Short", `${data.filter((x) => x.side === "LONG").length} / ${data.filter((x) => x.side === "SHORT").length}`) +
-      card("Backtest (all coins, after fees)", tot.n ? `${tot.n} trades · ${f1(tot.win * 100, 0)}% win · ${sgn(tot.exp)}R` : "-", tot.exp > 0 ? "good" : "bad");
+      card("Backtest, last ~1000 bars", tot.n ? `${f1(tot.win * 100, 0)}% win · ${sgn(tot.exp)}R` : "-", tot.exp > 0 ? "good" : "bad");
     table($("smcTable"), [
       { k: "sym", t: "Symbol", v: (x) => x.sym, f: (x) => `<b>${esc(base(x.sym))}</b>` },
       { k: "side", t: "Side", v: (x) => x.side, f: (x) => pill(x.side) },
       { k: "status", t: "Status", v: (x) => x.status, f: (x) => x.status === "TRIGGERED" ? `<span class="pill trig">TRIGGERED ${x.filledBarsAgo}b ago</span>` : `<span class="pill wait">WAITING</span>` },
-      { k: "kind", t: "Break", v: (x) => x.kind },
       { k: "entry", t: "Entry", v: (x) => x.entry, f: (x) => fmtP(x.entry) },
       { k: "sl", t: "Stop loss", v: (x) => x.sl, f: (x) => fmtP(x.sl) },
       { k: "tp", t: "Take profit", v: (x) => x.tp, f: (x) => fmtP(x.tp) },
-      { k: "risk", t: "Risk %", v: (x) => x.riskPct, f: (x) => f1(x.riskPct) },
       { k: "dist", t: "Dist to entry", v: (x) => Math.abs(x.distPct), f: (x) => `<span class="${x.status === "TRIGGERED" ? "dim" : ""}">${sgn(x.distPct)}%</span>` },
-      { k: "age", t: "Age (bars)", v: (x) => x.age },
       { k: "score", t: "Trend score", v: (x) => x.score, f: (x) => `${x.score}/5 ` + dots(Object.values(x.r.an.checks).map((c) => x.side === "LONG" ? c : (c === x.r.an.checks.oi ? c : !c)), x.side === "SHORT") },
-      { k: "bt", t: "Coin backtest", v: (x) => x.r.st.exp, f: (x) => x.r.st.n ? `<span class="${cls(x.r.st.exp)}">${sgn(x.r.st.exp)}R</span> <span class="dim">${x.r.st.n}t · ${f1(x.r.st.win * 100, 0)}%</span>` : "-" },
     ], data, openDetail, { k: "dist", dir: 1 });
   }
 
@@ -218,7 +213,7 @@
     const sel = x.entry != null ? x : null;
     drawChart(r, sel);
     const a = r.an;
-    $("mInfo").innerHTML = (sel ? card("Setup", `${sel.side} ${sel.status}`, sel.side === "LONG" ? "good" : "bad") + card("Entry / SL / TP", `${fmtP(sel.entry)} / ${fmtP(sel.sl)} / ${fmtP(sel.tp)}`) + card("RR · Risk", `1:${sel.rr} · ${f1(sel.riskPct)}%`) : card("Setups", r.live.setups.length ? r.live.setups.length : "none")) +
+    $("mInfo").innerHTML = (sel ? card("Setup", `${sel.side} ${sel.status}`, sel.side === "LONG" ? "good" : "bad") + card("Entry / SL / TP", `${fmtP(sel.entry)} / ${fmtP(sel.sl)} / ${fmtP(sel.tp)}`) + card("RR · Risk · Break", `1:${sel.rr} · ${f1(sel.riskPct)}% · ${sel.kind}`) + card("Order age", sel.age + " bars") : card("Setups", r.live.setups.length ? r.live.setups.length : "none")) +
       card("Trend score", `${a.bull} bull / ${a.bear} bear`) + card("EMA stack", a.ema) + card("ADX · RSI", `${f1(a.adx, 0)} · ${f1(a.rsi, 0)}`) +
       card("Coin backtest", r.st.n ? `${r.st.n}t · ${f1(r.st.win * 100, 0)}% · ${sgn(r.st.exp)}R` : "no trades", cls(r.st.exp)) + card("24h", sgn(+r.tk.priceChangePercent) + "%", cls(+r.tk.priceChangePercent));
   }
@@ -265,11 +260,11 @@
   $("applySmc").onclick = () => { readSettings(); if (rows.length) { computeSmc(); renderAll(); } };
   $("resetSmc").onclick = () => { P = Object.assign({}, DEF); P.only = null; localStorage.removeItem("smcP"); loadSettings(); $("p_only").value = ""; if (rows.length) { computeSmc(); renderAll(); } };
   $("runBT").onclick = () => { if (!rows.length) return scan(); computeSmc(); renderBt(); };
-  ["f_side", "f_status", "f_dist", "f_edge", "f_trend"].forEach((id) => $(id).onchange = () => rows.length && renderSmc());
+  ["f_side", "f_status", "f_dist", "f_trend"].forEach((id) => $(id).onchange = () => rows.length && renderSmc());
   $("f_search").oninput = () => rows.length && renderSmc();
   ["t_min", "t_side"].forEach((id) => $(id).onchange = () => rows.length && renderTrend()); $("t_search").oninput = () => rows.length && renderTrend();
   ["e_mode"].forEach((id) => $(id).onchange = () => rows.length && renderEma()); $("e_adx").oninput = () => rows.length && renderEma(); $("e_search").oninput = () => rows.length && renderEma();
-  $("tf").onchange = () => { $("tfwarn").classList.toggle("hidden", $("tf").value === "1h"); scan(); }; $("top").onchange = scan;
+  $("tf").onchange = scan; $("top").onchange = scan;
   $("auto").onchange = () => { clearInterval(timer); if ($("auto").checked) timer = setInterval(scan, 120000); };
   $("notif").onchange = async () => { if ($("notif").checked) { if (!("Notification" in window)) { alert("Notifications not supported in this browser."); $("notif").checked = false; return; } const p = await Notification.requestPermission(); if (p !== "granted") { alert("Notification permission denied."); $("notif").checked = false; } } };
   $("tabs").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("on", x === b)); document.querySelectorAll("main > section").forEach((s) => s.classList.toggle("hidden", s.id !== "tab-" + b.dataset.tab)); };

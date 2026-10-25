@@ -8,7 +8,7 @@
 </head>
 <body>
 <header>
-  <div class="brand"><span class="logo">◆</span> SMC Flow Radar <small>Binance USDT perps · closed candles only</small></div>
+  <div class="brand"><span class="logo">◆</span> SMC Flow Radar <small>market scanner · Binance USDT perps · closed candles</small></div>
   <div class="controls">
     <label>TF
       <select id="tf"><option>5m</option><option>15m</option><option selected>1h</option><option>4h</option></select>
@@ -23,15 +23,13 @@
 </header>
 
 <div id="status" class="status">Press “Scan now”.</div>
-<div id="tfwarn" class="warn hidden">⚠ SMC defaults were tuned on 1H candles. On other timeframes the settings are untested — treat signals as unvalidated.</div>
 
 <nav id="tabs">
-  <button data-tab="smc" class="on">SMC Signals</button>
-  <button data-tab="trend">Trend Confirmation</button>
-  <button data-tab="ema">EMA Screener</button>
-  <button data-tab="sector">Sector Flow</button>
-  <button data-tab="proof">Backtest &amp; Proof</button>
-  <button data-tab="how">How it works</button>
+  <button data-tab="smc" class="on">FVG Setups</button>
+  <button data-tab="trend">Trend</button>
+  <button data-tab="ema">EMA</button>
+  <button data-tab="sector">Sectors</button>
+  <button data-tab="proof">Reality check</button>
 </nav>
 
 <main>
@@ -52,17 +50,17 @@
       </div>
       <div class="row"><button id="applySmc">Apply &amp; recompute</button> <button id="resetSmc" class="ghost">Reset to tested defaults</button></div>
     </details>
+    <div class="verdict">⚠ These are <b>levels to study, not signals</b>. Fee-included backtests show this setup does not win on average — see “Reality check”.</div>
     <div class="filters">
       <label>Side <select id="f_side"><option value="">All</option><option>LONG</option><option>SHORT</option></select></label>
       <label>Status <select id="f_status"><option value="">All</option><option>WAITING</option><option>TRIGGERED</option></select></label>
       <label>Max distance to entry <select id="f_dist"><option value="">Any</option><option value="1">≤ 1%</option><option value="2">≤ 2%</option><option value="3" selected>≤ 3%</option><option value="5">≤ 5%</option></select></label>
-      <label class="chk"><input type="checkbox" id="f_edge"> Only coins with positive own backtest</label>
       <label class="chk"><input type="checkbox" id="f_trend"> Only aligned with trend score (≥4/5)</label>
       <input id="f_search" placeholder="Search symbol…">
     </div>
     <div id="smcSummary" class="cards"></div>
     <div class="tablewrap"><table id="smcTable"></table></div>
-    <p class="note">WAITING = limit order level not touched yet. TRIGGERED = entry touched within the last 3 closed candles (check price before chasing). “Coin backtest” is the same rules run over that coin’s last ~1000 candles (in-sample, after fees) — a sanity check, not a promise.</p>
+    <p class="note">WAITING = entry level not touched yet. TRIGGERED = touched within the last 3 closed candles. Click a row for the chart and details.</p>
   </section>
 
   <section id="tab-trend" class="hidden">
@@ -72,7 +70,7 @@
       <input id="t_search" placeholder="Search symbol…">
     </div>
     <div class="tablewrap"><table id="trendTable"></table></div>
-    <p class="note">5 checks: DMI (+DI&gt;−DI and +DI&gt;ADX), RSI&gt;EMA(RSI,14), RSI&gt;50, OBV&gt;EMA50, Open Interest rising 2 bars in a row. Score ≥4 = aligned. Our gold backtest of this score showed no reliable edge on its own — use it as a filter, not as a signal.</p>
+    <p class="note">5 checks: DMI (+DI&gt;−DI and +DI&gt;ADX), RSI&gt;EMA(RSI,14), RSI&gt;50, OBV&gt;EMA50, Open Interest rising 2 bars in a row. Score ≥4 = aligned. Backtests show no reliable edge on its own — use it to see who is trending, not as a trigger.</p>
   </section>
 
   <section id="tab-ema" class="hidden">
@@ -90,7 +88,7 @@
       <input id="e_search" placeholder="Search symbol…">
     </div>
     <div class="tablewrap"><table id="emaTable"></table></div>
-    <p class="note">Pullback = full EMA stack, last 3 candles touched EMA21 (within 0.25 ATR) and the latest close is back on the trend side. Our 23-coin 1H backtest of this pullback found no consistent edge (0 of 119 configs positive in all 3 folds) — it is a screener view, not a validated signal.</p>
+    <p class="note">Pullback = full EMA stack, last 3 candles touched EMA21 (within 0.25 ATR) and the latest close is back on the trend side. A 23-coin backtest of this pullback found no consistent edge — it is a screener view, not a signal.</p>
   </section>
 
   <section id="tab-sector" class="hidden">
@@ -100,45 +98,39 @@
   </section>
 
   <section id="tab-proof" class="hidden">
-    <h2>What was actually tested</h2>
+    <div class="verdict"><b>Verdict:</b> after fixing a lookahead bug and adding fees, none of the setups here showed a reliable edge. Use this site as a <b>market scanner</b> (what is trending, where volume moves) and plan your own entries — not as a signal service.</div>
+    <h2>What was tested (lookahead-free, fees included)</h2>
     <div class="tablewrap"><table class="plain">
       <tr><th>Test</th><th>Data</th><th>Result</th><th>Verdict</th></tr>
-      <tr><td>SMC (BOS/CHoCH → FVG retrace), RR 2.5, entry 0.75</td><td>Gold GC=F 1H, ~2y, cost 0.4pt, 3 folds</td><td>≈ +0.35 / +0.48 / +0.29 R, win ≈40%, PF ≈1.6</td><td class="good">Positive in all folds</td></tr>
-      <tr><td>Same rules, no re-tuning</td><td>19 Binance perps 1H, 3 folds, <b>zero fees</b></td><td>≈ +0.40 / +0.45 / +0.38 R, PF ≈1.7</td><td class="mid">Positive, fees not yet included</td></tr>
-      <tr><td>EMA-stack + score + EMA21 pullback</td><td>23 Binance perps 1H, 3 folds, 120 configs, fee 0.06%</td><td>0 of 119 configs positive in all folds; median −0.04 R</td><td class="bad">No edge</td></tr>
-      <tr><td>Trend-confirmation score</td><td>Gold 1H</td><td>Median expectancy ≈ 0; adds nothing as a filter on SMC</td><td class="bad">No edge</td></tr>
-      <tr><td>GEX levels</td><td>—</td><td>Needs ≥15 daily snapshots; not validated yet</td><td class="mid">Unknown</td></tr>
+      <tr><td>FVG setups, default settings (RR 2.5)</td><td>39 Binance perps, 1H, ~9 months/fold × 3 folds</td><td>26% win (break-even is 29%). Zero fees: −0.04 to −0.07 R. With 0.06%/side: −0.22 to −0.27 R</td><td class="bad">Loses money</td></tr>
+      <tr><td>Same on 4H and 15M</td><td>26 / 40 perps</td><td>4H: −0.12 to −0.19 R · 15M: −0.47 to −0.56 R (fees dominate)</td><td class="bad">Loses money</td></tr>
+      <tr><td>Parameter search</td><td>30,812 random configs on fold 1, then tested on folds 2 and 3</td><td>Best fold-1 configs (+0.2 R) turned negative out-of-sample (−0.06 to −0.23 R)</td><td class="bad">Overfit, no edge</td></tr>
+      <tr><td>FVG setups on gold</td><td>GC=F 1H, ~2 years, 3 folds</td><td>−0.21 / −0.05 / −0.10 R</td><td class="bad">Loses money</td></tr>
+      <tr><td>EMA stack + trend score + EMA21 pullback</td><td>23 perps 1H, 120 configs, 3 folds</td><td>0 of 119 configs positive in all folds</td><td class="bad">No edge</td></tr>
+      <tr><td>Trend-confirmation score alone</td><td>Gold 1H</td><td>Median expectancy ≈ 0</td><td class="bad">No edge</td></tr>
+      <tr><td>Sector flow</td><td>—</td><td>Descriptive only. Never backtested as a signal</td><td class="mid">Unvalidated</td></tr>
     </table></div>
-    <h2>Run it yourself — live backtest in your browser</h2>
-    <p class="note">Runs the current strategy settings over the last ~1000 candles of every coin loaded by the scan (fees included). This is in-sample on recent data.</p>
+    <p class="note">An earlier version of this page showed +0.4 R. That came from a bug: a candle closing through the zone cancelled the order <i>before</i> checking whether the entry had already been hit, which silently deleted losing trades. It has been fixed in both the engine and these numbers.</p>
+    <h2>Run it yourself</h2>
+    <p class="note">Re-runs the current settings over the last ~1000 candles of every scanned coin (fees included). It is a sanity check on recent data, not proof.</p>
     <div class="row"><button id="runBT">Run backtest on scanned coins</button> <span id="btStatus"></span></div>
     <div id="btCards" class="cards"></div>
     <div class="tablewrap"><table id="btTable"></table></div>
-    <h2>Honest caveats</h2>
-    <ul class="note">
-      <li>Win rate ≈ 40% at RR 2.5 is normal for this kind of strategy: profit comes from winners being 2.5× the losers, so losing streaks of 6–8 trades will happen.</li>
-      <li>Coins are highly correlated, so 19 coins ≠ 19 independent proofs.</li>
-      <li>Fills are assumed at the limit price; real slippage, funding and missed fills will reduce results.</li>
-      <li>No signal here is financial advice or a guaranteed accuracy figure. Paper-trade first and size small.</li>
-    </ul>
-  </section>
-
-  <section id="tab-how" class="hidden">
-    <h2>Strategy logic</h2>
-    <ol class="note">
-      <li><b>Structure:</b> a swing high/low is confirmed after <i>n</i> candles on each side.</li>
-      <li><b>Break:</b> a close beyond the last swing sets the bias. Same direction as before = <b>BOS</b>, opposite = <b>CHoCH</b>.</li>
-      <li><b>FVG:</b> within <i>N</i> bars of the break, a 3-candle gap in the break direction is the entry zone.</li>
-      <li><b>Order:</b> limit entry at the chosen depth inside the gap. SL = far edge of the gap ± buffer×ATR. TP = RR × risk. One order is dropped if price closes through the zone or it expires.</li>
-    </ol>
-    <h2>Other tabs</h2>
-    <ul class="note">
-      <li><b>Trend Confirmation</b> — Gauls-style 5-check score.</li>
-      <li><b>EMA Screener</b> — Full Bull, Full Bear and Pullback filters.</li>
-      <li><b>Sector Flow</b> — where volume is moving between sectors.</li>
-    </ul>
-    <h2>Deploy</h2>
-    <p class="note">This is a static site. Drag the <code>smc-screener</code> folder onto Netlify Drop (or <code>netlify deploy --dir smc-screener --prod</code>). Data comes straight from Binance’s public API in the visitor’s browser, so there is no server to overload. If Binance is blocked in your region, use a VPN.</p>
+    <details class="panel"><summary>How an FVG setup is built</summary>
+      <ol class="note">
+        <li><b>Structure:</b> a swing high/low is confirmed after <i>n</i> candles on each side.</li>
+        <li><b>Break:</b> a close beyond the last swing sets the bias (same direction as before = BOS, opposite = CHoCH).</li>
+        <li><b>FVG:</b> within <i>N</i> bars of the break, a 3-candle gap in the break direction is the entry zone.</li>
+        <li><b>Order:</b> limit entry inside the gap, SL beyond the far edge ± buffer×ATR, TP = RR × risk. Cancelled if a candle closes through the zone, or after the validity window.</li>
+      </ol>
+    </details>
+    <details class="panel"><summary>Other caveats</summary>
+      <ul class="note">
+        <li>Coins are highly correlated; many coins ≠ many independent tests.</li>
+        <li>Fills assume the limit price is reached; real slippage and funding make results worse.</li>
+        <li>Nothing here is financial advice.</li>
+      </ul>
+    </details>
   </section>
 </main>
 
