@@ -28,7 +28,7 @@
   let rows = [], busy = false, timer = null, seen = new Set(), sortState = {}, fund = {}, fng = null, failed = 0, firstScan = true;
   const ls = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
   const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage full */ } };
-  let fav = new Set(ls("fav", [])), rules = ls("rules", null), alertLog = ls("alertLog", []), alertKeys = new Set(ls("alertKeys", [])), fwd = ls("fwd", []);
+  let fav = new Set(ls("fav", [])), rules = ls("rules", null), alertLog = ls("alertLog", []), alertKeys = new Set(ls("alertKeys", [])), fwd = ls("fwd", []), sigLog = ls("sigLog", []);
   if (!rules) rules = [{ id: 1, side: "ANY", score: 5, ema: 1, pb: 0, setup: "", vol: 0, adx: 0 }];
   const tblState = {};
   const css = (n, d) => (getComputedStyle(document.documentElement).getPropertyValue(n) || "").trim() || d;
@@ -85,7 +85,7 @@
       rows = res.filter(Boolean);
       computeSmc();
       setStatus(`${rows.length} coins · ${tf} · closed candles · updated ${new Date().toLocaleTimeString()} (${((Date.now() - t0) / 1000).toFixed(0)}s)` + (failed ? ` · ⚠ ${failed} coins failed (rate-limit?) — press Scan now to retry` : ""), failed > 0);
-      fwdUpdate(); renderAll(); notify(); evalAlerts(); firstScan = false;
+      fwdUpdate(); sigUpdate(); renderAll(); notify(); evalAlerts(); firstScan = false;
     } catch (e) { setStatus("Error: " + e.message, true); }
     busy = false; $("refresh").disabled = false;
   }
@@ -149,6 +149,129 @@
       { k: "dist", t: "Dist to entry", v: (x) => Math.abs(x.distPct), f: (x) => `<span class="${x.status === "TRIGGERED" ? "dim" : ""}">${sgn(x.distPct)}%</span>` },
       { k: "score", t: "Trend score", v: (x) => x.score, f: (x) => `${x.score}/5 ` + dots(Object.values(x.r.an.checks).map((c) => x.side === "LONG" ? c : (c === x.r.an.checks.oi ? c : !c)), x.side === "SHORT") },
     ], data, openDetail, { k: "dist", dir: 1 });
+  }
+
+  // ---------- Signals tab: every confirmation must agree ----------
+  const SIG_CHECKS = [["trend", "Trend 5/5"], ["ema", "EMA stack"], ["adx", "ADX≥20"], ["vol", "Vol≥1×"], ["fund", "Funding ok"], ["fvg", "FVG entry"]];
+  // Every signal is logged (browser only) and followed on later closed candles: waiting -> entry triggered -> TP hit / SL hit.
+  function signalAll() {
+    const out = [];
+    rows.forEach((r) => {
+      const fu = fundOf(r.sym), vr = volRatio(r);
+      ["LONG", "SHORT"].forEach((side) => {
+        const L = side === "LONG", sc = L ? r.an.bull : r.an.bear;
+        const sets = r.live.setups.filter((s) => s.side === side && (s.status === "TRIGGERED" || Math.abs(s.distPct) <= 3))
+          .sort((a, b) => (a.status === "TRIGGERED" ? 0 : 1) - (b.status === "TRIGGERED" ? 0 : 1) || Math.abs(a.distPct) - Math.abs(b.distPct));
+        const s = sets[0];
+        const ck = { trend: sc === 5, ema: r.an.ema === (L ? "FULL BULL" : "FULL BEAR"), adx: r.an.adx >= 20, vol: vr >= 1, fund: fu == null || (L ? fu < 0.05 : fu > -0.05), fvg: !!s };
+        const passed = Object.values(ck).filter(Boolean).length;
+        out.push(Object.assign({ sym: r.sym, r, score: sc, ck, passed }, s || (passed >= 4 ? trendEntry(r, side) : { skip: true })));
+      });
+    });
+    return out.filter((x) => !x.skip);
+  }
+  // No FVG order available: enter at the last close, SL beyond the latest swing (1-3 ATR away), TP = RR x risk.
+  function trendEntry(r, side) {
+    const L = side === "LONG", N = r.d.length, price = r.d[N - 1].c, atr = r.live.atr[N - 1];
+    if (!(atr > 0)) return { skip: true };
+    const sw = r.live.swings.filter((w) => w.type === (L ? "L" : "H") && N - w.i <= 80 && (L ? w.p < price : w.p > price)).pop();
+    let risk = sw ? Math.abs(price - sw.p) + 0.5 * atr : 1.5 * atr;
+    risk = Math.min(3 * atr, Math.max(1 * atr, risk));
+    const sl = L ? price - risk : price + risk, tp = L ? price + P.rr * risk : price - P.rr * risk;
+    return { side, kind: "TREND", status: "TRIGGERED", fb: true, top: price, bot: price, entry: price, sl, tp, rr: P.rr, riskPct: risk / price * 100, distPct: 0, age: 0, t0: N - 1, filledBarsAgo: 0 };
+  }
+  function sigUpdate() {
+    const tf = $("tf").value, bySym = {}; rows.forEach((r) => bySym[r.sym] = r);
+    signalAll().filter((x) => x.passed >= 4).forEach((x) => {
+      const d = x.r.d, N = d.length, setupT = d[x.t0].t, id = `${x.sym}|${tf}|${x.side}|${setupT}`;
+      let e = sigLog.find((q) => q.id === id);
+      if (!e) {
+        if (x.fb && sigLog.some((q) => q.sym === x.sym && q.tf === tf && q.side === x.side && q.fb && q.setupT > d[Math.max(0, N - 13)].t)) return; // cooldown: one market signal per 12 bars
+        const trig = x.status === "TRIGGERED", seenT = x.fb ? d[N - 1].t : trig ? d[N - 1 - x.filledBarsAgo - 1].t : d[N - 1].t; // triggered FVG: replay from the bar before the fill
+        e = { id, sym: x.sym, tf, side: x.side, kind: x.kind, fb: !!x.fb, setupT, entry: x.entry, sl: x.sl, tp: x.tp, rr: x.rr, riskPct: x.riskPct, inval: x.side === "LONG" ? x.bot : x.top, seenT, age0: trig ? 0 : x.age, state: x.fb ? "open" : "pending" };
+        if (x.fb) e.fillT = d[N - 1].t;
+        sigLog.push(e);
+      }
+      if (e.state === "pending" || e.state === "open") { e.ck = x.ck; e.passed = x.passed; }
+    });
+    sigLog.forEach((e) => { const r = bySym[e.sym]; if (r && e.tf === tf) resolveSig(e, r.d); });
+    sigLog = sigLog.slice(-500); save("sigLog", sigLog);
+  }
+  // TP1 = 1R, TP2 = R:R setting (min 2R), TP3 = 2 x TP2. SL stays at its original price even after a TP is hit. SL is checked before TPs on the same candle.
+  const sigLv = (rr) => { const t2 = rr > 1 ? rr : 2; return [1, t2, 2 * t2]; };
+  function resolveSig(e, d) {
+    if (e.state === "win") { e.state = "done"; e.h = [e.lastT, e.lastT, null]; } // entries logged before multi-TP tracking
+    if (e.state === "loss") { e.state = "done"; e.slT = e.lastT; }
+    if (!e.h) e.h = [null, null, null];
+    if (e.state === "done" || e.state === "expired") return;
+    const L = e.side === "LONG", risk = Math.abs(e.entry - e.sl), lv = sigLv(e.rr).map((m) => L ? e.entry + m * risk : e.entry - m * risk);
+    for (const x of d) {
+      if (x.t <= (e.lastT || e.seenT)) continue;
+      e.lastT = x.t; e.bars = (e.bars || 0) + 1;
+      const hs = L ? x.l <= e.sl : x.h >= e.sl;
+      if (e.state === "pending") {
+        if (L ? x.l <= e.entry : x.h >= e.entry) { e.state = "open"; e.fillT = x.t; if (hs) { e.slT = x.t; e.state = "done"; return; } continue; }
+        if (L ? x.c < e.inval : x.c > e.inval) { e.state = "expired"; return; }
+        if (e.bars + (e.age0 || 0) > P.maxwait) { e.state = "expired"; return; }
+      } else {
+        if (hs) { e.slT = x.t; e.state = "done"; return; }
+        lv.forEach((p, i) => { if (e.h[i] == null && (L ? x.h >= p : x.l <= p)) e.h[i] = x.t; });
+        if (e.h[2] != null) { e.state = "done"; return; }
+      }
+    }
+  }
+  const sigHits = (e) => (e.h || []).filter((t) => t != null).length;
+  // Booked R assumes 1/3 of the position closes at each TP; the rest is stopped at the original SL. Fee only once filled.
+  function sigBooked(e) {
+    if (e.state === "pending" || e.state === "expired") return null;
+    const n = sigHits(e), lv = sigLv(e.rr), risk = Math.abs(e.entry - e.sl);
+    let r = lv.reduce((a, m, i) => a + (e.h[i] != null ? m / 3 : 0), 0);
+    if (e.slT) r -= (3 - n) / 3;
+    return r - e.entry * 2 * P.fee / 100 / risk;
+  }
+  function sigStatus(e) {
+    const n = sigHits(e);
+    if (e.state === "pending") return ["wait", "WAITING FOR ENTRY", 1];
+    if (e.state === "expired") return ["wait", "CANCELLED", 4];
+    if (e.state === "open") return n ? ["long", `TP${n} HIT ✔ · running`, 0] : ["trig", "ENTRY TRIGGERED", 0];
+    if (!e.slT) return ["long", "ALL TPs HIT ✔✔✔", 2];
+    return n ? ["short", `TP${n} HIT ✔ → then SL HIT ✘`, 2.5] : ["short", "SL HIT ✘", 3];
+  }
+  const sigActive = (e) => e.state === "pending" || e.state === "open";
+  function signalRows() {
+    const tf = $("tf").value, min = +$("s_min").value, side = $("s_side").value, q = $("s_search").value.trim().toUpperCase(), bySym = {}; rows.forEach((r) => bySym[r.sym] = r);
+    const all = sigLog.filter((e) => e.tf === tf && bySym[e.sym] && (e.passed || 0) >= min && (!side || e.side === side) && (!q || e.sym.includes(q)) && favOk(e.sym));
+    const active = all.filter(sigActive), closed = all.filter((e) => !sigActive(e)).sort((a, b) => b.lastT - a.lastT).slice(0, 30);
+    return active.concat(closed).map((e) => {
+      const r = bySym[e.sym];
+      return Object.assign({}, e, { r, ck: e.ck || {}, passed: e.passed || 0, st: sigStatus(e), booked: sigBooked(e), nHit: sigHits(e), distPct: e.state === "pending" ? (e.entry - r.an.price) / r.an.price * 100 : null });
+    });
+  }
+  function renderSignals() {
+    const data = signalRows(), n = (f) => data.filter(f).length;
+    $("sigSummary").innerHTML = card("Waiting for entry", n((x) => x.state === "pending")) + card("Entry triggered", n((x) => x.state === "open" && !x.nHit), n((x) => x.state === "open" && !x.nHit) ? "mid" : "") +
+      card("TP1+ hit, running", n((x) => x.state === "open" && x.nHit), "good") + card("All 3 TPs hit", n((x) => x.state === "done" && !x.slT), "good") +
+      card("TP hit, then SL", n((x) => x.state === "done" && x.slT && x.nHit), "mid") + card("SL hit (no TP)", n((x) => x.state === "done" && x.slT && !x.nHit), "bad") + card("Cancelled", n((x) => x.state === "expired"));
+    const chips = (x) => SIG_CHECKS.map(([k, t]) => `<span class="tag ${x.ck[k] ? "good" : "bad"}">${x.ck[k] ? "✔" : "✘"} ${t}</span>`).join("");
+    const tpCell = (x, i) => { const m = sigLv(x.rr)[i], p = x.side === "LONG" ? x.entry + m * Math.abs(x.entry - x.sl) : x.entry - m * Math.abs(x.entry - x.sl); return x.h && x.h[i] != null ? `<span class="good">✔ ${fmtP(p)}</span>` : fmtP(p); };
+    table($("sigTable"), [
+      { k: "sym", t: "Symbol", v: (x) => x.sym, f: (x) => symCell(x.sym) },
+      { k: "side", t: "Side", v: (x) => x.side, f: (x) => pill(x.side) },
+      { k: "state", t: "Status", v: (x) => x.st[2], f: (x) => `<span class="pill ${x.st[0]}">${x.st[1]}</span>` },
+      { k: "entry", t: "Entry", v: (x) => x.entry, f: (x) => fmtP(x.entry) + (x.fb ? ' <span class="dim" title="No FVG order: entered at the close of the signal candle">mkt</span>' : ' <span class="dim" title="FVG limit order">lmt</span>') },
+      { k: "sl", t: "Stop loss", v: (x) => x.sl, f: (x) => x.slT ? `<span class="bad">✘ ${fmtP(x.sl)}</span>` : fmtP(x.sl) },
+      { k: "tp1", t: "TP1", v: (x) => x.h && x.h[0] != null ? 1 : 0, f: (x) => tpCell(x, 0) },
+      { k: "tp2", t: "TP2", v: (x) => x.h && x.h[1] != null ? 1 : 0, f: (x) => tpCell(x, 1) },
+      { k: "tp3", t: "TP3", v: (x) => x.h && x.h[2] != null ? 1 : 0, f: (x) => tpCell(x, 2) },
+      { k: "risk", t: "Risk %", v: (x) => x.riskPct, f: (x) => f1(x.riskPct) },
+      { k: "dist", t: "Dist to entry", v: (x) => x.distPct == null ? null : Math.abs(x.distPct), f: (x) => x.distPct == null ? "-" : `${sgn(x.distPct)}%` },
+      { k: "res", t: "Booked R", v: (x) => x.booked, f: (x) => x.booked == null ? "-" : `<span class="${cls(x.booked)}">${sgn(x.booked)}</span>${sigActive(x) ? ' <span class="dim">open</span>' : ""}` },
+      { k: "passed", t: "Confirmations", v: (x) => x.passed, f: (x) => `<b>${x.passed}/${SIG_CHECKS.length}</b> ${chips(x)}` },
+    ], data, (x) => {
+      const s = x.r.live.setups.find((q) => q.side === x.side && x.r.d[q.t0].t === x.setupT), N = x.r.d.length, i = Math.max(2, x.r.d.findIndex((c) => c.t === x.setupT));
+      const sel = s || { side: x.side, kind: x.kind, status: x.state === "open" ? "TRIGGERED" : "WAITING", top: x.entry, bot: x.entry, entry: x.entry, sl: x.sl, tp: x.tp, rr: x.rr, riskPct: x.riskPct, age: N - 1 - i, t0: i, filledBarsAgo: 0 };
+      openDetail(Object.assign({ sym: x.sym, r: x.r, sig: x }, sel));
+    }, { k: "state", dir: 1 });
   }
 
   // ---------- Trend tab ----------
@@ -242,10 +365,35 @@
     if (!k || k.length < 100) return null;
     return (klCache[key] = { t: Date.now(), d: Lib.parseKlines(k.slice(0, -1)) }).d;
   }
+  function sigDetail(x) {
+    const r = x.r, an = r.an, L = x.side === "LONG", risk = Math.abs(x.entry - x.sl), bal = +$("s_bal").value || 0, rp = +$("s_risk").value || 0, fu = fundOf(r.sym), vr = volRatio(r);
+    const riskUsd = bal * rp / 100, notional = riskUsd / (x.riskPct / 100), qty = notional / x.entry, lev = Math.max(1, Math.min(50, Math.floor(50 / x.riskPct))), fee = notional * P.fee * 2 / 100;
+    const px = (m) => L ? x.entry + m * risk : x.entry - m * risk, usd = (v) => bal ? "$" + f1(v, 2) : "-";
+    const lvl = sigLv(x.rr), tps = [["TP1", lvl[0], ""], ["TP2", lvl[1], x.rr > 1 ? " · = R:R setting" : ""], ["TP3", lvl[2], ""]], tm = (t) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const sc = L ? an.bull : an.bear, c = an.checks, ok = (k) => L ? c[k] : (k === "oi" ? c[k] : !c[k]);
+    const why = [
+      [x.ck.trend, `Trend score ${sc}/5 — DMI ${ok("dmi") ? "✔" : "✘"}, RSI>EMA ${ok("rsiEma") ? "✔" : "✘"}, RSI50 ${ok("rsi50") ? "✔" : "✘"}, OBV ${ok("obv") ? "✔" : "✘"}, OI rising ${c.oi ? "✔" : "✘"} (OI chg ${sgn(an.oiChg)}%)`],
+      [x.ck.ema, `EMA stack: ${an.ema} (needs ${L ? "FULL BULL" : "FULL BEAR"}) · EMA21 ${fmtP(an.e21)} · EMA50 ${fmtP(an.e50)} · EMA200 ${fmtP(an.e200)}`],
+      [x.ck.adx, `ADX ${f1(an.adx, 1)} (needs ≥ 20 = trending) · RSI ${f1(an.rsi, 0)}`],
+      [x.ck.vol, `Volume ${f1(vr)}× the 7-day average (needs ≥ 1×)`],
+      [x.ck.fund, `Funding ${fu == null ? "n/a" : sgn(fu, 4) + "%"} (${L ? "longs not crowded: < 0.05%" : "shorts not crowded: > −0.05%"})`],
+      [x.ck.fvg, x.fb ? "No FVG order on this side — entry is market at the signal-candle close, SL beyond the latest swing ±0.5 ATR (clamped 1–3 ATR)" : `${x.kind} structure break → FVG limit order at ${f1(P.frac * 100, 0)}% depth of the gap, SL beyond the zone + ${P.buf} ATR`],
+    ];
+    const st = x.st, ev = [[x.fillT || (x.fb ? x.setupT : null), "Entry triggered", ""]].concat(tps.map(([n], i) => [x.h && x.h[i], `${n} hit`, "good"]), [[x.slT, x.nHit ? `SL hit (after TP${x.nHit})` : "SL hit", "bad"]]).filter((e) => e[0]).sort((a, b) => a[0] - b[0]);
+    return `<h4>Signal plan — ${base(x.sym)} ${x.side} · ${$("tf").value}</h4><div class="cards">` +
+      card("Status", st[1], st[0] === "short" ? "bad" : st[0] === "long" ? "good" : "mid") + card("Signal candle", tm(x.setupT)) +
+      card(x.fb ? "Entry (market)" : "Entry (limit)", fmtP(x.entry)) + card("Stop loss", `${x.slT ? "✘ " : ""}${fmtP(x.sl)} <span class="bad" style="font-size:12px">−${f1(x.riskPct)}% · −${usd(riskUsd)}</span>`) +
+      tps.map(([n, m, note], i) => card(`${x.h && x.h[i] != null ? "✔ " : ""}${n} · ${f1(m, 1)}R${note}`, `${fmtP(px(m))} <span class="good" style="font-size:12px">+${f1(m * x.riskPct)}% · +${usd(riskUsd * m)}</span>`, x.h && x.h[i] != null ? "good" : "")).join("") +
+      card("Position size", bal ? `${usd(notional)} notional · ${qty >= 1 ? f1(qty, 2) : qty.toPrecision(3)} ${base(x.sym)}` : "set account size") + card(`Margin @ ${lev}× (suggested max)`, bal ? usd(notional / lev) : "-") +
+      card("Est. fees (round trip)", bal ? usd(fee) : "-") + card(sigActive(x) ? "Booked so far" : "Final result", x.booked == null ? "not filled" : `${sgn(x.booked)} R` + (bal ? ` · ${x.booked >= 0 ? "+" : "−"}${usd(Math.abs(x.booked) * riskUsd)}` : ""), x.booked == null ? "" : cls(x.booked)) +
+      `</div><div class="note"><b>Timeline</b><ul>${ev.length ? ev.map(([t, n, c]) => `<li><span class="${c}">${n}</span> — ${tm(t)}</li>`).join("") : "<li>Waiting for entry…</li>"}</ul>` +
+      `<b>Why this signal</b><ul>${why.map(([g, t]) => `<li><span class="${g ? "good" : "bad"}">${g ? "✔" : "✘"}</span> ${t}</li>`).join("")}</ul>` +
+      `<b>Plan:</b> ${L ? "buy" : "sell"} at entry, close ⅓ at each TP, stop at SL. Tracking keeps the original SL even after TP1 (a stop moved to entry is optional and not simulated), so “TP1 hit → then SL hit” shows when price returns to the SL. Booked R = ⅓ × each TP's R, minus ⅓ per unfilled part stopped, minus fees. Suggested leverage keeps liquidation about 2× further than the stop; position size = account × risk% ÷ SL distance. Not financial advice — backtests found no proven edge.</div>`;
+  }
   function openDetail(x) {
-    cur = { r: x.r, clicked: x.entry != null ? x : null, tf: $("tf").value };
+    cur = { r: x.r, clicked: x.entry != null ? x : null, tf: $("tf").value, sig: x.sig || null };
     cs = { N: 130, off: 0, mx: null, my: null, drag: null };
-    $("mDeriv").innerHTML = ""; $("mMtf").innerHTML = "";
+    $("mDeriv").innerHTML = ""; $("mMtf").innerHTML = ""; $("mSig").innerHTML = cur.sig ? sigDetail(cur.sig) : "";
     $("modal").classList.remove("hidden"); showDetail();
   }
   async function showDetail() {
@@ -437,7 +585,7 @@
   }
 
   // ---------- export / share / theme ----------
-  const TAB_TABLE = { smc: "smcTable", trend: "trendTable", ema: "emaTable", sector: "sectorTable", alerts: "alertTable", proof: "btTable" };
+  const TAB_TABLE = { signals: "sigTable", smc: "smcTable", trend: "trendTable", ema: "emaTable", sector: "sectorTable", alerts: "alertTable", proof: "btTable" };
   const activeTab = () => document.querySelector("#tabs button.on").dataset.tab;
   function exportCsv() {
     const id = TAB_TABLE[activeTab()], s = tblState[id]; if (!s || !s.sorted.length) return;
@@ -467,7 +615,7 @@
   }
 
   // ---------- wiring ----------
-  function renderAll() { renderMarket(); renderSmc(); renderTrend(); renderEma(); renderSector(); renderBt(); renderAlerts(); renderFwd(); }
+  function renderAll() { renderMarket(); renderSignals(); renderSmc(); renderTrend(); renderEma(); renderSector(); renderBt(); renderAlerts(); renderFwd(); }
   function loadSettings() { Object.keys(DEF).forEach((k) => { const el = $("p_" + k); if (el) el.value = P[k]; }); }
   function readSettings() { Object.keys(DEF).forEach((k) => { const el = $("p_" + k); if (el) P[k] = el.tagName === "SELECT" && k === "only" ? el.value : +el.value; }); P.only = $("p_only").value || null; P.trend = +$("p_trend").value; localStorage.setItem("smcP", JSON.stringify(P)); }
   P.only = P.only || null; loadSettings(); $("p_only").value = P.only || "";
@@ -478,6 +626,9 @@
   $("runBT").onclick = () => { if (!rows.length) return scan(); computeSmc(); renderBt(); };
   ["f_side", "f_status", "f_dist", "f_trend"].forEach((id) => $(id).onchange = () => rows.length && renderSmc());
   $("f_search").oninput = () => rows.length && renderSmc();
+  const acct = ls("acct", { bal: 1000, risk: 1 }); $("s_bal").value = acct.bal; $("s_risk").value = acct.risk;
+  ["s_bal", "s_risk"].forEach((id) => $(id).oninput = () => save("acct", { bal: +$("s_bal").value, risk: +$("s_risk").value }));
+  ["s_min", "s_side"].forEach((id) => $(id).onchange = () => rows.length && renderSignals()); $("s_search").oninput = () => rows.length && renderSignals();
   ["t_min", "t_side"].forEach((id) => $(id).onchange = () => rows.length && renderTrend()); $("t_search").oninput = () => rows.length && renderTrend();
   ["e_mode"].forEach((id) => $(id).onchange = () => rows.length && renderEma()); $("e_adx").oninput = () => rows.length && renderEma(); $("e_search").oninput = () => rows.length && renderEma();
   $("tf").onchange = () => { syncHash(); scan(); }; $("top").onchange = () => { syncHash(); scan(); };
@@ -490,6 +641,7 @@
   $("csv").onclick = exportCsv;
   $("share").onclick = async () => { syncHash(); try { await navigator.clipboard.writeText(location.href); $("share").textContent = "✔ Copied"; } catch (e) { $("share").textContent = "Copy from URL bar"; } setTimeout(() => $("share").textContent = "🔗 Link", 1800); };
   $("a_add").onclick = () => { rules.push({ id: Date.now(), side: $("a_side").value, score: +$("a_score").value, ema: +$("a_ema").value, pb: +$("a_pb").value, setup: $("a_setup").value, vol: +$("a_vol").value || 0, adx: +$("a_adx").value || 0 }); save("rules", rules); alertKeys.clear(); renderAlerts(); if (rows.length) { evalAlerts(); renderAlerts(); } };
+  $("sigReset").onclick = () => { if (confirm("Clear the signal log?")) { sigLog = []; save("sigLog", sigLog); renderSignals(); } };
   $("fwdReset").onclick = () => { if (confirm("Clear the forward-test log?")) { fwd = []; save("fwd", fwd); renderFwd(); } };
   $("notif").onchange = async () => { if ($("notif").checked) { if (!("Notification" in window)) { alert("Notifications not supported in this browser."); $("notif").checked = false; return; } const p = await Notification.requestPermission(); if (p !== "granted") { alert("Notification permission denied."); $("notif").checked = false; } } };
   $("tabs").onclick = (e) => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b); };

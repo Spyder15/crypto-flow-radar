@@ -39,6 +39,7 @@
 
 <nav id="tabs">
   <button data-tab="trend" class="on">Trend</button>
+  <button data-tab="signals">Signals</button>
   <button data-tab="smc">FVG Setups</button>
   <button data-tab="ema">EMA</button>
   <button data-tab="sector">Sectors</button>
@@ -48,6 +49,22 @@
 </nav>
 
 <main>
+  <section id="tab-signals" class="hidden">
+    <div class="verdict">⚠ Coins where the confirmations agree, with a ready entry / SL / TP from the FVG order. Backtests showed <b>no proven edge</b> (see “Reality check”) — treat as a shortlist, size small, always use the stop.</div>
+    <div class="filters">
+      <label>Confirmations required <select id="s_min"><option value="6">All 6</option><option value="5" selected>At least 5</option><option value="4">At least 4</option></select></label>
+      <label>Side <select id="s_side"><option value="">All</option><option>LONG</option><option>SHORT</option></select></label>
+      <label>Account $ <input type="number" id="s_bal" min="0" step="100" style="width:90px"></label>
+      <label>Risk % / trade <input type="number" id="s_risk" min="0.1" max="10" step="0.1" style="width:70px"></label>
+      <input id="s_search" placeholder="Search symbol…">
+      <button id="sigReset" class="ghost">Clear signal log</button>
+    </div>
+    <div id="sigSummary" class="cards"></div>
+    <div class="tablewrap"><table id="sigTable"></table></div>
+    <p class="note">Checks: Trend score 5/5 (DMI, RSI&gt;EMA, RSI&gt;50, OBV, rising OI) · full EMA stack matching the side · ADX ≥ 20 · 24h volume ≥ 1× the 7-day average · funding not crowded on your side (&lt; 0.05%) · an FVG limit order on the same side that is TRIGGERED or within 3% of price. Entry = FVG limit level (lmt) when an FVG order exists; otherwise (mkt) the close of the signal candle with SL beyond the latest swing, 1–3 ATR away (the FVG check then shows ✘). TP = R:R × risk (set in FVG strategy settings). "All 6" = FVG-confirmed signals only. Click a row for the chart.</p>
+    <p class="note"><b>Status:</b> WAITING FOR ENTRY = limit level not touched yet · ENTRY TRIGGERED = price touched entry, trade is open · TP1 / TP2 HIT · running = those targets reached, trade still open · ALL TPs HIT = TP3 reached · TP1 HIT → then SL HIT = a target was reached first, then price came back to the original SL · SL HIT = stopped out before any TP · CANCELLED = a candle closed through the zone or the order expired. TP1 = 1R, TP2 = the R:R setting, TP3 = 2× TP2; SL is checked before TPs on the same candle and fees are included in Booked R. Signals are logged in this browser while the page is open, so results only update on scans.</p>
+  </section>
+
   <section id="tab-smc" class="hidden">
     <details class="panel" id="smcSettings">
       <summary>Strategy settings (saved in your browser)</summary>
@@ -183,6 +200,7 @@
   <div id="tfBar" class="tfbar"></div>
   <canvas id="chart" width="1000" height="460"></canvas>
   <div class="note">Scroll to zoom · drag to pan · hover for OHLC · double-click to reset</div>
+  <div id="mSig"></div>
   <div id="mInfo" class="cards"></div>
   <div id="mDeriv" class="cards"></div>
   <div id="mMtf" class="mtf"></div>
