@@ -780,7 +780,7 @@
   $("favOnly").checked = localStorage.getItem("favOnly") === "1";
   $("favOnly").onchange = () => { localStorage.setItem("favOnly", $("favOnly").checked ? "1" : "0"); if (rows.length) renderAll(); };
   $("theme").onclick = () => setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
-  document.documentElement.dataset.theme = localStorage.getItem("theme") === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = localStorage.getItem("theme") === "dark" ? "dark" : "light";
   $("csv").onclick = exportCsv;
   $("share").onclick = async () => { syncHash(); try { await navigator.clipboard.writeText(location.href); $("share").textContent = "✔ Copied"; } catch (e) { $("share").textContent = "Copy from URL bar"; } setTimeout(() => $("share").textContent = "🔗 Link", 1800); };
   $("a_add").onclick = () => { rules.push({ id: Date.now(), side: $("a_side").value, score: +$("a_score").value, ema: +$("a_ema").value, pb: +$("a_pb").value, setup: $("a_setup").value, vol: +$("a_vol").value || 0, adx: +$("a_adx").value || 0 }); save("rules", rules); alertKeys.clear(); renderAlerts(); if (rows.length) { evalAlerts(); renderAlerts(); } };
