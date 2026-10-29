@@ -201,6 +201,7 @@
       const d = x.r.d, N = d.length, setupT = d[x.t0].t, id = `${x.sym}|${tf}|${x.side}|${setupT}`;
       let e = sigLog.find((q) => q.id === id);
       if (!e) {
+        if (!(x.riskPct <= 15) || !(x.tp > 0) || !(x.sl > 0)) return; // skip degenerate plans (huge stop distance or non-positive target)
         if (x.fb && sigLog.some((q) => q.sym === x.sym && q.tf === tf && q.side === x.side && q.fb && q.setupT > d[Math.max(0, N - 13)].t)) return; // cooldown: one market signal per 12 bars
         const trig = x.status === "TRIGGERED", seenT = x.fb ? d[N - 1].t : trig ? d[N - 1 - x.filledBarsAgo - 1].t : d[N - 1].t; // triggered FVG: replay from the bar before the fill
         e = { id, sym: x.sym, tf, side: x.side, kind: x.kind, fb: !!x.fb, setupT, entry: x.entry, sl: x.sl, tp: x.tp, rr: x.rr, riskPct: x.riskPct, inval: x.side === "LONG" ? x.bot : x.top, seenT, be: $("s_be").checked, age0: trig ? 0 : x.age, state: x.fb ? "open" : "pending" };
