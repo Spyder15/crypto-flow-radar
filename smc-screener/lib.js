@@ -161,5 +161,32 @@
     return { price: c[i], adx: adx[i], rsi: rsi[i], dmi: dmiB ? "BULL" : dmiS ? "BEAR" : "-", checks: { dmi: dmiB, rsiEma: rsiAbove, rsi50: r50, obv: obvAbove, oi: oiUp }, bull, bear, oiChg, ema: fullBull ? "FULL BULL" : fullBear ? "FULL BEAR" : "-", pullback, atrPct: a / c[i] * 100, e9: e9[i], e21: e21[i], e50: e50[i], e200: e200[i] };
   };
 
+  // ---------------- Daily VWAP + value area (UTC days, like Binance daily candles) ----------------
+  // vwap[i]: VWAP of the day the candle belongs to, up to that candle. va[dayNo]: 70% value area from a volume profile built from candle ranges.
+  Lib.dayLevels = (d, bins = 48) => {
+    const N = d.length, day = d.map((x) => Math.floor(x.t / 864e5)), vwap = new Array(N).fill(NaN), groups = {}, va = {};
+    let pv = 0, vv = 0, cur = -1;
+    for (let i = 0; i < N; i++) {
+      if (day[i] !== cur) { cur = day[i]; pv = 0; vv = 0; }
+      const tp = (d[i].h + d[i].l + d[i].c) / 3; pv += tp * d[i].v; vv += d[i].v; vwap[i] = vv > 0 ? pv / vv : tp;
+      (groups[day[i]] = groups[day[i]] || []).push(i);
+    }
+    for (const k of Object.keys(groups)) {
+      const idx = groups[k], lo = Math.min(...idx.map((i) => d[i].l)), hi = Math.max(...idx.map((i) => d[i].h)), step = (hi - lo) / bins;
+      if (!(step > 0)) continue;
+      const vol = new Array(bins).fill(0);
+      idx.forEach((i) => { const a = Math.min(bins - 1, Math.floor((d[i].l - lo) / step)), b = Math.min(bins - 1, Math.floor((d[i].h - lo) / step)); for (let j = a; j <= b; j++) vol[j] += d[i].v / (b - a + 1); });
+      const total = vol.reduce((s, x) => s + x, 0); if (!(total > 0)) continue;
+      let poc = 0; vol.forEach((x, j) => { if (x > vol[poc]) poc = j; });
+      let a = poc, b = poc, acc = vol[poc];
+      while (acc < 0.7 * total && (a > 0 || b < bins - 1)) {
+        const dn = a > 0 ? vol[a - 1] : -1, up = b < bins - 1 ? vol[b + 1] : -1;
+        if (up >= dn) { b++; acc += vol[b]; } else { a--; acc += vol[a]; }
+      }
+      va[k] = { val: lo + a * step, vah: lo + (b + 1) * step, poc: lo + (poc + 0.5) * step, n: idx.length };
+    }
+    return { day, vwap, va };
+  };
+
   if (typeof module !== "undefined") module.exports = Lib; else root.Lib = Lib;
 })(typeof self !== "undefined" ? self : this);

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crypto Flow Radar — trend, EMA, sector flow &amp; FVG levels</title>
+<meta name="description" content="Free live scanner for Binance perps: trend confirmation, EMA screener, sector flow and FVG levels. Honest backtests, fees included.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Crypto Flow Radar">
+<meta property="og:description" content="Free live scanner for Binance perps: trend, EMA setups and sector flow.">
+<meta property="og:url" content="https://spyder15.github.io/crypto-flow-radar/">
+<meta property="og:image" content="https://spyder15.github.io/crypto-flow-radar/og.png?v=3">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Crypto Flow Radar">
+<meta name="twitter:description" content="Free live scanner for Binance perps: trend, EMA setups and sector flow.">
+<meta name="twitter:image" content="https://spyder15.github.io/crypto-flow-radar/og.png?v=3">
+<link rel="stylesheet" href="style.css?v=5">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo">◆</span> Crypto Flow Radar <small>market scanner · Binance USDT perps · closed candles</small> <small class="by">made by <a href="https://x.com/Mundr1Priyanshu/" target="_blank" rel="noopener noreferrer">Priyanshu</a></small></div>
+  <div class="controls">
+    <a href="./" class="homelink">← Home</a>
+    <label>TF
+      <select id="tf"><option>5m</option><option>15m</option><option selected>1h</option><option>4h</option></select>
+    </label>
+    <label>Coins
+      <select id="top"><option>30</option><option>60</option><option selected>100</option><option>150</option></select>
+    </label>
+    <label class="chk"><input type="checkbox" id="auto"> Auto-refresh 2 min</label>
+    <label class="chk"><input type="checkbox" id="notif"> 🔔 Alerts</label>
+    <label class="chk"><input type="checkbox" id="favOnly"> ★ only</label>
+    <button id="refresh">Scan now</button>
+    <button id="theme" class="ghost" title="Light / dark">◐</button>
+  </div>
+</header>
+
+<div id="status" class="status">Press “Scan now”.</div>
+<div id="mkt" class="cards mkt"></div>
+
+<nav id="tabs">
+  <button data-tab="screener" class="on">Screener</button>
+  <button data-tab="trend">Trend</button>
+  <button data-tab="signals">Signals</button>
+  <button data-tab="report">Report</button>
+  <button data-tab="smc">FVG Setups</button>
+  <button data-tab="ema">EMA</button>
+  <button data-tab="sector">Sectors</button>
+  <button data-tab="alerts">Alerts</button>
+  <button data-tab="proof">Reality check</button>
+  <span class="ctrl2"><button id="csv" class="ghost" title="Download current table as CSV">⬇ CSV</button><button id="share" class="ghost" title="Copy link with current settings">🔗 Link</button></span>
+</nav>
+
+<main>
+  <section id="tab-signals" class="hidden">
+    <div class="verdict">⚠ Coins where the confirmations agree, with a ready entry / SL / TP from the FVG order. Backtests showed <b>no proven edge</b> (see “Reality check”) — treat as a shortlist, size small, always use the stop.</div>
+    <div class="filters">
+      <label>Confirmations required <select id="s_min"><option value="8">All 8</option><option value="7">At least 7</option><option value="6" selected>At least 6</option><option value="5">At least 5</option><option value="4">At least 4</option></select></label>
+      <label title="Applies to new signals: after TP1 is hit the stop moves to the entry price"><input type="checkbox" id="s_be"> Move SL to entry after TP1</label>
+      <label>Side <select id="s_side"><option value="">All</option><option>LONG</option><option>SHORT</option></select></label>
+      <label>Account $ <input type="number" id="s_bal" min="0" step="100" style="width:90px"></label>
+      <label>Risk % / trade <input type="number" id="s_risk" min="0.1" max="10" step="0.1" style="width:70px"></label>
+      <input id="s_search" placeholder="Search symbol…">
+      <button id="sigReset" class="ghost">Clear signal log</button>
+    </div>
+    <div id="sigSummary" class="cards"></div>
+    <div class="tablewrap"><table id="sigTable"></table></div>
+    <p class="note">Checks: Trend score 5/5 (DMI, RSI&gt;EMA, RSI&gt;50, OBV, rising OI) · full EMA stack matching the side · ADX ≥ 20 · 24h volume ≥ 1× the 7-day average · funding not crowded on your side (&lt; 0.05%) · an FVG limit order on the same side that is TRIGGERED or within 3% of price · Daily VWAP flip (price crossed back over the UTC-day VWAP in the last 24 bars) · Value Area reclaim (price reclaimed the previous day's VAL for longs / VAH for shorts within the last 24 bars; value area = 70% of volume from a volume profile of the day's candles). Entry = FVG limit level (lmt) when an FVG order exists; otherwise (mkt) the close of the signal candle with SL beyond the latest swing, 1–3 ATR away (the FVG check then shows ✘). TP = R:R × risk (set in FVG strategy settings). "All 8" needs the FVG order too. Click a row for the chart.</p>
+    <p class="note"><b>Status:</b> WAITING FOR ENTRY = limit level not touched yet · ENTRY TRIGGERED = price touched entry, trade is open · TP1 / TP2 HIT · running = those targets reached, trade still open · ALL TPs HIT = TP3 reached · TP1 HIT → then SL HIT = a target was reached first, then price came back to the original SL · SL HIT = stopped out before any TP · TP1 HIT → stopped at entry (BE) = break-even mode was on and price returned to the entry after TP1 (no loss on the rest) · CANCELLED = a candle closed through the zone or the order expired. TP1 = 1R, TP2 = the R:R setting, TP3 = 2× TP2; SL is checked before TPs on the same candle and fees are included in Booked R. Signals are logged in this browser while the page is open, so results only update on scans.</p>
+  </section>
+
+  <section id="tab-report" class="hidden">
+    <div class="verdict">Report of every signal logged in this browser (all timeframes): how many hit TP1/TP2/TP3, how many were stopped, and the net result in R. Backtests showed <b>no proven edge</b> — this is a record, not a promise.</div>
+    <div class="filters">
+      <label>Period <select id="r_per"><option value="7">Last 7 days (weekly)</option><option value="30" selected>Last 30 days (monthly)</option><option value="0">All time</option></select></label>
+      <label>Side <select id="r_side"><option value="">All</option><option>LONG</option><option>SHORT</option></select></label>
+    </div>
+    <div id="repSummary" class="cards"></div>
+    <h4>By week</h4>
+    <div class="tablewrap"><table id="repWeek"></table></div>
+    <h4>Closed signals in this period</h4>
+    <div class="tablewrap"><table id="repTable"></table></div>
+    <p class="note">Period = date the signal closed (TP3, SL or break-even stop). Open and waiting signals are counted separately. Net R assumes ⅓ of the position closes at each TP, fees included. Data lives in this browser only.</p>
+  </section>
+
+  <section id="tab-smc" class="hidden">
+    <details class="panel" id="smcSettings">
+      <summary>Strategy settings (saved in your browser)</summary>
+      <div class="grid">
+        <label>Pivot bars (n)<input type="number" id="p_n" min="1" max="8" step="1"></label>
+        <label>Risk:Reward<input type="number" id="p_rr" min="0.5" max="6" step="0.25"></label>
+        <label>Entry depth in FVG (0=near edge, 1=far edge)<input type="number" id="p_frac" min="0" max="1" step="0.05"></label>
+        <label>SL buffer (× ATR)<input type="number" id="p_buf" min="0" max="3" step="0.1"></label>
+        <label>FVG within N bars of break<input type="number" id="p_lookback" min="1" max="60" step="1"></label>
+        <label>Order valid (bars)<input type="number" id="p_maxwait" min="5" max="200" step="5"></label>
+        <label>Min FVG size (× ATR)<input type="number" id="p_minfvg" min="0" max="2" step="0.1"></label>
+        <label>Fee per side (%)<input type="number" id="p_fee" min="0" max="0.3" step="0.01"></label>
+        <label>Break type<select id="p_only"><option value="">BOS + CHoCH</option><option value="CHoCH">CHoCH only</option><option value="BOS">BOS only</option></select></label>
+        <label>EMA100 trend filter<select id="p_trend"><option value="0">Off</option><option value="1">On</option></select></label>
+      </div>
+      <div class="row"><button id="applySmc">Apply &amp; recompute</button> <button id="resetSmc" class="ghost">Reset to tested defaults</button></div>
+    </details>
+    <div class="verdict">⚠ These are <b>levels to study, not signals</b>. Fee-included backtests show this setup does not win on average — see “Reality check”.</div>
+    <div class="filters">
+      <label>Side <select id="f_side"><option value="">All</option><option>LONG</option><option>SHORT</option></select></label>
+      <label>Status <select id="f_status"><option value="">All</option><option>WAITING</option><option>TRIGGERED</option></select></label>
+      <label>Max distance to entry <select id="f_dist"><option value="">Any</option><option value="1">≤ 1%</option><option value="2">≤ 2%</option><option value="3" selected>≤ 3%</option><option value="5">≤ 5%</option></select></label>
+      <label class="chk"><input type="checkbox" id="f_trend"> Only aligned with trend score (≥4/5)</label>
+      <input id="f_search" placeholder="Search symbol…">
+    </div>
+    <div id="smcSummary" class="cards"></div>
+    <div class="tablewrap"><table id="smcTable"></table></div>
+    <p class="note">WAITING = entry level not touched yet. TRIGGERED = touched within the last 3 closed candles. Click a row for the chart and details.</p>
+  </section>
+
+  <section id="tab-screener">
+    <div id="posture" class="posture"></div>
+    <div class="chiprow"><span class="chiplab">QUICK VIEW</span><span id="viewChips"></span></div>
+    <div class="chiprow"><span class="chiplab">SETUP</span><span id="setupChips"></span><input id="scr_search" placeholder="Search symbol…"><span id="scrCount" class="dim"></span></div>
+    <div class="split2">
+      <div class="tablewrap listwrap"><table id="scrTable"></table></div>
+      <div id="dock" class="dock"><div class="note" id="dockEmpty">Click a coin (or use ↑ / ↓) to see its chart, RS rating and trend checklist.</div></div>
+    </div>
+    <p class="note">RS rating = percentile rank (1–99) of each coin's 7/30/90-day return against BTC among the scanned coins. Posture uses the scan timeframe: Advancing = price &gt; EMA50 &gt; EMA200 · Topping = lost EMA50 but still above EMA200 · Basing = reclaimed EMA50 but below EMA200 · Declining = below both. Educational, not advice.</p>
+  </section>
+
+  <section id="tab-trend" class="hidden">
+    <div class="filters">
+      <label>Min score <select id="t_min"><option>3</option><option selected>4</option><option>5</option></select></label>
+      <label>Side <select id="t_side"><option value="">All</option><option>LONG</option><option>SHORT</option></select></label>
+      <input id="t_search" placeholder="Search symbol…">
+    </div>
+    <div class="tablewrap"><table id="trendTable"></table></div>
+    <p class="note">5 checks: DMI (+DI&gt;−DI and +DI&gt;ADX), RSI&gt;EMA(RSI,14), RSI&gt;50, OBV&gt;EMA50, Open Interest rising 2 bars in a row. Score ≥4 = aligned. Backtests show no reliable edge on its own — use it to see who is trending, not as a trigger.</p>
+  </section>
+
+  <section id="tab-ema" class="hidden">
+    <div class="filters">
+      <label>Strategy
+        <select id="e_mode">
+          <option value="fullbull">Full Bull (9&gt;21&gt;50&gt;200)</option>
+          <option value="fullbear">Full Bear (9&lt;21&lt;50&lt;200)</option>
+          <option value="pbl">Pullback LONG (full bull + EMA21 tag)</option>
+          <option value="pbs">Pullback SHORT (full bear + EMA21 tag)</option>
+          <option value="all">All coins</option>
+        </select>
+      </label>
+      <label>Min ADX <input type="number" id="e_adx" value="0" min="0" max="60" style="width:70px"></label>
+      <input id="e_search" placeholder="Search symbol…">
+    </div>
+    <div class="tablewrap"><table id="emaTable"></table></div>
+    <p class="note">Pullback = full EMA stack, last 3 candles touched EMA21 (within 0.25 ATR) and the latest close is back on the trend side. A 23-coin backtest of this pullback found no consistent edge — it is a screener view, not a signal.</p>
+  </section>
+
+  <section id="tab-sector" class="hidden">
+    <div id="sectorCards" class="cards"></div>
+    <div class="tablewrap"><table id="sectorTable"></table></div>
+    <p class="note">Share = sector’s portion of total 24h quote volume across scanned coins, compared with the average share of the previous 7 closed days. Participation = % of coins in the sector that are up in 24h. Sector tags are a static, hand-made list; unlisted coins fall under “Other”.</p>
+  </section>
+
+  <section id="tab-alerts" class="hidden">
+    <details class="panel" open>
+      <summary>Alert rules (saved in your browser, checked after every scan)</summary>
+      <div class="rule">
+        <label>Side<select id="a_side"><option value="ANY">Any</option><option>LONG</option><option>SHORT</option></select></label>
+        <label>Min trend score<select id="a_score"><option>0</option><option>3</option><option>4</option><option selected>5</option></select></label>
+        <label>EMA stack<select id="a_ema"><option value="0">Ignore</option><option value="1">Must match side</option></select></label>
+        <label>EMA21 pullback<select id="a_pb"><option value="0">Ignore</option><option value="1">Required</option></select></label>
+        <label>FVG setup<select id="a_setup"><option value="">Ignore</option><option value="ANY">Any</option><option>WAITING</option><option>TRIGGERED</option></select></label>
+        <label>Min vol vs 7d (×)<input type="number" id="a_vol" value="0" min="0" step="0.1"></label>
+        <label>Min ADX<input type="number" id="a_adx" value="0" min="0" max="60"></label>
+        <button id="a_add">Add rule</button>
+      </div>
+      <div id="ruleList"></div>
+    </details>
+    <h2>Matching right now</h2>
+    <div class="tablewrap"><table id="alertTable"></table></div>
+    <h2>New matches log</h2>
+    <div class="tablewrap"><table id="alertLog"></table></div>
+    <p class="note">A coin is logged (and a browser notification sent, if 🔔 is on) once per candle per rule. Alerts only work while this tab is open. These are screener conditions, not trade signals.</p>
+  </section>
+
+  <section id="tab-proof" class="hidden">
+    <div class="verdict"><b>Verdict:</b> after fixing a lookahead bug and adding fees, none of the setups here showed a reliable edge. Use this site as a <b>market scanner</b> (what is trending, where volume moves) and plan your own entries — not as a signal service.</div>
+    <h2>What was tested (lookahead-free, fees included)</h2>
+    <div class="tablewrap"><table class="plain">
+      <tr><th>Test</th><th>Data</th><th>Result</th><th>Verdict</th></tr>
+      <tr><td>FVG setups, default settings (RR 2.5)</td><td>39 Binance perps, 1H, ~9 months/fold × 3 folds</td><td>26% win (break-even is 29%). Zero fees: −0.04 to −0.07 R. With 0.06%/side: −0.22 to −0.27 R</td><td class="bad">Loses money</td></tr>
+      <tr><td>Same on 4H and 15M</td><td>26 / 40 perps</td><td>4H: −0.12 to −0.19 R · 15M: −0.47 to −0.56 R (fees dominate)</td><td class="bad">Loses money</td></tr>
+      <tr><td>Parameter search</td><td>30,812 random configs on fold 1, then tested on folds 2 and 3</td><td>Best fold-1 configs (+0.2 R) turned negative out-of-sample (−0.06 to −0.23 R)</td><td class="bad">Overfit, no edge</td></tr>
+      <tr><td>FVG setups on gold</td><td>GC=F 1H, ~2 years, 3 folds</td><td>−0.21 / −0.05 / −0.10 R</td><td class="bad">Loses money</td></tr>
+      <tr><td>EMA stack + trend score + EMA21 pullback</td><td>23 perps 1H, 120 configs, 3 folds</td><td>0 of 119 configs positive in all folds</td><td class="bad">No edge</td></tr>
+      <tr><td>Trend-confirmation score alone</td><td>Gold 1H</td><td>Median expectancy ≈ 0</td><td class="bad">No edge</td></tr>
+      <tr><td>Funding-rate extremes (fade and follow), cross-sectional 7d/1d momentum and reversal, Donchian 20/40/60-day breakouts</td><td>45 perps, 8H, ~3 years, 3 folds, fees + funding paid included, non-overlapping portfolio returns</td><td>Fading funding and reversal lose in every fold. “Follow” variants and breakouts looked positive per-trade (overlap-inflated), but as portfolios the folds flip sign and t-stats stay below 2 in most</td><td class="bad">No robust edge</td></tr>
+      <tr><td>Sector flow</td><td>—</td><td>Descriptive only. Never backtested as a signal</td><td class="mid">Unvalidated</td></tr>
+    </table></div>
+    <p class="note">An earlier version of this page showed +0.4 R. That came from a bug: a candle closing through the zone cancelled the order <i>before</i> checking whether the entry had already been hit, which silently deleted losing trades. It has been fixed in both the engine and these numbers.</p>
+    <h2>Forward test (live, your browser)</h2>
+    <p class="note">Every FVG setup first seen as WAITING is logged with its exact entry/SL/TP and then resolved from later closed candles (strict rules, fees included). This is the honest out-of-sample check — it only grows while this site is open. Stored locally.</p>
+    <div id="fwdCards" class="cards"></div>
+    <div class="row"><button id="fwdReset" class="ghost">Clear forward-test log</button></div>
+    <div class="tablewrap"><table id="fwdTable"></table></div>
+    <h2>Run it yourself</h2>
+    <p class="note">Re-runs the current settings over the last ~1000 candles of every scanned coin (fees included). It is a sanity check on recent data, not proof.</p>
+    <div class="row"><button id="runBT">Run backtest on scanned coins</button> <span id="btStatus"></span></div>
+    <div id="btCards" class="cards"></div>
+    <div class="tablewrap"><table id="btTable"></table></div>
+    <details class="panel"><summary>How an FVG setup is built</summary>
+      <ol class="note">
+        <li><b>Structure:</b> a swing high/low is confirmed after <i>n</i> candles on each side.</li>
+        <li><b>Break:</b> a close beyond the last swing sets the bias (same direction as before = BOS, opposite = CHoCH).</li>
+        <li><b>FVG:</b> within <i>N</i> bars of the break, a 3-candle gap in the break direction is the entry zone.</li>
+        <li><b>Order:</b> limit entry inside the gap, SL beyond the far edge ± buffer×ATR, TP = RR × risk. Cancelled if a candle closes through the zone, or after the validity window.</li>
+      </ol>
+    </details>
+    <details class="panel"><summary>Other caveats</summary>
+      <ul class="note">
+        <li>Coins are highly correlated; many coins ≠ many independent tests.</li>
+        <li>Fills assume the limit price is reached; real slippage and funding make results worse.</li>
+        <li>Nothing here is financial advice.</li>
+      </ul>
+    </details>
+  </section>
+</main>
+
+<div id="modal" class="modal hidden"><div class="modalbox">
+  <button id="closeModal" class="ghost close">✕</button>
+  <h3 id="mTitle"></h3>
+  <div id="tfBar" class="tfbar"></div>
+  <canvas id="chart" width="1000" height="460"></canvas>
+  <div class="note">Scroll to zoom · drag to pan · hover for OHLC · double-click to reset</div>
+  <div id="mSig"></div>
+  <div id="mInfo" class="cards"></div>
+  <div id="mDeriv" class="cards"></div>
+  <div id="mMtf" class="mtf"></div>
+</div></div>
+
+<script src="lib.js?v=3"></script>
+<script src="app.js?v=4"></script>
+</body>
+</html>

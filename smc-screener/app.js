@@ -72,7 +72,7 @@
         const [k, oi, dk] = await Promise.all([
           api("/fapi/v1/klines", { symbol: t.symbol, interval: tf, limit: 1000 }),
           api("/futures/data/openInterestHist", { symbol: t.symbol, period: oiPeriod[tf], limit: 5 }),
-          api("/fapi/v1/klines", { symbol: t.symbol, interval: "1d", limit: 9 }),
+          api("/fapi/v1/klines", { symbol: t.symbol, interval: "1d", limit: 99 }),
         ]);
         if (!k) { failed++; return null; }
         if (k.length < 260) return null;
@@ -80,9 +80,10 @@
         const an = Lib.analyze(d, oi ? oi.map((x) => +x.sumOpenInterest) : null);
         if (!an) return null;
         const vol7 = dk && dk.length >= 9 ? dk.slice(-8, -1).reduce((a, x) => a + +x[7], 0) / 7 : NaN;
-        return { sym: t.symbol, tk: t, d, an, vol7 };
+        return { sym: t.symbol, tk: t, d, an, vol7, dc: dk ? dk.map((x) => +x[4]) : [] };
       }, (n) => setStatus(`Scanning ${n}/${picked.length}…`));
       rows = res.filter(Boolean);
+      computeRs();
       computeSmc();
       setStatus(`${rows.length} coins · ${tf} · closed candles · updated ${new Date().toLocaleTimeString()} (${((Date.now() - t0) / 1000).toFixed(0)}s)` + (failed ? ` · ⚠ ${failed} coins failed (rate-limit?) — press Scan now to retry` : ""), failed > 0);
       fwdUpdate(); sigUpdate(); renderAll(); notify(); evalAlerts(); firstScan = false;
@@ -116,6 +117,7 @@
       (sorted.length ? sorted.map((r, i) => `<tr data-i="${i}">` + cols.map((c) => `<td data-label="${esc(c.t.replace(/&gt;/g, ">"))}">${c.f ? c.f(r) : esc(c.v(r))}</td>`).join("") + "</tr>").join("") : `<tr><td colspan="${cols.length}" class="dim" style="text-align:center;padding:24px">Nothing matches right now.</td></tr>`) + "</tbody>";
     el.querySelectorAll(".star").forEach((s) => s.onclick = (e) => { e.stopPropagation(); const k = s.dataset.star; fav.has(k) ? fav.delete(k) : fav.add(k); save("fav", [...fav]); renderAll(); });
     el.querySelectorAll("th").forEach((th) => th.onclick = () => { const k = th.dataset.k; if (st.k === k) st.dir *= -1; else { st.k = k; st.dir = -1; } table(el, cols, data, onRow, defSort); });
+    if (el.id === "scrTable") markSel();
     if (onRow) el.querySelectorAll("tbody tr[data-i]").forEach((tr) => tr.onclick = () => onRow(sorted[+tr.dataset.i]));
   }
   const pill = (s) => `<span class="pill ${s === "LONG" ? "long" : "short"}">${s}</span>`;
@@ -152,7 +154,17 @@
   }
 
   // ---------- Signals tab: every confirmation must agree ----------
-  const SIG_CHECKS = [["trend", "Trend 5/5"], ["ema", "EMA stack"], ["adx", "ADX≥20"], ["vol", "Vol≥1×"], ["fund", "Funding ok"], ["fvg", "FVG entry"]];
+  const SIG_CHECKS = [["trend", "Trend 5/5"], ["ema", "EMA stack"], ["adx", "ADX≥20"], ["vol", "Vol≥1×"], ["fund", "Funding ok"], ["fvg", "FVG entry"], ["vwap", "VWAP flip"], ["val", "Value area reclaim"]];
+  const dayOf = (r) => (r._dl && r._dl.n === r.d.length ? r._dl : (r._dl = Object.assign({ n: r.d.length }, Lib.dayLevels(r.d))));
+  // VWAP flip: price crossed back over the daily VWAP within the last 24 bars. Value area reclaim: price came back inside/over the previous day's VAL (long) or VAH (short).
+  function levelChecks(r, side) {
+    const L = side === "LONG", D = dayOf(r), N = r.d.length, c = r.d[N - 1].c, from = Math.max(0, N - 25), prev = D.va[D.day[N - 1] - 1];
+    const recent = (f) => { for (let i = from; i < N - 1; i++) if (f(i)) return true; return false; };
+    return {
+      vwap: L ? c > D.vwap[N - 1] && recent((i) => r.d[i].c < D.vwap[i]) : c < D.vwap[N - 1] && recent((i) => r.d[i].c > D.vwap[i]),
+      val: !!prev && (L ? c > prev.val && recent((i) => r.d[i].c < prev.val) : c < prev.vah && recent((i) => r.d[i].c > prev.vah)),
+    };
+  }
   // Every signal is logged (browser only) and followed on later closed candles: waiting -> entry triggered -> TP hit / SL hit.
   function signalAll() {
     const out = [];
@@ -164,6 +176,7 @@
           .sort((a, b) => (a.status === "TRIGGERED" ? 0 : 1) - (b.status === "TRIGGERED" ? 0 : 1) || Math.abs(a.distPct) - Math.abs(b.distPct));
         const s = sets[0];
         const ck = { trend: sc === 5, ema: r.an.ema === (L ? "FULL BULL" : "FULL BEAR"), adx: r.an.adx >= 20, vol: vr >= 1, fund: fu == null || (L ? fu < 0.05 : fu > -0.05), fvg: !!s };
+        Object.assign(ck, levelChecks(r, side));
         const passed = Object.values(ck).filter(Boolean).length;
         out.push(Object.assign({ sym: r.sym, r, score: sc, ck, passed }, s || (passed >= 4 ? trendEntry(r, side) : { skip: true })));
       });
@@ -188,7 +201,7 @@
       if (!e) {
         if (x.fb && sigLog.some((q) => q.sym === x.sym && q.tf === tf && q.side === x.side && q.fb && q.setupT > d[Math.max(0, N - 13)].t)) return; // cooldown: one market signal per 12 bars
         const trig = x.status === "TRIGGERED", seenT = x.fb ? d[N - 1].t : trig ? d[N - 1 - x.filledBarsAgo - 1].t : d[N - 1].t; // triggered FVG: replay from the bar before the fill
-        e = { id, sym: x.sym, tf, side: x.side, kind: x.kind, fb: !!x.fb, setupT, entry: x.entry, sl: x.sl, tp: x.tp, rr: x.rr, riskPct: x.riskPct, inval: x.side === "LONG" ? x.bot : x.top, seenT, age0: trig ? 0 : x.age, state: x.fb ? "open" : "pending" };
+        e = { id, sym: x.sym, tf, side: x.side, kind: x.kind, fb: !!x.fb, setupT, entry: x.entry, sl: x.sl, tp: x.tp, rr: x.rr, riskPct: x.riskPct, inval: x.side === "LONG" ? x.bot : x.top, seenT, be: $("s_be").checked, age0: trig ? 0 : x.age, state: x.fb ? "open" : "pending" };
         if (x.fb) e.fillT = d[N - 1].t;
         sigLog.push(e);
       }
@@ -208,13 +221,13 @@
     for (const x of d) {
       if (x.t <= (e.lastT || e.seenT)) continue;
       e.lastT = x.t; e.bars = (e.bars || 0) + 1;
-      const hs = L ? x.l <= e.sl : x.h >= e.sl;
+      const beOn = e.be && e.h[0] != null, stop = beOn ? e.entry : e.sl, hs = L ? x.l <= stop : x.h >= stop;
       if (e.state === "pending") {
         if (L ? x.l <= e.entry : x.h >= e.entry) { e.state = "open"; e.fillT = x.t; if (hs) { e.slT = x.t; e.state = "done"; return; } continue; }
         if (L ? x.c < e.inval : x.c > e.inval) { e.state = "expired"; return; }
         if (e.bars + (e.age0 || 0) > P.maxwait) { e.state = "expired"; return; }
       } else {
-        if (hs) { e.slT = x.t; e.state = "done"; return; }
+        if (hs) { e.slT = x.t; if (beOn) e.slBE = true; e.state = "done"; return; }
         lv.forEach((p, i) => { if (e.h[i] == null && (L ? x.h >= p : x.l <= p)) e.h[i] = x.t; });
         if (e.h[2] != null) { e.state = "done"; return; }
       }
@@ -226,7 +239,7 @@
     if (e.state === "pending" || e.state === "expired") return null;
     const n = sigHits(e), lv = sigLv(e.rr), risk = Math.abs(e.entry - e.sl);
     let r = lv.reduce((a, m, i) => a + (e.h[i] != null ? m / 3 : 0), 0);
-    if (e.slT) r -= (3 - n) / 3;
+    if (e.slT && !e.slBE) r -= (3 - n) / 3;
     return r - e.entry * 2 * P.fee / 100 / risk;
   }
   function sigStatus(e) {
@@ -235,6 +248,7 @@
     if (e.state === "expired") return ["wait", "CANCELLED", 4];
     if (e.state === "open") return n ? ["long", `TP${n} HIT ✔ · running`, 0] : ["trig", "ENTRY TRIGGERED", 0];
     if (!e.slT) return ["long", "ALL TPs HIT ✔✔✔", 2];
+    if (e.slBE) return ["trig", `TP${n} HIT ✔ → stopped at entry (BE)`, 2.5];
     return n ? ["short", `TP${n} HIT ✔ → then SL HIT ✘`, 2.5] : ["short", "SL HIT ✘", 3];
   }
   const sigActive = (e) => e.state === "pending" || e.state === "open";
@@ -251,7 +265,7 @@
     const data = signalRows(), n = (f) => data.filter(f).length;
     $("sigSummary").innerHTML = card("Waiting for entry", n((x) => x.state === "pending")) + card("Entry triggered", n((x) => x.state === "open" && !x.nHit), n((x) => x.state === "open" && !x.nHit) ? "mid" : "") +
       card("TP1+ hit, running", n((x) => x.state === "open" && x.nHit), "good") + card("All 3 TPs hit", n((x) => x.state === "done" && !x.slT), "good") +
-      card("TP hit, then SL", n((x) => x.state === "done" && x.slT && x.nHit), "mid") + card("SL hit (no TP)", n((x) => x.state === "done" && x.slT && !x.nHit), "bad") + card("Cancelled", n((x) => x.state === "expired"));
+      card("TP hit, then SL", n((x) => x.state === "done" && x.slT && !x.slBE && x.nHit), "mid") + card("TP1+ hit, stopped at entry (BE)", n((x) => x.slBE), "mid") + card("SL hit (no TP)", n((x) => x.state === "done" && x.slT && !x.nHit), "bad") + card("Cancelled", n((x) => x.state === "expired"));
     const chips = (x) => SIG_CHECKS.map(([k, t]) => `<span class="tag ${x.ck[k] ? "good" : "bad"}">${x.ck[k] ? "✔" : "✘"} ${t}</span>`).join("");
     const tpCell = (x, i) => { const m = sigLv(x.rr)[i], p = x.side === "LONG" ? x.entry + m * Math.abs(x.entry - x.sl) : x.entry - m * Math.abs(x.entry - x.sl); return x.h && x.h[i] != null ? `<span class="good">✔ ${fmtP(p)}</span>` : fmtP(p); };
     table($("sigTable"), [
@@ -259,7 +273,7 @@
       { k: "side", t: "Side", v: (x) => x.side, f: (x) => pill(x.side) },
       { k: "state", t: "Status", v: (x) => x.st[2], f: (x) => `<span class="pill ${x.st[0]}">${x.st[1]}</span>` },
       { k: "entry", t: "Entry", v: (x) => x.entry, f: (x) => fmtP(x.entry) + (x.fb ? ' <span class="dim" title="No FVG order: entered at the close of the signal candle">mkt</span>' : ' <span class="dim" title="FVG limit order">lmt</span>') },
-      { k: "sl", t: "Stop loss", v: (x) => x.sl, f: (x) => x.slT ? `<span class="bad">✘ ${fmtP(x.sl)}</span>` : fmtP(x.sl) },
+      { k: "sl", t: "Stop loss", v: (x) => x.sl, f: (x) => x.slBE ? `<span class="dim">BE ${fmtP(x.entry)}</span> <s class="dim">${fmtP(x.sl)}</s>` : x.slT ? `<span class="bad">✘ ${fmtP(x.sl)}</span>` : fmtP(x.sl) },
       { k: "tp1", t: "TP1", v: (x) => x.h && x.h[0] != null ? 1 : 0, f: (x) => tpCell(x, 0) },
       { k: "tp2", t: "TP2", v: (x) => x.h && x.h[1] != null ? 1 : 0, f: (x) => tpCell(x, 1) },
       { k: "tp3", t: "TP3", v: (x) => x.h && x.h[2] != null ? 1 : 0, f: (x) => tpCell(x, 2) },
@@ -272,6 +286,109 @@
       const sel = s || { side: x.side, kind: x.kind, status: x.state === "open" ? "TRIGGERED" : "WAITING", top: x.entry, bot: x.entry, entry: x.entry, sl: x.sl, tp: x.tp, rr: x.rr, riskPct: x.riskPct, age: N - 1 - i, t0: i, filledBarsAgo: 0 };
       openDetail(Object.assign({ sym: x.sym, r: x.r, sig: x }, sel));
     }, { k: "state", dir: 1 });
+  }
+
+  // ---------- Screener tab: posture, RS rating, quick views, split layout ----------
+  const POSTURES = [["Advancing", "adv"], ["Topping", "top"], ["Declining", "dec"], ["Basing", "bas"]];
+  const posture = (a) => a.price > a.e50 && a.e50 > a.e200 ? "Advancing" : a.price <= a.e50 && a.price > a.e200 ? "Topping" : a.price >= a.e50 && a.price < a.e200 ? "Basing" : "Declining";
+  const VIEWS = {
+    leaders: ["Momentum leaders", (r) => r.rs >= 80 && r.post === "Advancing"],
+    strength: ["Sustained strength", (r) => r.an.ema === "FULL BULL" && r.an.adx >= 20],
+    weak: ["Weakening", (r) => r.post === "Topping" || (r.post === "Advancing" && r.an.price < r.an.e21)],
+    down: ["Downtrends", (r) => r.post === "Declining"],
+  };
+  const SETUPS = {
+    breakout: ["Breakout", (r) => { const N = r.d.length; return r.an.price >= Math.max(...r.d.slice(N - 21, N - 1).map((x) => x.h)) * 0.998; }],
+    pullback: ["Pullback", (r) => !!r.an.pullback],
+    high: ["Near highs", (r) => r.an.price >= Math.max(...r.d.slice(-200).map((x) => x.h)) * 0.97],
+    ext: ["Extended", (r) => (r.an.price / r.an.e21 - 1) * 100 > 2.5 * r.an.atrPct],
+    slip: ["Slipping", (r) => r.an.price < r.an.e21 && r.an.price > r.an.e50],
+    hold: ["Holding", (r) => r.post === "Advancing" && r.an.price >= r.an.e21 && (r.an.price / r.an.e21 - 1) * 100 < r.an.atrPct],
+  };
+  let scrView = null, scrSetup = null, scrPost = null, selSym = null;
+  // RS rating: percentile rank of the 7/30/90-day return relative to BTC (weights re-normalised when a coin has less history).
+  function computeRs() {
+    const ret = (c, n) => c.length > n ? c[c.length - 1] / c[c.length - 1 - n] - 1 : null, W = [[7, 0.4], [30, 0.3], [90, 0.3]];
+    const btc = rows.find((r) => r.sym === "BTCUSDT"), bR = W.map(([n]) => btc ? ret(btc.dc, n) || 0 : 0);
+    rows.forEach((r) => {
+      let s = 0, w = 0; W.forEach(([n, k], i) => { const x = ret(r.dc, n); if (x != null) { s += k * (x - bR[i]); w += k; } });
+      r.rsRaw = w ? s / w : null; r.vsBtc = W.map(([n], i) => { const x = ret(r.dc, n); return x == null ? null : (x - bR[i]) * 100; }); r.post = posture(r.an);
+    });
+    const ok = rows.filter((r) => r.rsRaw != null).sort((a, b) => a.rsRaw - b.rsRaw);
+    rows.forEach((r) => r.rs = null);
+    ok.forEach((r, i) => { r.rs = ok.length > 1 ? Math.max(1, Math.min(99, Math.round(1 + i / (ok.length - 1) * 98))) : 50; });
+  }
+  const rsColor = (x) => x == null ? "var(--line)" : x >= 80 ? "var(--g)" : x >= 50 ? "var(--y)" : "var(--r)";
+  const rsBadge = (x) => `<span class="rsbadge" style="background:${rsColor(x)}">${x == null ? "-" : x}</span>`;
+  const tplOf = (r) => { const a = r.an; return [["Price > EMA200", a.price > a.e200], ["EMA50 > EMA200", a.e50 > a.e200], ["Price > EMA50", a.price > a.e50], ["Full EMA stack", a.ema === "FULL BULL"], ["ADX ≥ 20", a.adx >= 20], ["RSI > 50", a.rsi > 50], ["Volume ≥ 1× 7d", volRatio(r) >= 1], ["RS rating ≥ 70", r.rs != null && r.rs >= 70]]; };
+  function renderScreener() {
+    if (!rows.length) return;
+    const q = $("scr_search").value.trim().toUpperCase(), pool = rows.filter((r) => favOk(r.sym) && (!q || r.sym.includes(q)));
+    const cnt = {}; POSTURES.forEach(([p]) => cnt[p] = rows.filter((r) => r.post === p).length);
+    $("posture").innerHTML = POSTURES.map(([p, c]) => `<div class="pcard ${c} ${scrPost === p ? "on" : ""}" data-p="${p}"><div class="k">${p}</div><div class="v">${cnt[p]} <span class="dim" style="font-size:12px;font-weight:400">${f1(cnt[p] / rows.length * 100, 0)}%</span></div></div>`).join("") +
+      `<div class="pbar">${POSTURES.map(([p, c]) => `<i style="width:${cnt[p] / rows.length * 100}%;background:var(--${{ adv: "g", top: "y", dec: "r", bas: "b" }[c]})"></i>`).join("")}</div>`;
+    $("posture").querySelectorAll(".pcard").forEach((el) => el.onclick = () => { scrPost = scrPost === el.dataset.p ? null : el.dataset.p; renderScreener(); });
+    const chips = (id, map, key, set) => { $(id).innerHTML = Object.entries(map).map(([k, [t, f]]) => `<button class="chip ${key() === k ? "on" : ""}" data-k="${k}">${t} <span class="dim">${pool.filter(f).length}</span></button>`).join(""); $(id).querySelectorAll(".chip").forEach((b) => b.onclick = () => { set(key() === b.dataset.k ? null : b.dataset.k); renderScreener(); }); };
+    chips("viewChips", VIEWS, () => scrView, (v) => scrView = v); chips("setupChips", SETUPS, () => scrSetup, (v) => scrSetup = v);
+    const data = pool.filter((r) => (!scrView || VIEWS[scrView][1](r)) && (!scrSetup || SETUPS[scrSetup][1](r)) && (!scrPost || r.post === scrPost));
+    $("scrCount").textContent = `${data.length} coins match`;
+    table($("scrTable"), [
+      { k: "sym", t: "Symbol", v: (r) => r.sym, f: (r) => symCell(r.sym) },
+      { k: "last", t: "Last", v: (r) => +r.tk.lastPrice, f: (r) => fmtP(+r.tk.lastPrice) },
+      { k: "chg", t: "Chg%", v: (r) => +r.tk.priceChangePercent, f: (r) => `<span class="${cls(+r.tk.priceChangePercent)}">${sgn(+r.tk.priceChangePercent, 1)}%</span>` },
+      { k: "rs", t: "RS", v: (r) => r.rs, f: (r) => rsBadge(r.rs) },
+      { k: "post", t: "Posture", v: (r) => r.post, f: (r) => `<span class="dim">${r.post}</span>` },
+    ], data, (r) => selectCoin(r.sym), { k: "rs", dir: -1 });
+    markSel();
+    if (!selSym || !rows.some((r) => r.sym === selSym)) { const f = tblState.scrTable.sorted[0]; if (f) selectCoin(f.sym); } else ensureDock();
+  }
+  function markSel() { const s = tblState.scrTable; if (!s) return; $("scrTable").querySelectorAll("tbody tr[data-i]").forEach((tr) => { const on = s.sorted[+tr.dataset.i].sym === selSym; tr.classList.toggle("sel", on); if (on && tr.scrollIntoView) tr.scrollIntoView({ block: "nearest" }); }); }
+  function selectCoin(sym) {
+    const r = rows.find((x) => x.sym === sym); if (!r) return;
+    selSym = sym; markSel(); openDock(r);
+  }
+  function openDock(r) {
+    const box = document.querySelector(".modalbox"), dock = $("dock"); if (!box) return;
+    $("dockEmpty").classList.add("hidden"); dock.appendChild(box); box.classList.add("docked");
+    cur = { r, clicked: null, tf: $("tf").value, sig: null }; cs = { N: 130, off: 0, mx: null, my: null, drag: null };
+    $("mDeriv").innerHTML = ""; $("mMtf").innerHTML = ""; $("mSig").innerHTML = ""; showDetail();
+  }
+  function ensureDock() { const box = document.querySelector(".modalbox"); if (!box.classList.contains("docked") || !cur) { const r = rows.find((x) => x.sym === selSym); if (r) openDock(r); } }
+  document.addEventListener("keydown", (e) => {
+    if (activeTab() !== "screener" || !["ArrowDown", "ArrowUp"].includes(e.key) || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || !$("modal").classList.contains("hidden")) return;
+    const s = tblState.scrTable; if (!s || !s.sorted.length) return; e.preventDefault();
+    const i = s.sorted.findIndex((r) => r.sym === selSym), j = Math.max(0, Math.min(s.sorted.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
+    selectCoin(s.sorted[j].sym);
+  });
+
+  // ---------- Report tab: weekly / monthly results of the signal log ----------
+  function renderReport() {
+    const per = +$("r_per").value, side = $("r_side").value, since = per ? Date.now() - per * 864e5 : 0, tm = (t) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const base0 = sigLog.filter((e) => !side || e.side === side);
+    const closed = base0.filter((e) => e.state === "done" && (e.lastT || 0) >= since).map((e) => Object.assign({}, e, { booked: sigBooked(e), nHit: sigHits(e), st: sigStatus(e) }));
+    const n = (f) => closed.filter(f).length, sum = closed.reduce((a, e) => a + (e.booked || 0), 0), wins = n((e) => e.booked > 0);
+    const open = base0.filter((e) => e.state === "open").length, wait = base0.filter((e) => e.state === "pending").length;
+    $("repSummary").innerHTML = card("Closed signals", closed.length) + card("Net result", `${sgn(sum)} R`, cls(sum)) + card("Win rate (net R > 0)", closed.length ? f1(wins / closed.length * 100, 0) + "%" : "-") +
+      card("TP1 hit", n((e) => e.h[0] != null), "good") + card("TP2 hit", n((e) => e.h[1] != null), "good") + card("TP3 hit", n((e) => e.h[2] != null), "good") +
+      card("SL hit (no TP)", n((e) => e.slT && !e.nHit), "bad") + card("TP hit, then SL", n((e) => e.slT && !e.slBE && e.nHit), "mid") + card("TP1+ then stopped at entry (BE)", n((e) => e.slBE), "mid") +
+      card("Still open", open) + card("Waiting for entry", wait) + card("Cancelled", base0.filter((e) => e.state === "expired" && (e.lastT || 0) >= since).length);
+    const wk = {};
+    closed.forEach((e) => { const d = new Date(e.lastT), m = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)), k = m.getTime(); (wk[k] = wk[k] || { t: k, n: 0, tp1: 0, tp2: 0, tp3: 0, sl: 0, be: 0, r: 0 }); const o = wk[k]; o.n++; if (e.h[0]) o.tp1++; if (e.h[1]) o.tp2++; if (e.h[2]) o.tp3++; if (e.slT && !e.slBE) o.sl++; if (e.slBE) o.be++; o.r += e.booked || 0; });
+    table($("repWeek"), [
+      { k: "t", t: "Week starting", v: (o) => o.t, f: (o) => new Date(o.t).toLocaleDateString([], { month: "short", day: "numeric" }) },
+      { k: "n", t: "Signals", v: (o) => o.n }, { k: "tp1", t: "TP1", v: (o) => o.tp1 }, { k: "tp2", t: "TP2", v: (o) => o.tp2 }, { k: "tp3", t: "TP3", v: (o) => o.tp3 },
+      { k: "sl", t: "SL hit", v: (o) => o.sl }, { k: "be", t: "BE stop", v: (o) => o.be },
+      { k: "r", t: "Net R", v: (o) => o.r, f: (o) => `<span class="${cls(o.r)}">${sgn(o.r)}</span>` },
+    ], Object.values(wk), null, { k: "t", dir: -1 });
+    table($("repTable"), [
+      { k: "sym", t: "Symbol", v: (e) => e.sym, f: (e) => `<b>${esc(base(e.sym))}</b>` },
+      { k: "side", t: "Side", v: (e) => e.side, f: (e) => pill(e.side) }, { k: "tf", t: "TF", v: (e) => e.tf },
+      { k: "st", t: "Result", v: (e) => e.st[2], f: (e) => `<span class="pill ${e.st[0]}">${e.st[1]}</span>` },
+      { k: "entry", t: "Entry", v: (e) => e.entry, f: (e) => fmtP(e.entry) }, { k: "sl", t: "SL", v: (e) => e.sl, f: (e) => fmtP(e.sl) },
+      { k: "tp", t: "TPs hit", v: (e) => e.nHit, f: (e) => `${e.nHit}/3` },
+      { k: "r", t: "Net R", v: (e) => e.booked, f: (e) => `<span class="${cls(e.booked)}">${sgn(e.booked)}</span>` },
+      { k: "ct", t: "Closed", v: (e) => e.lastT, f: (e) => tm(e.lastT) },
+    ], closed, null, { k: "ct", dir: -1 });
   }
 
   // ---------- Trend tab ----------
@@ -371,6 +488,7 @@
     const px = (m) => L ? x.entry + m * risk : x.entry - m * risk, usd = (v) => bal ? "$" + f1(v, 2) : "-";
     const lvl = sigLv(x.rr), tps = [["TP1", lvl[0], ""], ["TP2", lvl[1], x.rr > 1 ? " · = R:R setting" : ""], ["TP3", lvl[2], ""]], tm = (t) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
     const sc = L ? an.bull : an.bear, c = an.checks, ok = (k) => L ? c[k] : (k === "oi" ? c[k] : !c[k]);
+    const dayD = dayOf(r), dl = { vwap: dayD.vwap, n: r.d.length }, prevVA = dayD.va[dayD.day[r.d.length - 1] - 1];
     const why = [
       [x.ck.trend, `Trend score ${sc}/5 — DMI ${ok("dmi") ? "✔" : "✘"}, RSI>EMA ${ok("rsiEma") ? "✔" : "✘"}, RSI50 ${ok("rsi50") ? "✔" : "✘"}, OBV ${ok("obv") ? "✔" : "✘"}, OI rising ${c.oi ? "✔" : "✘"} (OI chg ${sgn(an.oiChg)}%)`],
       [x.ck.ema, `EMA stack: ${an.ema} (needs ${L ? "FULL BULL" : "FULL BEAR"}) · EMA21 ${fmtP(an.e21)} · EMA50 ${fmtP(an.e50)} · EMA200 ${fmtP(an.e200)}`],
@@ -378,9 +496,11 @@
       [x.ck.vol, `Volume ${f1(vr)}× the 7-day average (needs ≥ 1×)`],
       [x.ck.fund, `Funding ${fu == null ? "n/a" : sgn(fu, 4) + "%"} (${L ? "longs not crowded: < 0.05%" : "shorts not crowded: > −0.05%"})`],
       [x.ck.fvg, x.fb ? "No FVG order on this side — entry is market at the signal-candle close, SL beyond the latest swing ±0.5 ATR (clamped 1–3 ATR)" : `${x.kind} structure break → FVG limit order at ${f1(P.frac * 100, 0)}% depth of the gap, SL beyond the zone + ${P.buf} ATR`],
+      [x.ck.vwap, `Daily VWAP ${fmtP(dl.vwap[dl.n - 1])} — ${L ? "price flipped back above it (reclaim)" : "price flipped back below it (rejection)"} within the last 24 bars`],
+      [x.ck.val, prevVA ? `Previous-day value area: VAL ${fmtP(prevVA.val)} · POC ${fmtP(prevVA.poc)} · VAH ${fmtP(prevVA.vah)} — ${L ? "VAL reclaimed" : "VAH rejected"} within the last 24 bars` : "No previous-day value area in the loaded candles"],
     ];
-    const st = x.st, ev = [[x.fillT || (x.fb ? x.setupT : null), "Entry triggered", ""]].concat(tps.map(([n], i) => [x.h && x.h[i], `${n} hit`, "good"]), [[x.slT, x.nHit ? `SL hit (after TP${x.nHit})` : "SL hit", "bad"]]).filter((e) => e[0]).sort((a, b) => a[0] - b[0]);
-    return `<h4>Signal plan — ${base(x.sym)} ${x.side} · ${$("tf").value}</h4><div class="cards">` +
+    const st = x.st, ev = [[x.fillT || (x.fb ? x.setupT : null), "Entry triggered", ""]].concat(tps.map(([n], i) => [x.h && x.h[i], `${n} hit`, "good"]), [[x.slT, x.slBE ? `Stopped at entry — break-even (after TP${x.nHit})` : x.nHit ? `SL hit (after TP${x.nHit})` : "SL hit", x.slBE ? "" : "bad"]]).filter((e) => e[0]).sort((a, b) => a[0] - b[0]);
+    return `<h4>Signal plan — ${base(x.sym)} ${x.side} · ${$("tf").value}</h4><div id="sigBias" class="note"><b>Bias:</b> loading higher-timeframe view…</div><div class="cards">` +
       card("Status", st[1], st[0] === "short" ? "bad" : st[0] === "long" ? "good" : "mid") + card("Signal candle", tm(x.setupT)) +
       card(x.fb ? "Entry (market)" : "Entry (limit)", fmtP(x.entry)) + card("Stop loss", `${x.slT ? "✘ " : ""}${fmtP(x.sl)} <span class="bad" style="font-size:12px">−${f1(x.riskPct)}% · −${usd(riskUsd)}</span>`) +
       tps.map(([n, m, note], i) => card(`${x.h && x.h[i] != null ? "✔ " : ""}${n} · ${f1(m, 1)}R${note}`, `${fmtP(px(m))} <span class="good" style="font-size:12px">+${f1(m * x.riskPct)}% · +${usd(riskUsd * m)}</span>`, x.h && x.h[i] != null ? "good" : "")).join("") +
@@ -388,13 +508,26 @@
       card("Est. fees (round trip)", bal ? usd(fee) : "-") + card(sigActive(x) ? "Booked so far" : "Final result", x.booked == null ? "not filled" : `${sgn(x.booked)} R` + (bal ? ` · ${x.booked >= 0 ? "+" : "−"}${usd(Math.abs(x.booked) * riskUsd)}` : ""), x.booked == null ? "" : cls(x.booked)) +
       `</div><div class="note"><b>Timeline</b><ul>${ev.length ? ev.map(([t, n, c]) => `<li><span class="${c}">${n}</span> — ${tm(t)}</li>`).join("") : "<li>Waiting for entry…</li>"}</ul>` +
       `<b>Why this signal</b><ul>${why.map(([g, t]) => `<li><span class="${g ? "good" : "bad"}">${g ? "✔" : "✘"}</span> ${t}</li>`).join("")}</ul>` +
-      `<b>Plan:</b> ${L ? "buy" : "sell"} at entry, close ⅓ at each TP, stop at SL. Tracking keeps the original SL even after TP1 (a stop moved to entry is optional and not simulated), so “TP1 hit → then SL hit” shows when price returns to the SL. Booked R = ⅓ × each TP's R, minus ⅓ per unfilled part stopped, minus fees. Suggested leverage keeps liquidation about 2× further than the stop; position size = account × risk% ÷ SL distance. Not financial advice — backtests found no proven edge.</div>`;
+      `<b>Plan:</b> ${L ? "buy" : "sell"} at entry, close ⅓ at each TP, stop at SL. ${x.be ? "Break-even mode: after TP1 the stop moves to the entry price, so a pullback shows “TP1 HIT → stopped at entry (BE)” and the rest costs nothing." : "Break-even is off for this signal: the original SL stays even after TP1, so “TP1 hit → then SL hit” shows when price returns to the SL."} Booked R = ⅓ × each TP's R, minus ⅓ per unfilled part stopped, minus fees. Suggested leverage keeps liquidation about 2× further than the stop; position size = account × risk% ÷ SL distance. Not financial advice — backtests found no proven edge.</div>`;
+  }
+  // "Are you long or short?": higher-timeframe bias (structure + EMA stack + trend score) next to a one-line plan.
+  async function loadBias(x, my) {
+    const htf = { "1m": "15m", "5m": "1h", "15m": "1h", "30m": "4h", "1h": "4h", "2h": "4h", "4h": "4h" }[x.tf] || "4h", el = $("sigBias"), L = x.side === "LONG";
+    const d = await getKl(x.sym, htf);
+    if (cur !== my || !el) return;
+    if (!d) { el.innerHTML = "<b>Bias:</b> higher-timeframe data unavailable"; return; }
+    const an = Lib.analyze(d, null), st = Lib.liveSetups(d, P).bias, v = st + (an.ema === "FULL BULL" ? 1 : an.ema === "FULL BEAR" ? -1 : 0) + (an.bull > an.bear ? 1 : an.bear > an.bull ? -1 : 0);
+    const b = v >= 2 ? "LONG" : v <= -2 ? "SHORT" : "NEUTRAL", al = b === x.side ? ["good", "aligned with this signal"] : b === "NEUTRAL" ? ["mid", "no clear HTF bias — lower conviction"] : ["bad", "AGAINST this signal — counter-trend"];
+    const state = x.state === "pending" ? `entry pending at ${fmtP(x.entry)}` : x.state === "open" ? `running from ${fmtP(x.entry)}` : x.state === "expired" ? "cancelled" : "closed";
+    el.innerHTML = `<b>Bias (${htf}):</b> <span class="${b === "LONG" ? "good" : b === "SHORT" ? "bad" : "dim"}">${b}</span> · <span class="${al[0]}">${al[1]}</span> — structure ${st === 1 ? "bullish" : st === -1 ? "bearish" : "mixed"}, EMA ${an.ema}<br><b>Plan:</b> ${x.side} ${state}, stop ${fmtP(x.sl)}, targets ${sigLv(x.rr).map((m) => fmtP(L ? x.entry + m * Math.abs(x.entry - x.sl) : x.entry - m * Math.abs(x.entry - x.sl))).join(" → ")}${x.be ? ", stop to entry after TP1" : ""}.`;
   }
   function openDetail(x) {
+    const box = document.querySelector(".modalbox"); if (box.classList.contains("docked")) { $("modal").appendChild(box); box.classList.remove("docked"); }
     cur = { r: x.r, clicked: x.entry != null ? x : null, tf: $("tf").value, sig: x.sig || null };
     cs = { N: 130, off: 0, mx: null, my: null, drag: null };
     $("mDeriv").innerHTML = ""; $("mMtf").innerHTML = ""; $("mSig").innerHTML = cur.sig ? sigDetail(cur.sig) : "";
     $("modal").classList.remove("hidden"); showDetail();
+    if (cur.sig) loadBias(cur.sig, cur);
   }
   async function showDetail() {
     const my = cur, { r, clicked, tf } = my, scanTf = $("tf").value, stale = () => cur !== my || my.tf !== tf;
@@ -419,7 +552,9 @@
     const fu = fundOf(r.sym);
     $("mInfo").innerHTML = (sel ? card("Setup", `${sel.side} ${sel.status}`, sel.side === "LONG" ? "good" : "bad") + card("Entry / SL / TP", `${fmtP(sel.entry)} / ${fmtP(sel.sl)} / ${fmtP(sel.tp)}`) + card("RR · Risk · Break", `1:${sel.rr} · ${f1(sel.riskPct)}% · ${sel.kind}`) + card("Order age", sel.age + " bars") : card("Setups", view.live.setups.length || "none on this timeframe")) +
       (an ? card(`Trend score (${tf})`, `${an.bull} bull / ${an.bear} bear`) + card("EMA stack", an.ema) + card("ADX · RSI", `${f1(an.adx, 0)} · ${f1(an.rsi, 0)}`) : "") +
-      card("24h", sgn(+r.tk.priceChangePercent) + "%", cls(+r.tk.priceChangePercent)) + card("Funding (8h)", fu == null ? "-" : sgn(fu, 4) + "%");
+      card("RS rating", rsBadge(r.rs) + ` <span class="dim" style="font-size:12px">${r.post}</span>`) + card("vs BTC 7d / 30d / 90d", (r.vsBtc || []).map((x) => x == null ? "-" : `<span class="${cls(x)}" style="font-size:13px">${sgn(x, 0)}%</span>`).join(" · ")) + card("24h", sgn(+r.tk.priceChangePercent) + "%", cls(+r.tk.priceChangePercent)) + card("Funding (8h)", fu == null ? "-" : sgn(fu, 4) + "%");
+    const tp = tplOf(r), tn = tp.filter((x) => x[1]).length;
+    $("mInfo").innerHTML += `<div class="note tpl" style="grid-column:1/-1"><b>Trend template (${tn}/8)</b><br>${tp.map(([t, g]) => `<span class="${g ? "good" : "bad"}">${g ? "✓" : "✗"} ${t}</span>`).join("")}</div>`;
     loadDeriv(r.sym, my); loadMtf(r, my);
   }
   async function loadDeriv(sym, my) {
@@ -452,7 +587,7 @@
   }
   function drawChart(r, sel) {
     const c = r.d.map((x) => x.c);
-    ctx = { r, sel, e21: Lib.ema(c, 21), e50: Lib.ema(c, 50), e200: Lib.ema(c, 200) };
+    ctx = { r, sel, e21: Lib.ema(c, 21), e50: Lib.ema(c, 50), e200: Lib.ema(c, 200), dl: Lib.dayLevels(r.d) };
     paint();
   }
   function paint() {
@@ -473,14 +608,17 @@
     const zone = (z, col) => { const x0 = Math.max(L, X(z.t0 - 2)); if (z.t0 - 2 >= e1) return; g.fillStyle = col; const y1 = Y(z.top), y2 = Y(z.bot); g.fillRect(x0, Math.min(y1, y2), W - R - x0, Math.max(Math.abs(y2 - y1), 2)); };
     if (sel) zone(sel, sel.side === "LONG" ? "rgba(46,204,113,.18)" : "rgba(255,90,95,.18)");
     else r.live.setups.forEach((z) => zone(z, z.side === "LONG" ? "rgba(46,204,113,.15)" : "rgba(255,90,95,.15)"));
-    const line = (arr, col) => { g.strokeStyle = col; g.lineWidth = 1.2; g.beginPath(); let st = false; arr.forEach((p, i) => { if (isNaN(p)) return; const x = X(s0 + i), y = Y(p); st ? g.lineTo(x, y) : g.moveTo(x, y); st = true; }); g.stroke(); g.lineWidth = 1; };
+    const line = (arr, col, lw) => { g.strokeStyle = col; g.lineWidth = lw || 1.2; g.beginPath(); let st = false; arr.forEach((p, i) => { if (isNaN(p)) { st = false; return; } const x = X(s0 + i), y = Y(p); st ? g.lineTo(x, y) : g.moveTo(x, y); st = true; }); g.stroke(); g.lineWidth = 1; };
     line(e21, "#4da3ff"); line(e50, "#f5b942"); line(e200, "#b07cff");
+    const pva = ctx.dl.va[ctx.dl.day[e1 - 1] - 1];
+    if (pva) [["VAH", pva.vah], ["POC", pva.poc], ["VAL", pva.val]].forEach(([n, p]) => { if (p < lo || p > hi) return; g.strokeStyle = g.fillStyle = "#e08cff"; g.setLineDash(n === "POC" ? [2, 3] : [8, 3]); g.beginPath(); g.moveTo(L, Y(p)); g.lineTo(W - R, Y(p)); g.stroke(); g.setLineDash([]); g.textAlign = "left"; g.fillText(`${n} ${fmtP(p)}`, W - R + 6, Y(p) - 3); });
     v.forEach((k, j) => { const x = X(s0 + j), up = k.c >= k.o; g.strokeStyle = g.fillStyle = up ? "#2ecc71" : "#ff5a5f"; g.beginPath(); g.moveTo(x, Y(k.h)); g.lineTo(x, Y(k.l)); g.stroke(); const y1 = Y(Math.max(k.o, k.c)), y2 = Y(Math.min(k.o, k.c)); g.fillRect(x - cw * 0.35, y1, Math.max(cw * 0.7, 1), Math.max(y2 - y1, 1)); });
+    line(ctx.dl.vwap.slice(s0, e1).map((p, i) => ctx.dl.day[s0 + i] === ctx.dl.day[s0 + i - 1] || i === 0 ? p : NaN), "#19c3d6", 2.2);
     g.font = "10px sans-serif"; g.textAlign = "center";
     if (N <= 200) r.live.swings.filter((w) => w.i >= s0 && w.i < e1).forEach((w) => { g.fillStyle = dim; g.fillText(w.type === "H" ? "▼" : "▲", X(w.i), w.type === "H" ? Y(w.p) - 4 : Y(w.p) + 12); });
     r.live.breaks.filter((b) => b.i >= s0 && b.i < e1).forEach((b) => { const x0 = X(Math.max(s0, b.i - 12)), x1 = X(b.i), y = Y(b.p); g.strokeStyle = b.dir === 1 ? "#2ecc71" : "#ff5a5f"; g.setLineDash([4, 3]); g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke(); g.setLineDash([]); g.fillStyle = g.strokeStyle; g.fillText(b.kind, (x0 + x1) / 2, y + (b.dir === 1 ? -4 : 11)); });
     if (sel) [["TP", sel.tp, "#2ecc71"], ["Entry", sel.entry, "#4da3ff"], ["SL", sel.sl, "#ff5a5f"]].forEach(([n, p, col]) => { g.strokeStyle = col; g.setLineDash([6, 4]); g.beginPath(); g.moveTo(L, Y(p)); g.lineTo(W - R, Y(p)); g.stroke(); g.setLineDash([]); g.fillStyle = col; g.textAlign = "left"; g.fillText(`${n} ${fmtP(p)}`, W - R + 6, Y(p) - 3); });
-    g.fillStyle = dim; g.textAlign = "left"; g.fillText("EMA21 blue · EMA50 yellow · EMA200 purple · shaded = FVG zone · ▲▼ swings", L + 4, H - 5);
+    g.fillStyle = dim; g.textAlign = "left"; g.fillText("EMA21 blue · EMA50 yellow · EMA200 purple · cyan = daily VWAP · pink = prev-day VAH/POC/VAL · shaded = FVG zone · ▲▼ swings", L + 4, H - 5);
     if (cs.mx != null && cs.mx >= L && cs.mx <= W - R && cs.my >= T && cs.my <= H - B) {
       const j = Math.min(N - 1, Math.max(0, Math.floor((cs.mx - L) / cw))), k = v[j], x = X(s0 + j), price = hi - (cs.my - T) / (H - T - B) * (hi - lo);
       g.strokeStyle = dim; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x, T); g.lineTo(x, H - B); g.moveTo(L, cs.my); g.lineTo(W - R, cs.my); g.stroke(); g.setLineDash([]);
@@ -585,7 +723,7 @@
   }
 
   // ---------- export / share / theme ----------
-  const TAB_TABLE = { signals: "sigTable", smc: "smcTable", trend: "trendTable", ema: "emaTable", sector: "sectorTable", alerts: "alertTable", proof: "btTable" };
+  const TAB_TABLE = { screener: "scrTable", report: "repTable", signals: "sigTable", smc: "smcTable", trend: "trendTable", ema: "emaTable", sector: "sectorTable", alerts: "alertTable", proof: "btTable" };
   const activeTab = () => document.querySelector("#tabs button.on").dataset.tab;
   function exportCsv() {
     const id = TAB_TABLE[activeTab()], s = tblState[id]; if (!s || !s.sorted.length) return;
@@ -601,8 +739,8 @@
     if (top && [...$("top").options].some((o) => o.value === top)) $("top").value = top;
     if (tab) { const b = document.querySelector(`#tabs button[data-tab="${tab}"]`); if (b) showTab(b); }
   }
-  function showTab(b) { document.querySelectorAll("#tabs > button").forEach((x) => x.classList.toggle("on", x === b)); document.querySelectorAll("main > section").forEach((s) => s.classList.toggle("hidden", s.id !== "tab-" + b.dataset.tab)); syncHash(); }
-  function setTheme(t) { document.documentElement.dataset.theme = t; localStorage.setItem("theme", t); if (!$("modal").classList.contains("hidden")) paint(); }
+  function showTab(b) { document.querySelectorAll("#tabs > button").forEach((x) => x.classList.toggle("on", x === b)); document.querySelectorAll("main > section").forEach((s) => s.classList.toggle("hidden", s.id !== "tab-" + b.dataset.tab)); syncHash(); if (b.dataset.tab === "screener" && rows.length) ensureDock(); }
+  function setTheme(t) { document.documentElement.dataset.theme = t; localStorage.setItem("theme", t); if (ctx) paint(); }
 
   // ---------- notifications ----------
   function notify() {
@@ -615,7 +753,7 @@
   }
 
   // ---------- wiring ----------
-  function renderAll() { renderMarket(); renderSignals(); renderSmc(); renderTrend(); renderEma(); renderSector(); renderBt(); renderAlerts(); renderFwd(); }
+  function renderAll() { renderMarket(); renderScreener(); renderSignals(); renderReport(); renderSmc(); renderTrend(); renderEma(); renderSector(); renderBt(); renderAlerts(); renderFwd(); }
   function loadSettings() { Object.keys(DEF).forEach((k) => { const el = $("p_" + k); if (el) el.value = P[k]; }); }
   function readSettings() { Object.keys(DEF).forEach((k) => { const el = $("p_" + k); if (el) P[k] = el.tagName === "SELECT" && k === "only" ? el.value : +el.value; }); P.only = $("p_only").value || null; P.trend = +$("p_trend").value; localStorage.setItem("smcP", JSON.stringify(P)); }
   P.only = P.only || null; loadSettings(); $("p_only").value = P.only || "";
@@ -628,7 +766,10 @@
   $("f_search").oninput = () => rows.length && renderSmc();
   const acct = ls("acct", { bal: 1000, risk: 1 }); $("s_bal").value = acct.bal; $("s_risk").value = acct.risk;
   ["s_bal", "s_risk"].forEach((id) => $(id).oninput = () => save("acct", { bal: +$("s_bal").value, risk: +$("s_risk").value }));
+  $("s_be").checked = localStorage.getItem("be") !== "0"; $("s_be").onchange = () => localStorage.setItem("be", $("s_be").checked ? "1" : "0");
   ["s_min", "s_side"].forEach((id) => $(id).onchange = () => rows.length && renderSignals()); $("s_search").oninput = () => rows.length && renderSignals();
+  $("scr_search").oninput = () => rows.length && renderScreener();
+  ["r_per", "r_side"].forEach((id) => $(id).onchange = renderReport);
   ["t_min", "t_side"].forEach((id) => $(id).onchange = () => rows.length && renderTrend()); $("t_search").oninput = () => rows.length && renderTrend();
   ["e_mode"].forEach((id) => $(id).onchange = () => rows.length && renderEma()); $("e_adx").oninput = () => rows.length && renderEma(); $("e_search").oninput = () => rows.length && renderEma();
   $("tf").onchange = () => { syncHash(); scan(); }; $("top").onchange = () => { syncHash(); scan(); };
@@ -637,7 +778,7 @@
   $("favOnly").checked = localStorage.getItem("favOnly") === "1";
   $("favOnly").onchange = () => { localStorage.setItem("favOnly", $("favOnly").checked ? "1" : "0"); if (rows.length) renderAll(); };
   $("theme").onclick = () => setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
-  document.documentElement.dataset.theme = localStorage.getItem("theme") || "dark";
+  document.documentElement.dataset.theme = localStorage.getItem("theme") || "light";
   $("csv").onclick = exportCsv;
   $("share").onclick = async () => { syncHash(); try { await navigator.clipboard.writeText(location.href); $("share").textContent = "✔ Copied"; } catch (e) { $("share").textContent = "Copy from URL bar"; } setTimeout(() => $("share").textContent = "🔗 Link", 1800); };
   $("a_add").onclick = () => { rules.push({ id: Date.now(), side: $("a_side").value, score: +$("a_score").value, ema: +$("a_ema").value, pb: +$("a_pb").value, setup: $("a_setup").value, vol: +$("a_vol").value || 0, adx: +$("a_adx").value || 0 }); save("rules", rules); alertKeys.clear(); renderAlerts(); if (rows.length) { evalAlerts(); renderAlerts(); } };
@@ -647,7 +788,7 @@
   $("tabs").onclick = (e) => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b); };
   $("closeModal").onclick = () => { $("modal").classList.add("hidden"); cur = null; };
   $("modal").onclick = (e) => { if (e.target === $("modal")) { $("modal").classList.add("hidden"); cur = null; } };
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("modal").classList.add("hidden"); cur = null; } });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !document.querySelector(".modalbox").classList.contains("docked")) { $("modal").classList.add("hidden"); cur = null; } });
   applyHash();
   scan();
 })();
