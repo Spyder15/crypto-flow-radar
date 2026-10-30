@@ -363,6 +363,8 @@
       { k: "chg", t: "Chg%", v: (r) => +r.tk.priceChangePercent, f: (r) => `<span class="${cls(+r.tk.priceChangePercent)}">${sgn(+r.tk.priceChangePercent, 1)}%</span>` },
       { k: "rs", t: "RS", v: (r) => r.rs, f: (r) => rsBadge(r.rs) },
       { k: "post", t: "Posture", v: (r) => r.post, f: (r) => `<span class="dim">${r.post}</span>` },
+      { k: "side", t: "Side", v: (r) => trendSide(r), f: (r) => pill(trendSide(r)) },
+      ...planCols((r) => sidePlan(r, trendSide(r))),
     ], data, (r) => selectCoin(r.sym), { k: "rs", dir: -1 });
     markSel();
     if (!selSym || !rows.some((r) => r.sym === selSym)) { const f = tblState.scrTable.sorted[0]; if (f) selectCoin(f.sym); } else ensureDock();
@@ -427,6 +429,7 @@
       { k: "sym", t: "Symbol", v: (x) => x.sym, f: (x) => symCell(x.sym) },
       { k: "side", t: "Side", v: (x) => x.side, f: (x) => pill(x.side) },
       { k: "score", t: "Score", v: (x) => x.score, f: (x) => `<b>${x.score}/5</b>` },
+      ...planCols((x) => sidePlan(x.r, x.side)),
       { k: "dmi", t: "DMI", v: (x) => ok(x, "dmi") ? 1 : 0, f: (x) => mark(x, "dmi") },
       { k: "rsiE", t: "RSI&gt;EMA", v: (x) => ok(x, "rsiEma") ? 1 : 0, f: (x) => mark(x, "rsiEma") },
       { k: "r50", t: "RSI 50", v: (x) => ok(x, "rsi50") ? 1 : 0, f: (x) => mark(x, "rsi50") },
@@ -458,6 +461,22 @@
     r._pl = { key, v };
     return v;
   }
+  // Market-entry plan for a given side (swing/ATR stop, TPs from R:R); null when the stop is too wide or a target is non-positive.
+  function sidePlan(r, side) {
+    const key = r.d.length + "|" + P.rr + "|" + side; r._sp = r._sp || {};
+    if (r._sp[side] && r._sp[side].key === key) return r._sp[side].v;
+    let v = trendEntry(r, side); if (v.skip) v = null;
+    if (v) { const risk = Math.abs(v.entry - v.sl), L = side === "LONG"; v.tps = sigLv(v.rr).map((m) => L ? v.entry + m * risk : v.entry - m * risk); if (!(v.riskPct <= 15) || v.tps.some((t) => t <= 0)) v = null; }
+    r._sp[side] = { key, v };
+    return v;
+  }
+  const planCols = (get) => [
+    { k: "en", t: "Entry", v: (x) => (get(x) || {}).entry, f: (x) => { const p = get(x); return p ? fmtP(p.entry) : "-"; } },
+    { k: "sl", t: "Stop loss", v: (x) => (get(x) || {}).sl, f: (x) => { const p = get(x); return p ? `<span class="bad">${fmtP(p.sl)}</span>` : "-"; } },
+    ...[0, 1, 2].map((i) => ({ k: "tp" + (i + 1), t: "TP" + (i + 1), v: (x) => (get(x) || { tps: [] }).tps[i], f: (x) => { const p = get(x); return p ? fmtP(p.tps[i]) : "-"; } })),
+    { k: "rk", t: "Risk %", v: (x) => (get(x) || {}).riskPct, f: (x) => { const p = get(x); return p ? f1(p.riskPct) : "-"; } },
+  ];
+  const trendSide = (r) => r.an.bull >= r.an.bear ? "LONG" : "SHORT";
   function renderEma() {
     const m = $("e_mode").value, adx = +$("e_adx").value || 0, q = $("e_search").value.trim().toUpperCase();
     const data = rows.filter((r) => ({ fullbull: r.an.ema === "FULL BULL", fullbear: r.an.ema === "FULL BEAR", pbl: r.an.pullback === "LONG", pbs: r.an.pullback === "SHORT", rtl: !!emaRetest(r, "LONG"), rts: !!emaRetest(r, "SHORT"), all: true }[m]) && r.an.adx >= adx && (!q || r.sym.includes(q)) && favOk(r.sym));
@@ -737,6 +756,7 @@
     table($("alertTable"), [
       { k: "sym", t: "Symbol", v: (x) => x.sym, f: (x) => symCell(x.sym) }, { k: "side", t: "Side", v: (x) => x.side, f: (x) => pill(x.side) },
       { k: "score", t: "Score", v: (x) => x.score, f: (x) => x.score + "/5" }, { k: "price", t: "Price", v: (x) => x.r.an.price, f: (x) => fmtP(x.r.an.price) },
+      ...planCols((x) => sidePlan(x.r, x.side)),
       { k: "rule", t: "Rule", v: (x) => x.rule, f: (x) => `<span class="dim">${esc(x.rule)}</span>` },
     ], now, (x) => openDetail({ r: x.r }), { k: "score", dir: -1 });
     table($("alertLog"), [
