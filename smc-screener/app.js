@@ -443,6 +443,21 @@
   const volRatio = (r) => r.vol7 > 0 ? +r.tk.quoteVolume / r.vol7 : NaN;
 
   // ---------- EMA tab ----------
+  // Trade plan for the EMA table: EMA 50/200 retest first, else EMA21 pullback, else full EMA stack (market entry, swing/ATR stop, TP from R:R).
+  function emaPlan(r) {
+    const key = r.d.length + "|" + P.rr;
+    if (r._pl && r._pl.key === key) return r._pl.v;
+    let v = null;
+    for (const side of ["LONG", "SHORT"]) { const q = emaRetest(r, side); if (q) { v = Object.assign(q, { src: q.lvl + " retest" }); break; } }
+    if (!v) {
+      const side = r.an.pullback || (r.an.ema === "FULL BULL" ? "LONG" : r.an.ema === "FULL BEAR" ? "SHORT" : null);
+      if (side) { const q = trendEntry(r, side); if (!q.skip) v = Object.assign(q, { src: r.an.pullback ? "EMA21 pullback" : "EMA stack" }); }
+    }
+    if (v && (!(v.riskPct <= 15) || sigLv(v.rr).some((m) => (v.side === "LONG" ? v.entry + m * Math.abs(v.entry - v.sl) : v.entry - m * Math.abs(v.entry - v.sl)) <= 0))) v = null; // drop plans with a huge stop or a non-positive target
+    if (v) { const risk = Math.abs(v.entry - v.sl), L = v.side === "LONG"; v.tps = sigLv(v.rr).map((m) => L ? v.entry + m * risk : v.entry - m * risk); }
+    r._pl = { key, v };
+    return v;
+  }
   function renderEma() {
     const m = $("e_mode").value, adx = +$("e_adx").value || 0, q = $("e_search").value.trim().toUpperCase();
     const data = rows.filter((r) => ({ fullbull: r.an.ema === "FULL BULL", fullbear: r.an.ema === "FULL BEAR", pbl: r.an.pullback === "LONG", pbs: r.an.pullback === "SHORT", rtl: !!emaRetest(r, "LONG"), rts: !!emaRetest(r, "SHORT"), all: true }[m]) && r.an.adx >= adx && (!q || r.sym.includes(q)) && favOk(r.sym));
@@ -450,6 +465,13 @@
       { k: "sym", t: "Symbol", v: (r) => r.sym, f: (r) => symCell(r.sym) },
       { k: "stack", t: "EMA stack", v: (r) => r.an.ema, f: (r) => `<span class="${r.an.ema === "FULL BULL" ? "good" : r.an.ema === "FULL BEAR" ? "bad" : "dim"}">${r.an.ema}</span>` },
       { k: "rt", t: "EMA 50/200 retest", v: (r) => (emaRetest(r, "LONG") || emaRetest(r, "SHORT") || {}).side || "", f: (r) => { const q = emaRetest(r, "LONG") || emaRetest(r, "SHORT"); return q ? `${pill(q.side)} <span class="dim">${q.lvl}</span>` : "-"; } },
+      { k: "side", t: "Side", v: (r) => (emaPlan(r) || {}).side || "", f: (r) => { const p = emaPlan(r); return p ? `${pill(p.side)} <span class="dim">${p.src}</span>` : "-"; } },
+      { k: "en", t: "Entry", v: (r) => (emaPlan(r) || {}).entry, f: (r) => { const p = emaPlan(r); return p ? fmtP(p.entry) : "-"; } },
+      { k: "sl", t: "Stop loss", v: (r) => (emaPlan(r) || {}).sl, f: (r) => { const p = emaPlan(r); return p ? `<span class="bad">${fmtP(p.sl)}</span>` : "-"; } },
+      { k: "tp1", t: "TP1", v: (r) => (emaPlan(r) || { tps: [] }).tps[0], f: (r) => { const p = emaPlan(r); return p ? fmtP(p.tps[0]) : "-"; } },
+      { k: "tp2", t: "TP2", v: (r) => (emaPlan(r) || { tps: [] }).tps[1], f: (r) => { const p = emaPlan(r); return p ? fmtP(p.tps[1]) : "-"; } },
+      { k: "tp3", t: "TP3", v: (r) => (emaPlan(r) || { tps: [] }).tps[2], f: (r) => { const p = emaPlan(r); return p ? fmtP(p.tps[2]) : "-"; } },
+      { k: "rk", t: "Risk %", v: (r) => (emaPlan(r) || {}).riskPct, f: (r) => { const p = emaPlan(r); return p ? f1(p.riskPct) : "-"; } },
       { k: "pb", t: "Pullback", v: (r) => r.an.pullback, f: (r) => r.an.pullback ? pill(r.an.pullback) : "-" },
       { k: "price", t: "Price", v: (r) => r.an.price, f: (r) => fmtP(r.an.price) },
       { k: "d21", t: "Dist EMA21 %", v: (r) => (r.an.price / r.an.e21 - 1) * 100, f: (r) => sgn((r.an.price / r.an.e21 - 1) * 100) },
