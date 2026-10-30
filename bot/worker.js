@@ -41,7 +41,8 @@ export async function run(env, { force = false } = {}) {
   if (!force && sinceClose > 10 * 60e3) return { skipped: true };
   const [tk, pi] = await Promise.all([j("/fapi/v1/ticker/24hr"), j("/fapi/v1/premiumIndex")]);
   const fund = {}; pi.forEach((x) => { fund[x.symbol] = +x.lastFundingRate * 100; });
-  const list = tk.filter((t) => t.symbol.endsWith("USDT") && !t.symbol.includes("_") && !SKIP.test(t.symbol.replace(/USDT$/, "")) && +t.quoteVolume > 0)
+  const wanted = (env.SYMBOLS || "").split(",").map((x) => x.trim().toUpperCase()).filter(Boolean);
+  const list = wanted.length ? wanted.map((symbol) => ({ symbol })) : tk.filter((t) => t.symbol.endsWith("USDT") && !t.symbol.includes("_") && !SKIP.test(t.symbol.replace(/USDT$/, "")) && +t.quoteVolume > 0)
     .sort((a, b) => b.quoteVolume - a.quoteVolume).slice(0, top);
   const sent = [];
   for (const t of list) {
