@@ -181,9 +181,31 @@
         Object.assign(ck, levelChecks(r, side));
         const passed = Object.values(ck).filter(Boolean).length;
         out.push(Object.assign({ sym: r.sym, r, score: sc, ck, passed }, s || (passed >= 4 ? trendEntry(r, side) : { skip: true })));
+        const er = emaRetest(r, side);
+        if (er) out.push(Object.assign({ sym: r.sym, r, score: sc, ck, passed }, er));
       });
     });
     return out.filter((x) => !x.skip);
+  }
+  // EMA 50/200 retest (works best on 4h-1D): in an EMA50>EMA200 uptrend, a candle tags EMA50 or EMA200 from above and closes back above it, then the last candle is green -> LONG.
+  // Mirror for SHORT. Entry at the last close, SL beyond the retest wick (+0.3 ATR), TP = RR x risk.
+  function emaRetest(r, side) {
+    const d = r.d, N = d.length; if (N < 210) return null;
+    if (!r._em || r._em.n !== N) { const c = d.map((k) => k.c); r._em = { n: N, e50: Lib.ema(c, 50), e200: Lib.ema(c, 200) }; }
+    const L = side === "LONG", atr = r.live.atr[N - 1], last = d[N - 1], price = last.c; if (!(atr > 0)) return null;
+    const E = r._em, lv = [["EMA50", E.e50], ["EMA200", E.e200]];
+    if (L ? !(E.e50[N - 1] > E.e200[N - 1]) : !(E.e50[N - 1] < E.e200[N - 1])) return null;
+    if (L ? !(last.c > last.o) : !(last.c < last.o)) return null;
+    for (const [name, e] of lv) {
+      if (L ? price <= e[N - 1] : price >= e[N - 1]) continue;
+      let wick = null;
+      for (let i = N - 3; i < N; i++) { const k = d[i], ev = e[i]; if (L ? k.l <= ev + 0.25 * atr && k.c > ev - 0.25 * atr : k.h >= ev - 0.25 * atr && k.c < ev + 0.25 * atr) wick = L ? Math.min(wick == null ? k.l : wick, k.l) : Math.max(wick == null ? k.h : wick, k.h); }
+      if (wick == null) continue;
+      const sl = L ? wick - 0.3 * atr : wick + 0.3 * atr, risk = Math.abs(price - sl);
+      if (!(risk > 0) || risk > 2 * atr) continue;
+      return { side, kind: "EMA RETEST", lvl: name, strat: true, status: "TRIGGERED", fb: true, top: price, bot: price, entry: price, sl, tp: L ? price + P.rr * risk : price - P.rr * risk, rr: P.rr, riskPct: risk / price * 100, distPct: 0, age: 0, t0: N - 1, filledBarsAgo: 0 };
+    }
+    return null;
   }
   // No FVG order available: enter at the last close, SL beyond the latest swing (1-3 ATR away), TP = RR x risk.
   function trendEntry(r, side) {
@@ -197,14 +219,14 @@
   }
   function sigUpdate() {
     const tf = $("tf").value, bySym = {}; rows.forEach((r) => bySym[r.sym] = r);
-    signalAll().filter((x) => x.passed >= 4).forEach((x) => {
-      const d = x.r.d, N = d.length, setupT = d[x.t0].t, id = `${x.sym}|${tf}|${x.side}|${setupT}`;
+    signalAll().filter((x) => x.passed >= 4 || x.strat).forEach((x) => {
+      const d = x.r.d, N = d.length, setupT = d[x.t0].t, id = `${x.sym}|${tf}|${x.side}|${setupT}${x.strat ? "|E" : ""}`;
       let e = sigLog.find((q) => q.id === id);
       if (!e) {
         if (!(x.riskPct <= 15) || !(x.tp > 0) || !(x.sl > 0)) return; // skip degenerate plans (huge stop distance or non-positive target)
-        if (x.fb && sigLog.some((q) => q.sym === x.sym && q.tf === tf && q.side === x.side && q.fb && q.setupT > d[Math.max(0, N - 13)].t)) return; // cooldown: one market signal per 12 bars
+        if (x.fb && sigLog.some((q) => q.sym === x.sym && q.tf === tf && q.side === x.side && q.fb && q.kind === x.kind && q.setupT > d[Math.max(0, N - 13)].t)) return; // cooldown: one market signal per 12 bars
         const trig = x.status === "TRIGGERED", seenT = x.fb ? d[N - 1].t : trig ? d[N - 1 - x.filledBarsAgo - 1].t : d[N - 1].t; // triggered FVG: replay from the bar before the fill
-        e = { id, sym: x.sym, tf, side: x.side, kind: x.kind, fb: !!x.fb, setupT, entry: x.entry, sl: x.sl, tp: x.tp, rr: x.rr, riskPct: x.riskPct, inval: x.side === "LONG" ? x.bot : x.top, seenT, be: $("s_be").checked, age0: trig ? 0 : x.age, state: x.fb ? "open" : "pending" };
+        e = { id, sym: x.sym, tf, side: x.side, kind: x.kind, lvl: x.lvl, fb: !!x.fb, setupT, entry: x.entry, sl: x.sl, tp: x.tp, rr: x.rr, riskPct: x.riskPct, inval: x.side === "LONG" ? x.bot : x.top, seenT, be: $("s_be").checked, age0: trig ? 0 : x.age, state: x.fb ? "open" : "pending" };
         if (x.fb) e.fillT = d[N - 1].t;
         sigLog.push(e);
       }
@@ -257,7 +279,7 @@
   const sigActive = (e) => e.state === "pending" || e.state === "open";
   function signalRows() {
     const tf = $("tf").value, min = +$("s_min").value, side = $("s_side").value, q = $("s_search").value.trim().toUpperCase(), bySym = {}; rows.forEach((r) => bySym[r.sym] = r);
-    const all = sigLog.filter((e) => e.tf === tf && bySym[e.sym] && (e.passed || 0) >= min && (!side || e.side === side) && (!q || e.sym.includes(q)) && favOk(e.sym));
+    const all = sigLog.filter((e) => e.tf === tf && bySym[e.sym] && ((e.passed || 0) >= min || e.kind === "EMA RETEST") && (!side || e.side === side) && (!q || e.sym.includes(q)) && favOk(e.sym));
     const active = all.filter(sigActive), closed = all.filter((e) => !sigActive(e)).sort((a, b) => b.lastT - a.lastT).slice(0, 30);
     return active.concat(closed).map((e) => {
       const r = bySym[e.sym];
@@ -275,7 +297,7 @@
       { k: "sym", t: "Symbol", v: (x) => x.sym, f: (x) => symCell(x.sym) },
       { k: "side", t: "Side", v: (x) => x.side, f: (x) => pill(x.side) },
       { k: "state", t: "Status", v: (x) => x.st[2], f: (x) => `<span class="pill ${x.st[0]}">${x.st[1]}</span>` },
-      { k: "entry", t: "Entry", v: (x) => x.entry, f: (x) => fmtP(x.entry) + (x.fb ? ' <span class="dim" title="No FVG order: entered at the close of the signal candle">mkt</span>' : ' <span class="dim" title="FVG limit order">lmt</span>') },
+      { k: "entry", t: "Entry", v: (x) => x.entry, f: (x) => fmtP(x.entry) + (x.kind === "EMA RETEST" ? ` <span class="dim" title="EMA 50/200 retest: entered at the close of the bounce/rejection candle">${x.lvl || "EMA"} retest</span>` : x.fb ? ' <span class="dim" title="No FVG order: entered at the close of the signal candle">mkt</span>' : ' <span class="dim" title="FVG limit order">lmt</span>') },
       { k: "sl", t: "Stop loss", v: (x) => x.sl, f: (x) => x.slBE ? `<span class="dim">BE ${fmtP(x.entry)}</span> <s class="dim">${fmtP(x.sl)}</s>` : x.slT ? `<span class="bad">✘ ${fmtP(x.sl)}</span>` : fmtP(x.sl) },
       { k: "tp1", t: "TP1", v: (x) => x.h && x.h[0] != null ? 1 : 0, f: (x) => tpCell(x, 0) },
       { k: "tp2", t: "TP2", v: (x) => x.h && x.h[1] != null ? 1 : 0, f: (x) => tpCell(x, 1) },
@@ -423,10 +445,11 @@
   // ---------- EMA tab ----------
   function renderEma() {
     const m = $("e_mode").value, adx = +$("e_adx").value || 0, q = $("e_search").value.trim().toUpperCase();
-    const data = rows.filter((r) => ({ fullbull: r.an.ema === "FULL BULL", fullbear: r.an.ema === "FULL BEAR", pbl: r.an.pullback === "LONG", pbs: r.an.pullback === "SHORT", all: true }[m]) && r.an.adx >= adx && (!q || r.sym.includes(q)) && favOk(r.sym));
+    const data = rows.filter((r) => ({ fullbull: r.an.ema === "FULL BULL", fullbear: r.an.ema === "FULL BEAR", pbl: r.an.pullback === "LONG", pbs: r.an.pullback === "SHORT", rtl: !!emaRetest(r, "LONG"), rts: !!emaRetest(r, "SHORT"), all: true }[m]) && r.an.adx >= adx && (!q || r.sym.includes(q)) && favOk(r.sym));
     table($("emaTable"), [
       { k: "sym", t: "Symbol", v: (r) => r.sym, f: (r) => symCell(r.sym) },
       { k: "stack", t: "EMA stack", v: (r) => r.an.ema, f: (r) => `<span class="${r.an.ema === "FULL BULL" ? "good" : r.an.ema === "FULL BEAR" ? "bad" : "dim"}">${r.an.ema}</span>` },
+      { k: "rt", t: "EMA 50/200 retest", v: (r) => (emaRetest(r, "LONG") || emaRetest(r, "SHORT") || {}).side || "", f: (r) => { const q = emaRetest(r, "LONG") || emaRetest(r, "SHORT"); return q ? `${pill(q.side)} <span class="dim">${q.lvl}</span>` : "-"; } },
       { k: "pb", t: "Pullback", v: (r) => r.an.pullback, f: (r) => r.an.pullback ? pill(r.an.pullback) : "-" },
       { k: "price", t: "Price", v: (r) => r.an.price, f: (r) => fmtP(r.an.price) },
       { k: "d21", t: "Dist EMA21 %", v: (r) => (r.an.price / r.an.e21 - 1) * 100, f: (r) => sgn((r.an.price / r.an.e21 - 1) * 100) },
