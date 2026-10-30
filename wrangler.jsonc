@@ -1,5 +1,8 @@
 {
   "name": "crypto-flow-radar",
+  "main": "bot/worker.js",
   "compatibility_date": "2025-01-01",
-  "assets": { "directory": "./smc-screener" }
+  "assets": { "directory": "./smc-screener" },
+  "triggers": { "crons": ["1 */4 * * *"] },
+  "vars": { "TF": "4h", "TOP": "30" }
 }
