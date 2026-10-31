@@ -3,23 +3,44 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Live signals — Crypto Flow Radar</title>
-<meta name="description" content="Open and closed trades posted by the Crypto Flow Radar Telegram bot, with results in R.">
-<script src="theme.js?v=3"></script>
-<link rel="stylesheet" href="style.css?v=8">
+<title>Live ledger — Crypto Flow Radar</title>
+<meta name="description" content="Every signal the Crypto Flow Radar Telegram bot posted, tracked to TP or stop, with results in R.">
+<link rel="stylesheet" href="live.css?v=1">
 </head>
 <body>
-<header>
-  <div class="brand"><span class="logo">◆</span> Live signals <small>posted by the Telegram bot · results in R · no cherry-picking</small></div>
-  <div class="controls"><a href="dashboard.html" class="homelink">← Dashboard</a><a href="./" class="homelink">Home</a></div>
+<header class="top">
+  <div class="brand"><b>SF</b><span>SPYDER LEDGER</span></div>
+  <div class="sub">Telegram bot signals · tracked to TP/SL · results in R · nothing is hidden</div>
+  <nav><a href="dashboard.html">Screener</a><a href="./">Home</a></nav>
 </header>
-<div id="status" class="status">Loading…</div>
-<main style="padding:14px 18px">
-  <div id="sum" class="cards"></div>
-  <h3>Open trades</h3><div class="tablewrap"><table id="open"></table></div>
-  <h3>Closed trades (latest 100)</h3><div class="tablewrap"><table id="closed"></table></div>
-  <p class="dim">R = result in multiples of the initial risk, each trade exits at its final stop or target. Small sample, no proven edge, not financial advice.</p>
+
+<main>
+  <div class="titlebar"><h1>DASHBOARD</h1><span id="status" class="dim">Loading…</span></div>
+
+  <section class="kpis" id="kpi1"></section>
+  <section class="kpis" id="kpi2"></section>
+
+  <section class="grid3">
+    <div class="panel"><h2>CUMULATIVE R <em id="cumTag"></em></h2><canvas id="cCum"></canvas></div>
+    <div class="panel"><h2>DRAWDOWN <em id="ddTag"></em></h2><canvas id="cDD"></canvas></div>
+    <div class="panel"><h2>R PER TRADE</h2><canvas id="cTrades"></canvas></div>
+  </section>
+
+  <section class="grid3">
+    <div class="panel"><h2>RECENT TRADES</h2><div class="scroll"><table id="recent"></table></div></div>
+    <div class="panel"><h2>SCORE <em id="scoreTag"></em></h2><canvas id="cScore"></canvas></div>
+    <div class="panel"><h2>WIN % (rolling 20 trades)</h2><canvas id="cRoll"></canvas></div>
+  </section>
+
+  <section class="grid2">
+    <div class="panel"><h2>OPEN POSITIONS <em id="openTag"></em></h2><div class="scroll"><table id="open"></table></div></div>
+    <div class="panel"><h2>NET DAILY R</h2><canvas id="cDaily"></canvas></div>
+  </section>
+
+  <section class="panel"><h2>INSIGHTS</h2><ul id="insights"></ul></section>
+
+  <p class="dim foot">R = result in multiples of the initial risk; each trade exits at its final stop or target. Signals from the 15m test runs and below 7/8 confirmations are excluded. Small sample, no proven edge, not financial advice.</p>
 </main>
-<script src="live.js?v=1"></script>
+<script src="live.js?v=2"></script>
 </body>
 </html>
