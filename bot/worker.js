@@ -30,7 +30,7 @@ function caption(s, env = {}) {
     ...s.reasons.map((x) => "▸ " + esc(x)),
     "",
     "<i>⚠️ Not financial advice. No proven edge; wins and losses both posted. Trade at your own risk.</i>",
-    "<b>— SPYDER Flow Radar</b>",
+    "<b>— SPYDER Flow Radar</b> · <a href=\"https://crypto-flow-radar.live-scanner.workers.dev/live.html\">📊 Live results</a>",
   ].join("\n");
 }
 

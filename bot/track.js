@@ -35,7 +35,7 @@ const R = (x) => (Math.abs(x) < 0.05 ? "0.0" : (x > 0 ? "+" : "") + x.toFixed(1)
 export function eventText(t, ev) {
   const L = t.side === "LONG", base = t.sym.replace(/USDT$/, ""), head = `${L ? "🟢" : "🔴"} <b>#${base} ${t.side}</b> · ${t.tf.toUpperCase()}`;
   const line = "━━━━━━━━━━━━━━", lv = `📍 Entry <code>${fmt(t.entry)}</code>`;
-  const foot = "<b>— SPYDER Flow Radar</b>";
+  const foot = "<b>— SPYDER Flow Radar</b> · <a href=\"https://crypto-flow-radar.live-scanner.workers.dev/live.html\">📊 Live results</a>";
   const body = {
     TP1: [`🎯 <b>TP1 HIT</b> ✅  (${R(rOf(t, t.tps[0]))})`, line, lv, `🔒 <b>Move SL to breakeven</b> → <code>${fmt(t.entry)}</code>`, `Next: TP2 <code>${fmt(t.tps[1])}</code>`],
     TP2: [`🎯 <b>TP2 HIT</b> ✅✅  (${R(rOf(t, t.tps[1]))})`, line, lv, `🔒 <b>Move SL to TP1</b> → <code>${fmt(t.tps[0])}</code>`, `Next: TP3 <code>${fmt(t.tps[2])}</code>`],
@@ -88,7 +88,7 @@ export async function weekly(env, days = 7, now = Date.now()) {
     dec ? `Win rate (excl. BE): <b>${((wins.length / dec) * 100).toFixed(0)}%</b>` : "Win rate: n/a",
     `Net result: <b>${R(tot)}</b>  <i>(each trade exits at its final stop/target)</i>`,
     ...(rows.length ? ["", ...rows] : ["", "No closed trades in this period."]),
-    "", "<i>Small sample, no proven edge. Not financial advice.</i>", "<b>— SPYDER Flow Radar</b>",
+    "", "<i>Small sample, no proven edge. Not financial advice.</i>", "<b>— SPYDER Flow Radar</b> · <a href=\"https://crypto-flow-radar.live-scanner.workers.dev/live.html\">📊 Live results</a>",
   ].join("\n");
 }
 
