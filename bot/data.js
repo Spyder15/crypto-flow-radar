@@ -1,6 +1,7 @@
 // Market data from Bybit public API (Binance blocks Cloudflare Workers with 403).
 const HOSTS = ["https://api.bybit.com", "https://api.bytick.com"];
-const IV = { "1h": "60", "4h": "240", "1d": "D" };
+const IV = { "15m": "15", "1h": "60", "4h": "240", "1d": "D" };
+const OI_IV = { "15m": "15min", "1h": "1h", "4h": "4h", "1d": "1d" };
 
 async function get(path) {
   let last = "";
@@ -19,13 +20,13 @@ export async function tickers() {
 
 // Same row layout as Binance klines (oldest first, last = forming candle).
 export async function klines(symbol, tf) {
-  const res = await get(`/v5/market/kline?category=linear&symbol=${symbol}&interval=${IV[tf]}&limit=400`);
+  const res = await get(`/v5/market/kline?category=linear&symbol=${symbol}&interval=${IV[tf]}&limit=${tf === "15m" ? 1000 : 400}`);
   return res.list.slice().reverse().map((x) => [+x[0], x[1], x[2], x[3], x[4], x[5], 0, x[6]]);
 }
 
 // Open interest history (oldest first) for the trend score's OI check.
 export async function openInterest(symbol, tf) {
-  const res = await get(`/v5/market/open-interest?category=linear&symbol=${symbol}&intervalTime=${tf}&limit=5`);
+  const res = await get(`/v5/market/open-interest?category=linear&symbol=${symbol}&intervalTime=${OI_IV[tf]}&limit=5`);
   return res.list.slice().reverse().map((x) => +x.openInterest);
 }
 

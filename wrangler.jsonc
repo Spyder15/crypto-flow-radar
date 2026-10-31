@@ -4,6 +4,6 @@
   "compatibility_date": "2025-01-01",
   "assets": { "directory": "./smc-screener" },
   "kv_namespaces": [{ "binding": "TRADES", "id": "a3ccb7e66a9746b6b5f1c000878e72b6" }],
-  "triggers": { "crons": ["1-5 */4 * * *", "*/15 * * * *", "0 4 * * 1"] },
-  "vars": { "TF": "4h", "BATCH": "25", "SYMBOLS": "", "MIN_CONF": "7" }
+  "triggers": { "crons": ["1-5 * * * *", "1-5,16-20,31-35,46-50 * * * *", "*/15 * * * *", "0 4 * * 1"] },
+  "vars": { "TF": "1h", "BATCH": "25", "SYMBOLS": "", "MIN_CONF": "7" }
 }

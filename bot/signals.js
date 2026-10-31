@@ -1,7 +1,7 @@
 // Signal logic for the Telegram bot. Same rules as the dashboard (smc-screener/app.js), without any DOM.
 import Lib from "../smc-screener/lib.js";
 
-export const TF_MS = { "1h": 3600e3, "4h": 4 * 3600e3, "1d": 86400e3 };
+export const TF_MS = { "15m": 900e3, "1h": 3600e3, "4h": 4 * 3600e3, "1d": 86400e3 };
 const RR = 2.5;
 const sigLv = (rr) => { const t2 = rr > 1 ? rr : 2; return [1, t2, 2 * t2]; };
 
