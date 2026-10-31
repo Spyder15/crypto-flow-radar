@@ -1,13 +1,15 @@
 // Market data from Bybit public API (Binance blocks Cloudflare Workers with 403).
-const HOSTS = ["https://api.bybit.com", "https://api.bytick.com"];
+const HOSTS = ["https://api.bybit.com", "https://api.bytick.com", "https://api.bybitglobal.com", "https://api.bybit.nl", "https://api.bybit.kz", "https://api.byhkbit.com"];
 const IV = { "15m": "15", "1h": "60", "4h": "240", "1d": "D" };
 const OI_IV = { "15m": "15min", "1h": "1h", "4h": "4h", "1d": "1d" };
 
 async function get(path) {
   let last = "";
   for (const h of HOSTS) {
-    const r = await fetch(h + path, { headers: { "user-agent": "Mozilla/5.0", accept: "application/json" } });
-    if (r.ok) { const j = await r.json(); if (j.retCode === 0) return j.result; last = "retCode " + j.retCode; } else last = String(r.status);
+    try {
+      const r = await fetch(h + path, { headers: { "user-agent": "Mozilla/5.0", accept: "application/json" } });
+      if (r.ok) { const j = await r.json(); if (j.retCode === 0) return j.result; last = "retCode " + j.retCode; } else last = String(r.status);
+    } catch (e) { last = e.message; }
   }
   throw new Error(`${path} -> ${last}`);
 }
