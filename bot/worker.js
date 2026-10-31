@@ -50,8 +50,8 @@ async function tg(env, text, chart, replyTo) {
 }
 const send = (env, s, chart) => tg(env, caption(s, env), chart);
 
-export async function run(env, { force = false, batch = 0, minConf, tf: tfArg } = {}) {
-  const tf = tfArg || env.TF || "1h", ms = TF_MS[tf], size = +env.BATCH || 25, min = minConf || +env.MIN_CONF || 7;
+export async function run(env, { force = false, batch = 0, minConf, tf: tfArg, test = false } = {}) {
+  const tf = tfArg || env.TF || "1h", ms = TF_MS[tf], size = +env.BATCH || 25, min = minConf || (test ? 4 : +env.MIN_CONF || 7);
   const sinceClose = Date.now() % ms; // time since the last candle closed
   if (!force && sinceClose > 10 * 60e3) return { skipped: true };
   const wanted = (env.SYMBOLS || "").split(",").map((x) => x.trim().toUpperCase()).filter(Boolean);
@@ -73,14 +73,15 @@ export async function run(env, { force = false, batch = 0, minConf, tf: tfArg } 
       if (passed < min) continue;
       Object.assign(s, { ck, passed });
       const t0 = r.d[r.d.length - 1].t + ms, seen = `s:${s.sym}:${tf}:${t0}`;
-      if (env.TRADES && (await env.TRADES.get(seen))) continue; // already posted for this candle
-      if (env.TRADES) {
+      if (test && sent.length >= 2) break; // test mode: at most 2 samples
+      if (env.TRADES && !test && (await env.TRADES.get(seen))) continue; // already posted for this candle
+      if (env.TRADES && !test) {
         if ((await env.TRADES.list({ prefix: `o:${s.sym}:`, limit: 1 })).keys.length) { errors.push(s.sym + " skipped: trade already open"); continue; }
         if ((+(await env.TRADES.get("d:" + day)) || 0) >= maxDay) { errors.push("daily signal cap reached"); break; }
       }
       calls += 2; let chart = null; try { chart = await renderChart(r, s); } catch (e) { console.log("chart failed", e.message); }
-      const msg = await send(env, s, chart);
-      if (env.TRADES) {
+      const msg = test ? await tg(env, "🧪 <b>TEST (not tracked)</b>\n" + caption(s, env), chart) : await send(env, s, chart);
+      if (env.TRADES && !test) {
         const trade = { sym: s.sym, side: s.side, tf, kind: s.kind, lvl: s.lvl, entry: s.entry, sl: s.sl, tps: s.tps, riskPct: s.riskPct, passed, t0, stage: 0, cursor: 0, msg };
         await env.TRADES.put(seen, "1", { expirationTtl: 6 * 3600 });
         await env.TRADES.put("d:" + day, String((+(await env.TRADES.get("d:" + day)) || 0) + 1), { expirationTtl: 2 * 86400 });
@@ -108,7 +109,7 @@ export default {
     }
     else ctx.waitUntil(run(env, { tf: e.cron === "1-5 * * * *" ? "1h" : e.cron === "1-5 */4 * * *" ? "4h" : "1d", batch: Math.max(0, (new Date(e.scheduledTime).getUTCMinutes() % 15) - 1) })); // minute 1..5 of each candle close = batch 0..4
   },
-  // Manual checks (need ?key=RUN_KEY): /__run?tf=1h|4h|1d&batch=0..4&min=N scans now, /__track checks open trades, /__weekly posts the report, /__ping tests Telegram.
+  // Manual checks (need ?key=RUN_KEY): /__run?tf=1h|4h|1d&batch=0..4&min=N scans now, /__track checks open trades, /__weekly posts the report, /__ping tests Telegram, /__run?...&test=1 posts up to 2 sample signals (min conf 4, not tracked, not counted).
   async fetch(req, env) {
     const u = new URL(req.url), ok = env.RUN_KEY && u.searchParams.get("key") === env.RUN_KEY;
     if (ok && u.pathname === "/__track") return Response.json(await track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
@@ -119,7 +120,7 @@ export default {
       return Response.json({ open, closed }, { headers: { "cache-control": "public, max-age=60", "access-control-allow-origin": "*" } });
     }
     if (ok && u.pathname === "/__run") {
-      try { return Response.json(await run(env, { force: true, tf: u.searchParams.get("tf") || undefined, batch: +u.searchParams.get("batch") || 0, minConf: +u.searchParams.get("min") || 0 })); } catch (e) { return new Response(String(e.message), { status: 500 }); }
+      try { return Response.json(await run(env, { force: true, tf: u.searchParams.get("tf") || undefined, batch: +u.searchParams.get("batch") || 0, minConf: +u.searchParams.get("min") || 0, test: u.searchParams.get("test") === "1" })); } catch (e) { return new Response(String(e.message), { status: 500 }); }
     }
     if (ok && u.pathname === "/__ping") {
       const r = await fetch(`https://api.telegram.org/bot${env.TG_TOKEN}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: env.TG_CHAT, text: "✅ TEST: SPYDER Flow Radar connected. Real signals will appear here." }) });
