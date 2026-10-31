@@ -20,3 +20,13 @@ Notes: Check data access with `/__run`. The free Workers plan allows 50 subreque
 Data comes from the Bybit public API (`bot/data.js`), because Binance returns HTTP 403 to Cloudflare Workers. Coins are ranked by 24h turnover (commodities and stock perps skipped) and split into 5 batches of `BATCH` (25) = top 125 coins. Five cron triggers (minute 1-5 of every 4th hour) scan one batch each, because the free Workers plan allows 50 subrequests per run. Set `SYMBOLS` in `wrangler.jsonc` to scan a fixed list instead.
 
 Manual test: `/__run?key=<RUN_KEY>&batch=0` (batch 0-4).
+
+## Trade tracking and weekly report
+Needs the KV namespace bound as `TRADES` (see `wrangler.jsonc`). Every posted signal is stored; a cron every 15 min checks closed 15m candles and replies to the original message with a chart:
+- TP1 hit: move SL to breakeven. TP2 hit: move SL to TP1. TP3 hit: trade complete.
+- SL hit: loss (-1R); after TP1 it is a breakeven exit (0R); after TP2 it is a TP1 exit (+1R).
+- If one candle touches both stop and target, the stop is counted first.
+- Open trades older than 7 days are dropped as EXPIRED.
+- Monday 04:00 UTC (09:30 IST) a weekly report is posted. Results are R-multiples with each trade exiting at its final stop/target.
+
+Manual checks (add `?key=RUN_KEY`): `/__track`, `/__weekly`, `/__ping`, `/__run?batch=0..4&min=N`.

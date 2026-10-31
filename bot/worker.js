@@ -1,3 +1,4 @@
+import { track, weekly, eventText } from "./track.js";
 import { TF_MS, CHECKS, buildRow, findSignals, confirmations, trendScore } from "./signals.js";
 import { renderChart, fmt } from "./chart.js";
 import { tickers, klines, openInterest } from "./data.js";
@@ -30,18 +31,21 @@ function caption(s) {
   ].join("\n");
 }
 
-async function send(env, s, chart) {
-  const base = `https://api.telegram.org/bot${env.TG_TOKEN}`, text = caption(s);
+async function tg(env, text, chart, replyTo) {
+  const base = `https://api.telegram.org/bot${env.TG_TOKEN}`, rep = replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {};
   if (chart) {
     const fd = new FormData();
     fd.append("chat_id", env.TG_CHAT); fd.append("parse_mode", "HTML"); fd.append("caption", text);
+    Object.entries(rep).forEach(([k, v]) => fd.append(k, String(v)));
     fd.append("photo", new Blob([chart], { type: "image/png" }), "chart.png");
     const r = await fetch(base + "/sendPhoto", { method: "POST", body: fd });
-    if (r.ok) return;
+    if (r.ok) return (await r.json()).result.message_id;
   }
-  const r = await fetch(base + "/sendMessage", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: env.TG_CHAT, parse_mode: "HTML", text, disable_web_page_preview: true }) });
+  const r = await fetch(base + "/sendMessage", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: env.TG_CHAT, parse_mode: "HTML", text, disable_web_page_preview: true, ...rep }) });
   if (!r.ok) throw new Error("telegram " + r.status + " " + (await r.text()));
+  return (await r.json()).result.message_id;
 }
+const send = (env, s, chart) => tg(env, caption(s), chart);
 
 export async function run(env, { force = false, batch = 0, minConf } = {}) {
   const tf = env.TF || "4h", ms = TF_MS[tf], size = +env.BATCH || 25, min = minConf || +env.MIN_CONF || 7;
@@ -63,23 +67,43 @@ export async function run(env, { force = false, batch = 0, minConf } = {}) {
       ck = confirmations(r, s.side, tf, trendScore(r, s.side, oi)); passed = Object.values(ck).filter(Boolean).length;
       if (passed < min) continue;
       Object.assign(s, { ck, passed });
+      const t0 = r.d[r.d.length - 1].t + ms, seen = `s:${s.sym}:${tf}:${t0}`;
+      if (env.TRADES && (await env.TRADES.get(seen))) continue; // already posted for this candle
       calls += 2; let chart = null; try { chart = await renderChart(r, s); } catch (e) { console.log("chart failed", e.message); }
-      await send(env, s, chart); sent.push(`${s.sym} ${s.side} ${s.kind} ${passed}/8`);
+      const msg = await send(env, s, chart);
+      if (env.TRADES) {
+        const trade = { sym: s.sym, side: s.side, tf, kind: s.kind, lvl: s.lvl, entry: s.entry, sl: s.sl, tps: s.tps, riskPct: s.riskPct, passed, t0, stage: 0, cursor: 0, msg };
+        await env.TRADES.put(seen, "1", { expirationTtl: 6 * 3600 });
+        await env.TRADES.put(`o:${s.sym}:${tf}:${t0}`, JSON.stringify(trade), { expirationTtl: 9 * 86400 });
+      }
+      sent.push(`${s.sym} ${s.side} ${s.kind} ${passed}/8`);
     }
   }
   console.log("sent", sent, "errors", errors);
   return { batch, scanned: list.length, sent, errors: errors.slice(0, 5) };
 }
 
+async function notifyUpdate(env, t, ev, info) {
+  let chart = null;
+  try { const k = await klines(t.sym, t.tf); const r = buildRow(t.sym, k, null); if (r) chart = await renderChart(r, { ...t, track: info }); } catch (e) { console.log("chart failed", e.message); }
+  return tg(env, eventText(t, ev), chart, t.msg);
+}
+
 export default {
-  scheduled(e, env, ctx) { ctx.waitUntil(run(env, { batch: Math.max(0, (+e.cron.split(" ")[0] || 1) - 1) })); }, // cron minute 1..5 = batch 0..4
-  // Manual check: /__run?key=<RUN_KEY>&batch=0..4 scans now (force) and posts any signal on the latest closed candle. Disabled unless RUN_KEY is set.
+  scheduled(e, env, ctx) {
+    if (e.cron === "*/15 * * * *") ctx.waitUntil(track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
+    else if (e.cron === "0 4 * * 1") ctx.waitUntil(weekly(env).then((text) => tg(env, text)));
+    else ctx.waitUntil(run(env, { batch: Math.max(0, new Date(e.scheduledTime).getUTCMinutes() - 1) })); // minute 1..5 = batch 0..4
+  },
+  // Manual checks (need ?key=RUN_KEY): /__run?batch=0..4&min=N scans now, /__track checks open trades, /__weekly posts the report, /__ping tests Telegram.
   async fetch(req, env) {
-    const u = new URL(req.url);
-    if (u.pathname === "/__run" && env.RUN_KEY && u.searchParams.get("key") === env.RUN_KEY) {
+    const u = new URL(req.url), ok = env.RUN_KEY && u.searchParams.get("key") === env.RUN_KEY;
+    if (ok && u.pathname === "/__track") return Response.json(await track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
+    if (ok && u.pathname === "/__weekly") { await tg(env, await weekly(env)); return Response.json({ sent: true }); }
+    if (ok && u.pathname === "/__run") {
       try { return Response.json(await run(env, { force: true, batch: +u.searchParams.get("batch") || 0, minConf: +u.searchParams.get("min") || 0 })); } catch (e) { return new Response(String(e.message), { status: 500 }); }
     }
-    if (u.pathname === "/__ping" && env.RUN_KEY && u.searchParams.get("key") === env.RUN_KEY) {
+    if (ok && u.pathname === "/__ping") {
       const r = await fetch(`https://api.telegram.org/bot${env.TG_TOKEN}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: env.TG_CHAT, text: "✅ TEST: SPYDER Flow Radar connected. Real signals will appear here." }) });
       return new Response(await r.text(), { status: r.status });
     }

@@ -3,6 +3,7 @@
   "main": "bot/worker.js",
   "compatibility_date": "2025-01-01",
   "assets": { "directory": "./smc-screener" },
-  "triggers": { "crons": ["1 */4 * * *", "2 */4 * * *", "3 */4 * * *", "4 */4 * * *", "5 */4 * * *"] },
+  "kv_namespaces": [{ "binding": "TRADES", "id": "a3ccb7e66a9746b6b5f1c000878e72b6" }],
+  "triggers": { "crons": ["1-5 */4 * * *", "*/15 * * * *", "0 4 * * 1"] },
   "vars": { "TF": "4h", "BATCH": "25", "SYMBOLS": "", "MIN_CONF": "7" }
 }

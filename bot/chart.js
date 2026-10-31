@@ -32,6 +32,15 @@ export function chartConfig(r, s, bars = 90) {
     tEntry: tag(s.entry, fmt(s.entry), "#eab308", "#111"), tSl: tag(s.sl, fmt(s.sl), "#e11d48"),
     tTp1: tag(s.tps[0], fmt(s.tps[0]), "#2563eb"), tTp2: tag(s.tps[1], fmt(s.tps[1]), "#2563eb"), tTp3: tag(s.tps[2], fmt(s.tps[2]), "#4f46e5"),
   };
+  const tr = s.track;
+  if (tr) {
+    for (let i = 0; i < tr.tpHit; i++) ann["nTp" + (i + 1)].content = [`TP${i + 1} ✔ HIT`], ann["nTp" + (i + 1)].color = "#4ade80";
+    if (tr.slCur != null) {
+      ann.curSl = line(tr.slCur, "#fb923c", "", [8, 4]); // same level as ENTRY/TP1, so relabel those instead of stacking labels
+      if (tr.slCur === s.entry) { ann.nEntry.content = ["ENTRY = NEW SL (BE)"]; ann.nEntry.color = "#fb923c"; } else { ann.nTp1.content = ["TP1 ✔ HIT = NEW SL"]; ann.nTp1.color = "#fb923c"; }
+    }
+    tr.marks.forEach((m, i) => { ann["mk" + i] = { type: "label", xValue: m.t, yValue: m.y, yAdjust: L === (m.text[0] === "✔") ? -16 : 16, content: [m.text], color: m.text[0] === "✔" ? "#4ade80" : "#f87171", backgroundColor: "rgba(15,23,42,0.85)", font: { size: 13, weight: "bold" }, padding: 3, borderRadius: 3 }; });
+  }
   const sets = [{
     type: "candlestick", label: s.sym, yAxisID: "y",
     data: r.d.slice(from).map((k) => ({ x: k.t, o: k.o, h: k.h, l: k.l, c: k.c })),
@@ -40,7 +49,7 @@ export function chartConfig(r, s, bars = 90) {
   const ema = (label, arr, color) => ({ type: "line", label, yAxisID: "y", data: ts.map((t, i) => ({ x: t, y: arr[from + i] })), borderColor: color, borderWidth: 1.3, pointRadius: 0, fill: false });
   if (s.kind === "EMA RETEST") sets.push(ema("EMA50", r.e50, "#38bdf8"), ema("EMA200", r.e200, "#f59e0b"));
   sets.push({ type: "bar", label: "RSI-50", yAxisID: "y2", data: ts.map((t, i) => ({ x: t, y: rs[from + i] - 50 })), backgroundColor: ts.map((t, i) => (rs[from + i] >= 50 ? "rgba(34,197,94,0.75)" : "rgba(239,68,68,0.75)")), barPercentage: 1, categoryPercentage: 1 });
-  const head = `${s.sym}, ${s.tf.toUpperCase()}  |  ${L ? "POTENTIAL UPSIDE MOVE" : "POTENTIAL DOWNSIDE MOVE"}  |  ${s.kind}${s.kind === "EMA RETEST" ? " " + s.lvl : ""}  |  ${s.passed}/8 CONFIRMED`;
+  const head = tr ? `${s.sym}, ${s.tf.toUpperCase()}  |  ${L ? "LONG" : "SHORT"}  |  ${tr.title}` : `${s.sym}, ${s.tf.toUpperCase()}  |  ${L ? "POTENTIAL UPSIDE MOVE" : "POTENTIAL DOWNSIDE MOVE"}  |  ${s.kind}${s.kind === "EMA RETEST" ? " " + s.lvl : ""}  |  ${s.passed}/8 CONFIRMED`;
   return {
     version: "3", backgroundColor: BG, width: 1100, height: 700, format: "png",
     chart: {

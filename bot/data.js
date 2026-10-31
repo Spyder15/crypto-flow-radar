@@ -28,3 +28,9 @@ export async function openInterest(symbol, tf) {
   const res = await get(`/v5/market/open-interest?category=linear&symbol=${symbol}&intervalTime=${tf}&limit=5`);
   return res.list.slice().reverse().map((x) => +x.openInterest);
 }
+
+// 15m candles since `start` (ms), oldest first, for TP/SL tracking. Includes the forming candle; caller filters.
+export async function klines15(symbol, start) {
+  const res = await get(`/v5/market/kline?category=linear&symbol=${symbol}&interval=15&start=${start}&limit=1000`);
+  return res.list.slice().reverse().map((x) => ({ t: +x[0], o: +x[1], h: +x[2], l: +x[3], c: +x[4] }));
+}
