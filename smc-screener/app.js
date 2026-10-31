@@ -807,7 +807,7 @@
     if (top && [...$("top").options].some((o) => o.value === top)) $("top").value = top;
     if (tab) { const b = document.querySelector(`#tabs button[data-tab="${tab}"]`); if (b) showTab(b); }
   }
-  function showTab(b) { document.querySelectorAll("#tabs > button").forEach((x) => x.classList.toggle("on", x === b)); document.querySelectorAll("main > section").forEach((s) => s.classList.toggle("hidden", s.id !== "tab-" + b.dataset.tab)); syncHash(); if (b.dataset.tab === "screener" && rows.length) ensureDock(); }
+  function showTab(b) { if (b.dataset.tab === "ledger") { location.href = "live.html"; return; } document.querySelectorAll("#tabs > button").forEach((x) => x.classList.toggle("on", x === b)); document.querySelectorAll("main > section").forEach((s) => s.classList.toggle("hidden", s.id !== "tab-" + b.dataset.tab)); syncHash(); if (b.dataset.tab === "screener" && rows.length) ensureDock(); }
   function setTheme(t) { document.documentElement.dataset.theme = t; localStorage.setItem("theme", t); if (ctx) paint(); }
 
   // ---------- notifications ----------
