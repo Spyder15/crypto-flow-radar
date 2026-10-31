@@ -79,6 +79,10 @@ export default {
     if (u.pathname === "/__run" && env.RUN_KEY && u.searchParams.get("key") === env.RUN_KEY) {
       try { return Response.json(await run(env, { force: true, batch: +u.searchParams.get("batch") || 0 })); } catch (e) { return new Response(String(e.message), { status: 500 }); }
     }
+    if (u.pathname === "/__ping" && env.RUN_KEY && u.searchParams.get("key") === env.RUN_KEY) {
+      const r = await fetch(`https://api.telegram.org/bot${env.TG_TOKEN}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: env.TG_CHAT, text: "✅ TEST: SPYDER Flow Radar connected. Real signals will appear here." }) });
+      return new Response(await r.text(), { status: r.status });
+    }
     return new Response("Not found", { status: 404 });
   },
 };
