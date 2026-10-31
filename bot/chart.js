@@ -21,7 +21,9 @@ export function chartConfig(r, s, bars = 90) {
   const tag = (y, text, color, fg) => ({ type: "label", xValue: tEnd, yValue: y, xAdjust: -4, content: [text], color: fg || "#fff", backgroundColor: color, font: { size: 13, weight: "bold", family: "monospace" }, padding: 4, borderRadius: 3 });
   const line = (y, color, _n, dash) => ({ type: "line", yMin: y, yMax: y, borderColor: color, borderWidth: 1.6, borderDash: dash || [6, 4]});
   const name = (y, text, color) => ({ type: "label", xValue: ts[0], yValue: y, xAdjust: 6, yAdjust: -10, content: [text], color, font: { size: 13, weight: "bold" }, position: { x: "start" } });
+  const vis = r.d.slice(from), lo = Math.min(...vis.map((k) => k.l), s.sl, s.tps[2]), hi = Math.max(...vis.map((k) => k.h), s.sl, s.tps[2]);
   const ann = {
+    mark: { type: "label", drawTime: "beforeDatasetsDraw", xValue: ts[Math.floor(ts.length / 2)], yValue: (lo + hi) / 2, content: ["SPYDER"], color: "rgba(255,255,255,0.11)", font: { size: 150, weight: "bold" } },
     riskZone: { type: "box", yMin: Math.min(s.entry, s.sl), yMax: Math.max(s.entry, s.sl), backgroundColor: "rgba(239,68,68,0.10)", borderWidth: 0 },
     rewardZone: { type: "box", yMin: Math.min(s.entry, s.tps[1]), yMax: Math.max(s.entry, s.tps[1]), backgroundColor: "rgba(34,197,94,0.08)", borderWidth: 0 },
     entry: line(s.entry, "#facc15", "ENTRY", [2, 3]), sl: line(s.sl, "#f43f5e", "INVALID / SL"),
