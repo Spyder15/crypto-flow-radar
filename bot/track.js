@@ -2,7 +2,7 @@
 import { fmt } from "./chart.js";
 import { klines15 } from "./data.js";
 
-const DAY = 864e5, MAX_AGE = 7 * DAY;
+const DAY = 864e5, MAX_AGE = { "1h": 7 * DAY, "4h": 14 * DAY, "1d": 30 * DAY };
 export const tradeKey = (t) => `o:${t.sym}:${t.tf}:${t.t0}`;
 
 // Stop level for each stage: 0 = original SL, 1 = breakeven after TP1, 2 = TP1 after TP2.
@@ -73,19 +73,19 @@ export async function recordClosed(env, t) {
   await env.TRADES.put("closed", JSON.stringify(list.slice(-300)));
 }
 
-export async function weekly(env, now = Date.now()) {
-  const all = ((await env.TRADES.get("closed", "json")) || []).filter((x) => now - x.closed <= 7 * DAY && x.r !== null);
+export async function weekly(env, days = 7, now = Date.now()) {
+  const all = ((await env.TRADES.get("closed", "json")) || []).filter((x) => now - x.closed <= days * DAY && x.r !== null);
   const open = (await loadOpen(env)).filter(([, t]) => !t.closed).length;
   const wins = all.filter((x) => x.r > 0.05), loss = all.filter((x) => x.r < -0.05), be = all.length - wins.length - loss.length;
   const tot = all.reduce((a, x) => a + x.r, 0), dec = wins.length + loss.length;
   const rows = all.slice(-12).map((x) => `${x.r > 0.05 ? "✅" : x.r < -0.05 ? "🛑" : "⚖️"} #${x.sym.replace(/USDT$/, "")} ${x.side} ${x.outcome}  ${R(x.r)}`);
   return [
-    "📈 <b>WEEKLY REPORT</b>  <i>last 7 days</i>", "━━━━━━━━━━━━━━",
+    `📈 <b>${days === 1 ? "DAILY SUMMARY" : "WEEKLY REPORT"}</b>  <i>last ${days === 1 ? "24 hours" : days + " days"}</i>`, "━━━━━━━━━━━━━━",
     `Closed trades: <b>${all.length}</b>   Open: <b>${open}</b>`,
     `✅ Wins: ${wins.length}   🛑 Losses: ${loss.length}   ⚖️ Breakeven: ${be}`,
     dec ? `Win rate (excl. BE): <b>${((wins.length / dec) * 100).toFixed(0)}%</b>` : "Win rate: n/a",
     `Net result: <b>${R(tot)}</b>  <i>(each trade exits at its final stop/target)</i>`,
-    ...(rows.length ? ["", ...rows] : ["", "No closed trades this week."]),
+    ...(rows.length ? ["", ...rows] : ["", "No closed trades in this period."]),
     "", "<i>Small sample, no proven edge. Not financial advice.</i>", "<b>— SPYDER Flow Radar</b>",
   ].join("\n");
 }
@@ -95,7 +95,7 @@ export async function track(env, notify) {
   const now = Date.now(), done = [], errors = []; let calls = 0;
   for (const [key, t] of await loadOpen(env)) {
     if (t.closed) { await env.TRADES.delete(key); continue; }
-    if (now - t.t0 > MAX_AGE) { t.closed = true; t.outcome = "EXPIRED"; t.r = null; await recordClosed(env, t); await env.TRADES.delete(key); done.push(key + " expired"); continue; }
+    if (now - t.t0 > (MAX_AGE[t.tf] || 7 * DAY)) { t.closed = true; t.outcome = "EXPIRED"; t.r = null; await recordClosed(env, t); await env.TRADES.delete(key); done.push(key + " expired"); continue; }
     if (calls > 36) break; // free plan: 50 subrequests per run
     calls += 2; let cs; // candles + chart data
     try { cs = await klines15(t.sym, Math.max(t.t0, (t.cursor || 0) + 1)); } catch (e) { errors.push(e.message); continue; }
@@ -105,7 +105,7 @@ export async function track(env, notify) {
     for (const [i, ev] of events.entries()) {
       try { calls += 2; t.msg = (await notify(t, ev, trackInfo(t, events, i))) || t.msg; } catch (e) { errors.push("notify " + e.message); }
     }
-    if (t.closed) { await recordClosed(env, t); await env.TRADES.delete(key); } else await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 9 * 86400 });
+    if (t.closed) { await recordClosed(env, t); await env.TRADES.delete(key); } else await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 });
     if (events.length) done.push(`${t.sym} ${events.map((e) => e.type).join(",")}`);
   }
   return { open: done, errors: errors.slice(0, 5) };
