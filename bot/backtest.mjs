@@ -28,7 +28,9 @@ for (const t of tk) {
   for (let i = WIN; i < all.length - 2; i++) {
     const kk = k.slice(i - WIN + 1, i + 1); kk.push(k[i]); // buildRow drops the last (forming) row, so add a dummy
     const r = buildRow(t.symbol, kk, null); if (!r) continue;
-    for (const s of findSignals(r, tf, { ema: true, fib: true })) {
+    const V = { fib_base: {}, fib_trend: { trend: true }, fib_gp: { gp: true }, fib_leg4: { minLeg: 4 }, fib_wick: { wick: true }, fib_all: { trend: true, gp: true, minLeg: 4, wick: true }, fib_t_leg: { trend: true, minLeg: 4 } };
+    const sigs = process.env.FIBV ? Object.entries(V).flatMap(([n, o]) => findSignals(r, tf, { fib: o }).filter((x) => x.kind === "FIB RETRACE").map((x) => Object.assign(x, { kind: n }))) : findSignals(r, tf, { ema: true, fib: true });
+    for (const s of sigs) {
       const an = Lib.analyze(r.d, null), ts = an ? (s.side === "LONG" ? an.bull : an.bear) : 0;
       const ck = confirmations(r, s.side, tf, ts >= 4 ? 5 : 0); ck.fund = true;
       const passed = Object.values(ck).filter(Boolean).length; if (passed < 5) continue;
@@ -50,6 +52,6 @@ const stat = (arr) => {
 };
 console.log(JSON.stringify({ tf, coins: tk.length, bars: BARS }));
 for (const m of [5, 6, 7, 8]) console.log(`>= ${m}/8`, JSON.stringify(stat(trades.filter((x) => x.passed >= m))));
-for (const kind of ["EMA RETEST", "FIB RETRACE", "CHoCH", "BOS"]) console.log(`${kind} (>=7)`, JSON.stringify(stat(trades.filter((x) => x.passed >= 7 && x.kind === kind))));
+for (const kind of process.env.FIBV ? Object.keys({ fib_base: 1, fib_trend: 1, fib_gp: 1, fib_leg4: 1, fib_wick: 1, fib_all: 1, fib_t_leg: 1 }) : ["EMA RETEST", "FIB RETRACE", "CHoCH", "BOS"]) console.log(`${kind} (>=7)`, JSON.stringify(stat(trades.filter((x) => x.passed >= 7 && x.kind === kind))));
 for (const side of ["LONG", "SHORT"]) console.log(`${side} (>=7)`, JSON.stringify(stat(trades.filter((x) => x.passed >= 7 && x.side === side))));
 console.log("outcomes (>=7)", JSON.stringify(trades.filter((x) => x.passed >= 7).reduce((a, x) => ((a[x.out] = (a[x.out] || 0) + 1), a), {})));

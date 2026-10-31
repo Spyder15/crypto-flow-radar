@@ -14,18 +14,22 @@ export function buildRow(sym, k, fund) {
 }
 
 // Pullback into the 0.5-0.786 zone of the latest swing leg, closing back in the trade direction.
-function fibRetrace(r, side) {
+// o: trend = EMA50/200 must agree, minLeg = leg size in ATR, gp = narrow 0.618-0.65 zone, wick = rejection wick on the last candle.
+function fibRetrace(r, side, o = {}) {
   const d = r.d, N = d.length, L = side === "LONG", atr = r.live.atr[N - 1], last = d[N - 1], sw = r.live.swings;
   if (!(atr > 0) || (L ? !(last.c > last.o) : !(last.c < last.o))) return null;
+  if (o.trend && (L ? !(r.e50[N - 1] > r.e200[N - 1]) : !(r.e50[N - 1] < r.e200[N - 1]))) return null;
+  if (o.wick) { const rng = last.h - last.l, tail = L ? Math.min(last.o, last.c) - last.l : last.h - Math.max(last.o, last.c); if (!(rng > 0) || tail / rng < 0.4) return null; }
   let to = null, from = null;
   for (let k = sw.length - 1; k >= 0; k--) {
     if (!to) { if (sw[k].type === (L ? "H" : "L")) to = sw[k]; } else if (sw[k].type === (L ? "L" : "H")) { from = sw[k]; break; }
   }
   if (!to || !from) return null;
   const range = Math.abs(to.p - from.p), age = N - 1 - to.i;
-  if (range < 2 * atr || age < 2 || age > 40) return null;
+  if (range < (o.minLeg || 2) * atr || age < 2 || age > 40) return null;
   const lv = (x) => (L ? to.p - x * range : to.p + x * range);
-  const touched = L ? last.l <= lv(0.5) : last.h >= lv(0.5), held = L ? last.c > lv(0.786) && last.c < lv(0.382) : last.c < lv(0.786) && last.c > lv(0.382);
+  const zt = o.gp ? 0.618 : 0.5, zh = o.gp ? 0.65 : 0.786;
+  const touched = L ? last.l <= lv(zt) : last.h >= lv(zt), held = L ? last.c > lv(zh) && last.c < lv(0.382) : last.c < lv(zh) && last.c > lv(0.382);
   if (!touched || !held) return null;
   const sl = L ? Math.min(last.l, lv(0.786)) - 0.3 * atr : Math.max(last.h, lv(0.786)) + 0.3 * atr, risk = Math.abs(last.c - sl);
   if (!(risk > 0) || risk > 2.5 * atr) return null;
@@ -109,14 +113,14 @@ function reasons(r, s, tf) {
 }
 
 // Candidates created by the candle that just closed (fresh FVG fill; EMA retest and Fibonacci pullback are opt-in). Confirmations are applied by the caller.
-export function findSignals(r, tf, { ema = false, fib = false } = {}) {
+export function findSignals(r, tf, { ema = false, fib = false, fvg = true } = {}) {
   const N = r.d.length, found = [];
   for (const side of ["LONG", "SHORT"]) {
     const er = ema && emaRetest(r, side);
     if (er) found.push(er);
-    const fb = fib && fibRetrace(r, side);
+    const fb = fib && fibRetrace(r, side, fib === true ? {} : fib);
     if (fb) found.push(fb);
-    const fv = r.live.setups.filter((x) => x.side === side && x.status === "TRIGGERED" && x.filledBarsAgo === 0)[0];
+    const fv = fvg && r.live.setups.filter((x) => x.side === side && x.status === "TRIGGERED" && x.filledBarsAgo === 0)[0];
     if (fv) found.push({ side, kind: fv.kind, lvl: "FVG", entry: fv.entry, sl: fv.sl, risk: Math.abs(fv.entry - fv.sl) });
   }
   return found.filter(withTargets).map((s) => Object.assign(s, { sym: r.sym, tf, reasons: reasons(r, s, tf), closeT: r.d[N - 1].t }));

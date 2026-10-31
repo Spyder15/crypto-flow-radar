@@ -3,6 +3,8 @@ import { TF_MS, CHECKS, buildRow, findSignals, confirmations, trendScore } from 
 import { renderChart, fmt } from "./chart.js";
 import { tickers, klines, openInterest } from "./data.js";
 
+// Per-timeframe strategies, picked from the backtest (bot/README.md).
+const STRAT = { "1h": {}, "4h": { fib: { minLeg: 4 } } };
 const SKIP = /^(XAU|XAG|XAUT|XPT|XPD|CL|BZ|COPPER|NATGAS|SOXL|SPY|MU|SKHYNIX|SNDK|KORU|SPCX|SOXS|CRCL|ORCL|TSLA|NVDA|AAPL|MSTR|COIN|HOOD)$/;
 const esc = (x) => String(x).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 
@@ -59,7 +61,7 @@ export async function run(env, { force = false, batch = 0, minConf, tf: tfArg } 
     let k; calls++; try { k = await klines(t.symbol, tf); } catch (e) { errors.push(e.message); continue; }
     const r = buildRow(t.symbol, k, fund[t.symbol] ?? null); if (!r) continue;
     let oi;
-    for (const s of findSignals(r, tf)) {
+    for (const s of findSignals(r, tf, STRAT[tf] || {})) {
       let ck = confirmations(r, s.side, tf, 0), passed = Object.values(ck).filter(Boolean).length;
       if (passed + 1 < min) continue; // even with the OI check it cannot reach the minimum
       if (calls + 4 > 48) { errors.push("subrequest budget reached"); break; }
@@ -93,7 +95,7 @@ export default {
   scheduled(e, env, ctx) {
     if (e.cron === "*/15 * * * *") ctx.waitUntil(track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
     else if (e.cron === "0 4 * * 1") ctx.waitUntil(weekly(env).then((text) => tg(env, text)));
-    else ctx.waitUntil(run(env, { tf: e.cron === "1-5 * * * *" ? "1h" : "15m", batch: Math.max(0, (new Date(e.scheduledTime).getUTCMinutes() % 15) - 1) })); // minute 1..5 of each candle close = batch 0..4
+    else ctx.waitUntil(run(env, { tf: e.cron === "1-5 * * * *" ? "1h" : e.cron === "1-5 */4 * * *" ? "4h" : "15m", batch: Math.max(0, (new Date(e.scheduledTime).getUTCMinutes() % 15) - 1) })); // minute 1..5 of each candle close = batch 0..4
   },
   // Manual checks (need ?key=RUN_KEY): /__run?tf=1h|15m|4h&batch=0..4&min=N scans now, /__track checks open trades, /__weekly posts the report, /__ping tests Telegram.
   async fetch(req, env) {
