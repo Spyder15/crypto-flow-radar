@@ -76,7 +76,7 @@ for (const t of tk) {
       const tr = { side: s.side, entry: s.entry, sl: s.sl, tps: s.tps, stage: 0, cursor: 0 };
       const ev = evaluate(tr, all.slice(i + 1, i + 1 + HORIZON)), dir = s.side === "LONG" ? 1 : -1, cost = FEE / (s.riskPct / 100);
       const rr = tr.closed ? tr.r : null, part = !tr.closed ? null : { SL: -1, BE: 0.5, TP1STOP: 1, TP3: 0.5 + 0.5 * tr.r }[tr.outcome];
-      trades.push({ sym: t.symbol, side: s.side, kind: s.kind, passed, out: tr.closed ? tr.outcome : "OPEN", r: rr, net: rr === null ? null : rr - cost, pnet: part == null ? null : part - cost, t: all[i].t, end: tr.closed ? ev[ev.length - 1].t : Infinity, htf: coinTrend(close) === dir, btc: btcTrend(close) === dir });
+      trades.push({ sym: t.symbol, side: s.side, kind: s.kind, passed, out: tr.closed ? tr.outcome : "OPEN", r: rr, cost, net: rr === null ? null : rr - cost, pnet: part == null ? null : part - cost, t: all[i].t, end: tr.closed ? ev[ev.length - 1].t : Infinity, htf: coinTrend(close) === dir, btc: btcTrend(close) === dir });
     }
   }
   console.error(t.symbol, k.length, "bars, trades", trades.length);
@@ -102,3 +102,19 @@ console.log("one open + htf          ", stat(oneOpen(q.filter((x) => x.htf))));
 console.log("first half / second half", stat(q.filter((x) => x.t < mid)), stat(q.filter((x) => x.t >= mid)));
 for (const kind of [...new Set(q.map((x) => x.kind))]) console.log("kind", kind.padEnd(12), stat(q.filter((x) => x.kind === kind)));
 for (const side of ["LONG", "SHORT"]) console.log(side.padEnd(18), stat(q.filter((x) => x.side === side)));
+
+// Robustness checks: do the results survive higher fees, different periods, losing the best trades, and sampling luck?
+const done = q.filter((x) => x.net !== null).sort((a, b) => a.t - b.t), avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN);
+console.log("--- robustness ---");
+for (const m of [2, 3]) console.log(`fees x${m}`.padEnd(24), JSON.stringify({ n: done.length, avgR: +avg(done.map((x) => x.r - x.cost * m)).toFixed(2) }));
+const chunks = 4, per = Math.ceil(done.length / chunks);
+console.log("4 time chunks avgR     ", Array.from({ length: chunks }, (_, i) => { const c = done.slice(i * per, (i + 1) * per); return c.length ? `${c.length}:${avg(c.map((x) => x.net)).toFixed(2)}` : "-"; }).join("  "));
+const sortedR = done.map((x) => x.net).sort((a, b) => b - a);
+console.log("avgR without top 5 wins", +avg(sortedR.slice(5)).toFixed(2), "| without top 10%", +avg(sortedR.slice(Math.ceil(sortedR.length / 10))).toFixed(2));
+const byCoin = {}; done.forEach((x) => (byCoin[x.sym] = (byCoin[x.sym] || []).concat(x.net)));
+const coinsPos = Object.values(byCoin).filter((a) => avg(a) > 0).length;
+console.log("coins with avgR > 0    ", `${coinsPos}/${Object.keys(byCoin).length}`);
+let seed = 12345; const rnd = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296), boots = [];
+for (let b = 0; b < 2000; b++) { let sum = 0; for (let i = 0; i < done.length; i++) sum += done[Math.floor(rnd() * done.length)].net; boots.push(sum / (done.length || 1)); }
+boots.sort((a, b) => a - b);
+console.log("95% range of avgR      ", done.length ? `${boots[50].toFixed(2)} .. ${boots[1949].toFixed(2)}` : "-", "(bootstrap; below 0 on the low side = edge not proven)");

@@ -48,3 +48,9 @@ Fibonacci variants (`FIBV=1 node bot/backtest.mjs 4h 40 3000`): on 1H every vari
 - A trade already open on a coin blocks a new signal on it.
 - The cron at 18:30 UTC (00:00 IST) posts a daily summary, plus the weekly report on Sundays.
 - `/api/trades` serves open and recent closed trades as JSON for `smc-screener/live.html`.
+
+## Robustness checks (end of `backtest.mjs` output)
+Fees x2/x3, four time chunks, results without the best trades, share of coins with positive average R, and a bootstrap 95% range.
+- 4H: stays +0.58R at 3x fees, all 4 chunks positive (+0.58 to +0.97), 32/39 coins positive, bootstrap range +0.57..+0.97.
+- 1D: +0.85R at 3x fees, 18/24 coins positive, range +0.56..+1.33 (only ~90 trades).
+- 1H: weakest. +0.22R at 2x fees and about 0 at 3x, about 0 without the top 10% of trades, last chunk +0.19. Bootstrap range +0.25..+0.64. Keep fees low (limit entries) and watch it live.
