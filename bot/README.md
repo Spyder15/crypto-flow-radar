@@ -1,6 +1,6 @@
 # Telegram signal bot
 
-Cloudflare Worker (cron `1 */4 * * *`, UTC) that scans the top Bybit USDT perps on the 4H timeframe one minute after each candle closes. It posts signals from the latest closed candle to Telegram with a chart (entry, SL, TP1-3, EMAs) and the reasons for the trade.
+Cloudflare Worker (5 crons, UTC) that scans the top 125 Bybit USDT perps on the 4H timeframe in the first minutes after each candle closes. It posts signals from the latest closed candle to Telegram with a chart (entry, SL, TP1-3, EMAs) and the reasons for the trade.
 
 Strategies: EMA 50/200 retest and fresh FVG entry fills. A signal is posted only if it passes at least `MIN_CONF` (default 6) of the same 8 confirmations as the website Signals tab: Trend 5/5 (incl. open interest), EMA stack, ADX>=20, Vol>=1x, Funding ok, FVG entry, VWAP flip, Value area reclaim. The message lists every check with a tick or cross.
 
@@ -17,4 +17,6 @@ Strategies: EMA 50/200 retest and fresh FVG entry fills. A signal is posted only
 Notes: Check data access with `/__run`. The free Workers plan allows 50 subrequests per run, so `TOP` stays at 30.
 
 ## Symbols and data
-Data comes from the Bybit public API (`bot/data.js`), because Binance returns HTTP 403 to Cloudflare Workers. By default the top `TOP` (25) USDT perps by 24h turnover are scanned, with commodities and stock perps skipped. Set `SYMBOLS` in `wrangler.jsonc` (e.g. `"BTCUSDT,ETHUSDT"`) to scan a fixed list instead. The free Workers plan allows 50 subrequests per run, so keep `TOP` at or below 25.
+Data comes from the Bybit public API (`bot/data.js`), because Binance returns HTTP 403 to Cloudflare Workers. Coins are ranked by 24h turnover (commodities and stock perps skipped) and split into 5 batches of `BATCH` (25) = top 125 coins. Five cron triggers (minute 1-5 of every 4th hour) scan one batch each, because the free Workers plan allows 50 subrequests per run. Set `SYMBOLS` in `wrangler.jsonc` to scan a fixed list instead.
+
+Manual test: `/__run?key=<RUN_KEY>&batch=0` (batch 0-4).

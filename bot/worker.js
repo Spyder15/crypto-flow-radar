@@ -37,40 +37,41 @@ async function send(env, s, chart) {
   if (!r.ok) throw new Error("telegram " + r.status + " " + (await r.text()));
 }
 
-export async function run(env, { force = false } = {}) {
-  const tf = env.TF || "4h", ms = TF_MS[tf], top = +env.TOP || 35, min = +env.MIN_CONF || 6;
+export async function run(env, { force = false, batch = 0 } = {}) {
+  const tf = env.TF || "4h", ms = TF_MS[tf], size = +env.BATCH || 25, min = +env.MIN_CONF || 6;
   const sinceClose = Date.now() % ms; // time since the last candle closed
   if (!force && sinceClose > 10 * 60e3) return { skipped: true };
   const wanted = (env.SYMBOLS || "").split(",").map((x) => x.trim().toUpperCase()).filter(Boolean);
   const tk = await tickers(), fund = {}; tk.forEach((t) => { fund[t.symbol] = t.fund; });
-  const list = wanted.length ? wanted.map((symbol) => ({ symbol })) : tk.filter((t) => !SKIP.test(t.symbol.replace(/USDT$/, "")) && t.vol > 0).sort((a, b) => b.vol - a.vol).slice(0, top);
-  const sent = [], errors = [];
+  const list = wanted.length ? wanted.map((symbol) => ({ symbol })) : tk.filter((t) => !SKIP.test(t.symbol.replace(/USDT$/, "")) && t.vol > 0).sort((a, b) => b.vol - a.vol).slice(batch * size, (batch + 1) * size);
+  const sent = [], errors = []; let calls = 1; // free plan: max 50 subrequests per run
   for (const t of list) {
-    let k; try { k = await klines(t.symbol, tf); } catch (e) { errors.push(e.message); continue; }
+    let k; calls++; try { k = await klines(t.symbol, tf); } catch (e) { errors.push(e.message); continue; }
     const r = buildRow(t.symbol, k, fund[t.symbol] ?? null); if (!r) continue;
     let oi;
     for (const s of findSignals(r, tf)) {
       let ck = confirmations(r, s.side, tf, 0), passed = Object.values(ck).filter(Boolean).length;
       if (passed + 1 < min) continue; // even with the OI check it cannot reach the minimum
-      if (oi === undefined) { try { oi = await openInterest(t.symbol, tf); } catch (e) { oi = null; } }
+      if (calls + 4 > 48) { errors.push("subrequest budget reached"); break; }
+      if (oi === undefined) { calls++; try { oi = await openInterest(t.symbol, tf); } catch (e) { oi = null; } }
       ck = confirmations(r, s.side, tf, trendScore(r, s.side, oi)); passed = Object.values(ck).filter(Boolean).length;
       if (passed < min) continue;
       Object.assign(s, { ck, passed });
-      let chart = null; try { chart = await renderChart(r, s); } catch (e) { console.log("chart failed", e.message); }
+      calls += 2; let chart = null; try { chart = await renderChart(r, s); } catch (e) { console.log("chart failed", e.message); }
       await send(env, s, chart); sent.push(`${s.sym} ${s.side} ${s.kind} ${passed}/8`);
     }
   }
   console.log("sent", sent, "errors", errors);
-  return { scanned: list.length, sent, errors: errors.slice(0, 5) };
+  return { batch, scanned: list.length, sent, errors: errors.slice(0, 5) };
 }
 
 export default {
-  scheduled(_e, env, ctx) { ctx.waitUntil(run(env)); },
-  // Manual check: /__run?key=<RUN_KEY> scans now (force) and posts any signal on the latest closed candle. Disabled unless RUN_KEY is set.
+  scheduled(e, env, ctx) { ctx.waitUntil(run(env, { batch: Math.max(0, (+e.cron.split(" ")[0] || 1) - 1) })); }, // cron minute 1..5 = batch 0..4
+  // Manual check: /__run?key=<RUN_KEY>&batch=0..4 scans now (force) and posts any signal on the latest closed candle. Disabled unless RUN_KEY is set.
   async fetch(req, env) {
     const u = new URL(req.url);
     if (u.pathname === "/__run" && env.RUN_KEY && u.searchParams.get("key") === env.RUN_KEY) {
-      try { return Response.json(await run(env, { force: true })); } catch (e) { return new Response(String(e.message), { status: 500 }); }
+      try { return Response.json(await run(env, { force: true, batch: +u.searchParams.get("batch") || 0 })); } catch (e) { return new Response(String(e.message), { status: 500 }); }
     }
     return new Response("Not found", { status: 404 });
   },
