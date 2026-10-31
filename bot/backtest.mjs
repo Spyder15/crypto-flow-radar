@@ -118,3 +118,10 @@ let seed = 12345; const rnd = () => ((seed = (seed * 1664525 + 1013904223) % 429
 for (let b = 0; b < 2000; b++) { let sum = 0; for (let i = 0; i < done.length; i++) sum += done[Math.floor(rnd() * done.length)].net; boots.push(sum / (done.length || 1)); }
 boots.sort((a, b) => a - b);
 console.log("95% range of avgR      ", done.length ? `${boots[50].toFixed(2)} .. ${boots[1949].toFixed(2)}` : "-", "(bootstrap; below 0 on the low side = edge not proven)");
+
+// DUMP=file.json DAYS=14: write the last DAYS of closed >=7/8 trades (one open per coin) in the /api/trades shape, for previewing the live page.
+if (process.env.DUMP) {
+  const since = Date.now() - (+process.env.DAYS || 14) * 864e5;
+  const rows = oneOpen(q).filter((x) => x.r !== null && x.end !== Infinity && x.end + ms >= since).map((x) => ({ sym: x.sym, side: x.side, tf, kind: x.kind, outcome: x.out, r: x.r, opened: x.t + ms, closed: x.end + ms, passed: x.passed }));
+  fs.writeFileSync(process.env.DUMP, JSON.stringify(rows)); console.log("dumped", rows.length, "trades to", process.env.DUMP);
+}

@@ -46,7 +46,7 @@
     if (!vals.length) return none(c);
     const { x, w, h } = setup(c), m = Math.max(0.5, ...vals.map(Math.abs)), f = frame(x, w, h, -m, m, (v) => v.toFixed(1)), n = vals.length, bw = Math.max(1, Math.min(14, f.pw / n - 1));
     vals.forEach((v, i) => { const cx = f.L + ((i + 0.5) / n) * f.pw; x.fillStyle = v >= 0 ? G : R_; x.fillRect(cx - bw / 2, Math.min(f.y(v), f.y(0)), bw, Math.max(1, Math.abs(f.y(v) - f.y(0)))); });
-    if (labels && n) { x.fillStyle = DIM; x.textAlign = "left"; x.fillText(labels[0], f.L, h - 3); x.textAlign = "right"; x.fillText(labels[n - 1], f.L + f.pw, h - 3); }
+    if (labels && n) { x.fillStyle = DIM; x.textAlign = "left"; x.fillText(labels[0], f.L, h - 3); x.textAlign = "right"; x.fillText(labels[1], f.L + f.pw, h - 3); }
   }
   function radar(c, axes) {
     const { x, w, h } = setup(c), cx = w / 2, cy = h / 2 + 4, r = Math.min(w, h) / 2 - 34, n = axes.length, pt = (i, k) => [cx + Math.sin((i / n) * 2 * Math.PI) * r * k, cy - Math.cos((i / n) * 2 * Math.PI) * r * k];
@@ -121,9 +121,10 @@
       if (S.total > 0 && n > 5) add("Your top 5 trades account for ", { b: Math.round((100 * top5) / S.total) + "%" }, " of net R" + (top5 > S.total ? " (the rest net negative)." : "."));
       if (n < 30) add("Only ", { b: String(n) }, " closed trades so far: too few to trust any of the above.");
     }
-    $("status").textContent = "Updated " + new Date().toLocaleTimeString() + " · trades tracked on 15m candles, refreshed every 15 minutes";
+    $("status").textContent = preview ? "BACKTEST PREVIEW: last 14 days of simulated trades, not real signals" : "Updated " + new Date().toLocaleTimeString() + " · trades tracked on 15m candles, refreshed every 15 minutes";
   }
+  const preview = new URLSearchParams(location.search).has("preview"); // ?preview shows the last 14 days of BACKTEST trades, not live results
   let data; // kept so a resize redraws without refetching
-  fetch(API).then((r) => r.json()).then((d) => { data = d; render(d); }).catch(() => { $("status").textContent = "Could not load trades."; });
+  fetch(preview ? "preview.json" : API).then((r) => r.json()).then((d) => { data = d; render(d); }).catch(() => { $("status").textContent = "Could not load trades."; });
   let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => data && render(data), 200); });
 })();
