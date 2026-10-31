@@ -1,6 +1,6 @@
-import { TF_MS, buildRow, findSignals } from "./signals.js";
+import { TF_MS, CHECKS, buildRow, findSignals, confirmations, trendScore } from "./signals.js";
 import { renderChart, fmt } from "./chart.js";
-import { tickers, klines } from "./data.js";
+import { tickers, klines, openInterest } from "./data.js";
 
 const SKIP = /^(XAU|XAG|XAUT|XPT|XPD|CL|BZ|COPPER|NATGAS|SOXL|SPY|MU|SKHYNIX|SNDK|KORU|SPCX|SOXS|CRCL|ORCL|TSLA|NVDA|AAPL|MSTR|COIN|HOOD)$/;
 const esc = (x) => String(x).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -13,6 +13,9 @@ function caption(s) {
     `Entry: <code>${fmt(s.entry)}</code>`,
     `🛑 SL: <code>${fmt(s.sl)}</code> (${s.riskPct.toFixed(1)}%)`,
     `🎯 TP1: <code>${fmt(s.tps[0])}</code> (1R) · TP2: <code>${fmt(s.tps[1])}</code> · TP3: <code>${fmt(s.tps[2])}</code>`,
+    "",
+    `<b>Confirmations ${s.passed}/8</b>`,
+    CHECKS.map(([k, t]) => `${s.ck[k] ? "✔" : "✘"} ${t}`).reduce((a, x, i) => a + (i % 2 ? "  ·  " : "\n") + x, "").trim(),
     "",
     "<b>Why this trade</b>",
     ...s.reasons.map((x) => "• " + esc(x)),
@@ -35,7 +38,7 @@ async function send(env, s, chart) {
 }
 
 export async function run(env, { force = false } = {}) {
-  const tf = env.TF || "4h", ms = TF_MS[tf], top = +env.TOP || 35;
+  const tf = env.TF || "4h", ms = TF_MS[tf], top = +env.TOP || 35, min = +env.MIN_CONF || 6;
   const sinceClose = Date.now() % ms; // time since the last candle closed
   if (!force && sinceClose > 10 * 60e3) return { skipped: true };
   const wanted = (env.SYMBOLS || "").split(",").map((x) => x.trim().toUpperCase()).filter(Boolean);
@@ -45,9 +48,16 @@ export async function run(env, { force = false } = {}) {
   for (const t of list) {
     let k; try { k = await klines(t.symbol, tf); } catch (e) { errors.push(e.message); continue; }
     const r = buildRow(t.symbol, k, fund[t.symbol] ?? null); if (!r) continue;
+    let oi;
     for (const s of findSignals(r, tf)) {
+      let ck = confirmations(r, s.side, tf, 0), passed = Object.values(ck).filter(Boolean).length;
+      if (passed + 1 < min) continue; // even with the OI check it cannot reach the minimum
+      if (oi === undefined) { try { oi = await openInterest(t.symbol, tf); } catch (e) { oi = null; } }
+      ck = confirmations(r, s.side, tf, trendScore(r, s.side, oi)); passed = Object.values(ck).filter(Boolean).length;
+      if (passed < min) continue;
+      Object.assign(s, { ck, passed });
       let chart = null; try { chart = await renderChart(r, s); } catch (e) { console.log("chart failed", e.message); }
-      await send(env, s, chart); sent.push(`${s.sym} ${s.side} ${s.kind}`);
+      await send(env, s, chart); sent.push(`${s.sym} ${s.side} ${s.kind} ${passed}/8`);
     }
   }
   console.log("sent", sent, "errors", errors);

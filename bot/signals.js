@@ -40,6 +40,34 @@ function withTargets(s) {
   return !(s.riskPct > 15) && s.tps.every((t) => t > 0);
 }
 
+export const CHECKS = [["trend", "Trend 5/5"], ["ema", "EMA stack"], ["adx", "ADX≥20"], ["vol", "Vol≥1×"], ["fund", "Funding ok"], ["fvg", "FVG entry"], ["vwap", "VWAP flip"], ["val", "Value area reclaim"]];
+
+export function trendScore(r, side, oi) {
+  const an = Lib.analyze(r.d, oi); return an ? (side === "LONG" ? an.bull : an.bear) : 0;
+}
+
+// 24h volume vs the average of the 7 days before it, from the candles themselves.
+function volRatio(r, tf) {
+  const per = Math.round(86400e3 / TF_MS[tf]), q = r.d.map((x) => x.qv || 0), N = q.length;
+  if (N < per * 8) return NaN;
+  const sum = (a, b) => q.slice(a, b).reduce((x, y) => x + y, 0), day = sum(N - per, N), avg = sum(N - 8 * per, N - per) / 7;
+  return avg > 0 ? day / avg : NaN;
+}
+
+// Same 8 confirmations as the Signals tab on the website. oiScore: trend score incl. open interest (null = OI not fetched, trend check fails).
+export function confirmations(r, side, tf, trendScore) {
+  const L = side === "LONG", an = r.an, N = r.d.length, c = r.d[N - 1].c, from = Math.max(0, N - 25);
+  if (!r._dl) r._dl = Lib.dayLevels(r.d);
+  const D = r._dl, prev = D.va[D.day[N - 1] - 1], recent = (f) => { for (let i = from; i < N - 1; i++) if (f(i)) return true; return false; };
+  const fu = r.fund, vr = volRatio(r, tf), last = r.d[N - 1].c;
+  const fvg = r.live.setups.some((x) => x.side === side && (x.status === "TRIGGERED" || Math.abs((x.entry - last) / last * 100) <= 3));
+  return {
+    trend: trendScore === 5, ema: an.ema === (L ? "FULL BULL" : "FULL BEAR"), adx: an.adx >= 20, vol: vr >= 1, fund: fu == null || (L ? fu < 0.05 : fu > -0.05), fvg,
+    vwap: L ? c > D.vwap[N - 1] && recent((i) => r.d[i].c < D.vwap[i]) : c < D.vwap[N - 1] && recent((i) => r.d[i].c > D.vwap[i]),
+    val: !!prev && (L ? c > prev.val && recent((i) => r.d[i].c < prev.val) : c < prev.vah && recent((i) => r.d[i].c > prev.vah)),
+  };
+}
+
 // Reasons in plain words, only facts that the engine actually checked.
 function reasons(r, s, tf) {
   const L = s.side === "LONG", an = r.an, N = r.d.length, out = [], T = tf.toUpperCase();
@@ -50,8 +78,6 @@ function reasons(r, s, tf) {
   } else {
     out.push(`${s.kind} then retrace into a ${L ? "bullish" : "bearish"} FVG, entry order filled`);
   }
-  const sc = L ? an.bull : an.bear;
-  out.push(`Momentum (DMI, RSI, OBV) agrees ${sc}/4${sc < 2 ? ": weak, caution" : ""}`);
   if (an.adx >= 20) out.push(`ADX ${an.adx.toFixed(0)}: trend has strength`);
   else out.push(`ADX ${an.adx.toFixed(0)}: weak trend, caution`);
   if (an.ema === (L ? "FULL BULL" : "FULL BEAR")) out.push("EMA 9/21/50/200 fully stacked in trade direction");
@@ -60,15 +86,14 @@ function reasons(r, s, tf) {
   return out;
 }
 
-// Only signals created by the candle that just closed.
+// Candidates created by the candle that just closed (EMA retest, fresh FVG fill). Confirmations are applied by the caller.
 export function findSignals(r, tf) {
   const N = r.d.length, found = [];
   for (const side of ["LONG", "SHORT"]) {
     const er = emaRetest(r, side);
     if (er) found.push(er);
-    const sc = side === "LONG" ? r.an.bull : r.an.bear;
     const fv = r.live.setups.filter((x) => x.side === side && x.status === "TRIGGERED" && x.filledBarsAgo === 0)[0];
-    if (fv && sc >= 3) found.push({ side, kind: fv.kind, lvl: "FVG", entry: fv.entry, sl: fv.sl, risk: Math.abs(fv.entry - fv.sl) });
+    if (fv) found.push({ side, kind: fv.kind, lvl: "FVG", entry: fv.entry, sl: fv.sl, risk: Math.abs(fv.entry - fv.sl) });
   }
   return found.filter(withTargets).map((s) => Object.assign(s, { sym: r.sym, tf, reasons: reasons(r, s, tf), closeT: r.d[N - 1].t }));
 }

@@ -22,3 +22,9 @@ export async function klines(symbol, tf) {
   const res = await get(`/v5/market/kline?category=linear&symbol=${symbol}&interval=${IV[tf]}&limit=400`);
   return res.list.slice().reverse().map((x) => [+x[0], x[1], x[2], x[3], x[4], x[5], 0, x[6]]);
 }
+
+// Open interest history (oldest first) for the trend score's OI check.
+export async function openInterest(symbol, tf) {
+  const res = await get(`/v5/market/open-interest?category=linear&symbol=${symbol}&intervalTime=${tf}&limit=5`);
+  return res.list.slice().reverse().map((x) => +x.openInterest);
+}

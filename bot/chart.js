@@ -18,7 +18,7 @@ export function chartConfig(r, s, bars = 90) {
   const N = r.d.length, from = N - bars, L = s.side === "LONG", step = r.d[N - 1].t - r.d[N - 2].t;
   const ts = r.d.slice(from).map((k) => k.t), tEnd = ts[ts.length - 1] + 14 * step;
   const rs = rsi(r.d);
-  const tag = (y, text, color, fg) => ({ type: "label", xValue: tEnd, yValue: y, xAdjust: -4, content: [text], color: fg || "#fff", backgroundColor: color, font: { size: 13, weight: "bold", family: "monospace" }, padding: 4, borderRadius: 3 });
+  const tag = (y, text, color, fg) => ({ type: "label", xValue: tEnd, yValue: y, xAdjust: -26, content: [text], color: fg || "#fff", backgroundColor: color, font: { size: 13, weight: "bold", family: "monospace" }, padding: 4, borderRadius: 3 });
   const line = (y, color, _n, dash) => ({ type: "line", yMin: y, yMax: y, borderColor: color, borderWidth: 1.6, borderDash: dash || [6, 4]});
   const name = (y, text, color) => ({ type: "label", xValue: ts[0], yValue: y, xAdjust: 6, yAdjust: -10, content: [text], color, font: { size: 13, weight: "bold" }, position: { x: "start" } });
   const vis = r.d.slice(from), lo = Math.min(...vis.map((k) => k.l), s.sl, s.tps[2]), hi = Math.max(...vis.map((k) => k.h), s.sl, s.tps[2]);
@@ -40,7 +40,7 @@ export function chartConfig(r, s, bars = 90) {
   const ema = (label, arr, color) => ({ type: "line", label, yAxisID: "y", data: ts.map((t, i) => ({ x: t, y: arr[from + i] })), borderColor: color, borderWidth: 1.3, pointRadius: 0, fill: false });
   if (s.kind === "EMA RETEST") sets.push(ema("EMA50", r.e50, "#38bdf8"), ema("EMA200", r.e200, "#f59e0b"));
   sets.push({ type: "bar", label: "RSI-50", yAxisID: "y2", data: ts.map((t, i) => ({ x: t, y: rs[from + i] - 50 })), backgroundColor: ts.map((t, i) => (rs[from + i] >= 50 ? "rgba(34,197,94,0.75)" : "rgba(239,68,68,0.75)")), barPercentage: 1, categoryPercentage: 1 });
-  const head = `${s.sym}, ${s.tf.toUpperCase()}  |  ${L ? "POTENTIAL UPSIDE MOVE" : "POTENTIAL DOWNSIDE MOVE"}  |  ${s.kind}${s.kind === "EMA RETEST" ? " " + s.lvl : ""}`;
+  const head = `${s.sym}, ${s.tf.toUpperCase()}  |  ${L ? "POTENTIAL UPSIDE MOVE" : "POTENTIAL DOWNSIDE MOVE"}  |  ${s.kind}${s.kind === "EMA RETEST" ? " " + s.lvl : ""}  |  ${s.passed}/8 CONFIRMED`;
   return {
     version: "3", backgroundColor: BG, width: 1100, height: 700, format: "png",
     chart: {

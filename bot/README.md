@@ -2,7 +2,7 @@
 
 Cloudflare Worker (cron `1 */4 * * *`, UTC) that scans the top Bybit USDT perps on the 4H timeframe one minute after each candle closes. It posts signals from the latest closed candle to Telegram with a chart (entry, SL, TP1-3, EMAs) and the reasons for the trade.
 
-Strategies: EMA 50/200 retest, and FVG entry fills (trend score >= 3/4).
+Strategies: EMA 50/200 retest and fresh FVG entry fills. A signal is posted only if it passes at least `MIN_CONF` (default 6) of the same 8 confirmations as the website Signals tab: Trend 5/5 (incl. open interest), EMA stack, ADX>=20, Vol>=1x, Funding ok, FVG entry, VWAP flip, Value area reclaim. The message lists every check with a tick or cross.
 
 ## Setup
 1. Telegram: create a bot with @BotFather, copy the token. Create a channel/group and add the bot as admin. Get the chat id (e.g. `@mychannel` or `-100...`).
