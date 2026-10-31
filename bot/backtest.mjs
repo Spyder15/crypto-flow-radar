@@ -28,11 +28,13 @@ for (const t of tk) {
   for (let i = WIN; i < all.length - 2; i++) {
     const kk = k.slice(i - WIN + 1, i + 1); kk.push(k[i]); // buildRow drops the last (forming) row, so add a dummy
     const r = buildRow(t.symbol, kk, null); if (!r) continue;
-    for (const s of findSignals(r, tf)) {
+    for (const s of findSignals(r, tf, { ema: true, fib: true })) {
       const an = Lib.analyze(r.d, null), ts = an ? (s.side === "LONG" ? an.bull : an.bear) : 0;
       const ck = confirmations(r, s.side, tf, ts >= 4 ? 5 : 0); ck.fund = true;
       const passed = Object.values(ck).filter(Boolean).length; if (passed < 5) continue;
-      const tr = { side: s.side, entry: s.entry, sl: s.sl, tps: s.tps, stage: 0, cursor: 0 };
+      let tps = s.tps;
+      if (s.fib && process.env.FIBTP) { const { from, to } = s.fib, g = to - from; tps = [to, to + 0.272 * g, to + 0.618 * g]; if (tps.some((x, j) => (s.side === "LONG" ? x <= s.entry : x >= s.entry))) continue; }
+      const tr = { side: s.side, entry: s.entry, sl: s.sl, tps, stage: 0, cursor: 0 };
       evaluate(tr, all.slice(i + 1, i + 1 + HORIZON));
       const cost = FEE / (s.riskPct / 100);
       trades.push({ sym: t.symbol, side: s.side, kind: s.kind, passed, out: tr.closed ? tr.outcome : "OPEN", r: tr.closed ? tr.r : null, net: tr.closed ? tr.r - cost : null, t: all[i].t });
@@ -48,6 +50,6 @@ const stat = (arr) => {
 };
 console.log(JSON.stringify({ tf, coins: tk.length, bars: BARS }));
 for (const m of [5, 6, 7, 8]) console.log(`>= ${m}/8`, JSON.stringify(stat(trades.filter((x) => x.passed >= m))));
-for (const kind of ["EMA RETEST", "CHoCH", "BOS"]) console.log(`${kind} (>=7)`, JSON.stringify(stat(trades.filter((x) => x.passed >= 7 && x.kind === kind))));
+for (const kind of ["EMA RETEST", "FIB RETRACE", "CHoCH", "BOS"]) console.log(`${kind} (>=7)`, JSON.stringify(stat(trades.filter((x) => x.passed >= 7 && x.kind === kind))));
 for (const side of ["LONG", "SHORT"]) console.log(`${side} (>=7)`, JSON.stringify(stat(trades.filter((x) => x.passed >= 7 && x.side === side))));
 console.log("outcomes (>=7)", JSON.stringify(trades.filter((x) => x.passed >= 7).reduce((a, x) => ((a[x.out] = (a[x.out] || 0) + 1), a), {})));

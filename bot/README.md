@@ -1,6 +1,6 @@
 # Telegram signal bot
 
-Cloudflare Worker (4 crons, UTC) that scans the top 125 Bybit USDT perps on the 1H and 15M timeframes in the first minutes after each candle closes. It posts signals from the latest closed candle to Telegram with a chart (entry, SL, TP1-3, EMAs) and the reasons for the trade.
+Cloudflare Worker (3 crons, UTC) that scans the top 125 Bybit USDT perps on the 1H timeframe in the first minutes after each candle closes. It posts signals from the latest closed candle to Telegram with a chart (entry, SL, TP1-3, EMAs) and the reasons for the trade.
 
 Strategies: EMA 50/200 retest and fresh FVG entry fills. A signal is posted only if it passes at least `MIN_CONF` (default 6) of the same 8 confirmations as the website Signals tab: Trend 5/5 (incl. open interest), EMA stack, ADX>=20, Vol>=1x, Funding ok, FVG entry, VWAP flip, Value area reclaim. The message lists every check with a tick or cross.
 
@@ -12,7 +12,7 @@ Strategies: EMA 50/200 retest and fresh FVG entry fills. A signal is posted only
    npx wrangler secret put TG_CHAT
    npx wrangler secret put RUN_KEY   # optional, enables /__run?key=... for a manual test
    ```
-3. Deploy (Cloudflare git build does this on push). The timeframe of each scan comes from its cron (`1-5 * * * *` = 1H, `1-5,16-20,31-35,46-50 * * * *` = 15M); `TF` is only the default for manual runs.
+3. Deploy (Cloudflare git build does this on push). The scan cron `1-5 * * * *` runs 1H. 15M was dropped after the backtest (negative after fees); to bring it back add the cron `1-5,16-20,31-35,46-50 * * * *`.
 
 Notes: Check data access with `/__run`. The free Workers plan allows 50 subrequests per run, so `TOP` stays at 30.
 
@@ -30,3 +30,6 @@ Needs the KV namespace bound as `TRADES` (see `wrangler.jsonc`). Every posted si
 - Monday 04:00 UTC (09:30 IST) a weekly report is posted. Results are R-multiples with each trade exiting at its final stop/target.
 
 Manual checks (add `?key=RUN_KEY`): `/__track`, `/__weekly`, `/__ping`, `/__run?batch=0..4&min=N`.
+
+## Backtest
+`node bot/backtest.mjs 1h 40 4000` replays the rules on Bybit history (coins, bars). Findings (40 coins, ~166 days of 1H, net of ~0.13% fees, OI/funding assumed ok so slightly optimistic, in-sample): CHoCH and BOS entries with >=7/8 were positive (+0.23R and +0.46R per trade), EMA retest and Fibonacci pullback were negative, 15M was negative at every confidence level. So live signals are only FVG entries (CHoCH/BOS) on 1H; `findSignals` has opt-in flags `ema` and `fib`.

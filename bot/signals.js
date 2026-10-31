@@ -13,6 +13,25 @@ export function buildRow(sym, k, fund) {
   return { sym, d, an, fund, live: Lib.liveSetups(d, { rr: RR }), e50: Lib.ema(c, 50), e200: Lib.ema(c, 200) };
 }
 
+// Pullback into the 0.5-0.786 zone of the latest swing leg, closing back in the trade direction.
+function fibRetrace(r, side) {
+  const d = r.d, N = d.length, L = side === "LONG", atr = r.live.atr[N - 1], last = d[N - 1], sw = r.live.swings;
+  if (!(atr > 0) || (L ? !(last.c > last.o) : !(last.c < last.o))) return null;
+  let to = null, from = null;
+  for (let k = sw.length - 1; k >= 0; k--) {
+    if (!to) { if (sw[k].type === (L ? "H" : "L")) to = sw[k]; } else if (sw[k].type === (L ? "L" : "H")) { from = sw[k]; break; }
+  }
+  if (!to || !from) return null;
+  const range = Math.abs(to.p - from.p), age = N - 1 - to.i;
+  if (range < 2 * atr || age < 2 || age > 40) return null;
+  const lv = (x) => (L ? to.p - x * range : to.p + x * range);
+  const touched = L ? last.l <= lv(0.5) : last.h >= lv(0.5), held = L ? last.c > lv(0.786) && last.c < lv(0.382) : last.c < lv(0.786) && last.c > lv(0.382);
+  if (!touched || !held) return null;
+  const sl = L ? Math.min(last.l, lv(0.786)) - 0.3 * atr : Math.max(last.h, lv(0.786)) + 0.3 * atr, risk = Math.abs(last.c - sl);
+  if (!(risk > 0) || risk > 2.5 * atr) return null;
+  return { side, kind: "FIB RETRACE", lvl: "0.5-0.786", entry: last.c, sl, risk, atr, fib: { from: from.p, to: to.p } };
+}
+
 function emaRetest(r, side) {
   const d = r.d, N = d.length, L = side === "LONG", atr = r.live.atr[N - 1], last = d[N - 1], price = last.c;
   if (!(atr > 0)) return null;
@@ -75,6 +94,9 @@ function reasons(r, s, tf) {
     out.push(`${T} EMA50 ${L ? "above" : "below"} EMA200 = ${L ? "uptrend" : "downtrend"}`);
     out.push(`Price tested ${s.lvl} and closed back ${L ? "above" : "below"} it (${L ? "support" : "resistance"} held)`);
     out.push(`Last candle ${L ? "green" : "red"}, confirms the bounce`);
+  } else if (s.kind === "FIB RETRACE") {
+    out.push(`Pulled back into the 0.5-0.786 Fibonacci zone of the last ${L ? "up" : "down"} swing`);
+    out.push(`Last candle ${L ? "green" : "red"}, price closed back in the trade direction inside the zone`);
   } else {
     out.push(`${s.kind} then retrace into a ${L ? "bullish" : "bearish"} FVG, entry order filled`);
   }
@@ -86,12 +108,14 @@ function reasons(r, s, tf) {
   return out;
 }
 
-// Candidates created by the candle that just closed (EMA retest, fresh FVG fill). Confirmations are applied by the caller.
-export function findSignals(r, tf) {
+// Candidates created by the candle that just closed (fresh FVG fill; EMA retest and Fibonacci pullback are opt-in). Confirmations are applied by the caller.
+export function findSignals(r, tf, { ema = false, fib = false } = {}) {
   const N = r.d.length, found = [];
   for (const side of ["LONG", "SHORT"]) {
-    const er = emaRetest(r, side);
+    const er = ema && emaRetest(r, side);
     if (er) found.push(er);
+    const fb = fib && fibRetrace(r, side);
+    if (fb) found.push(fb);
     const fv = r.live.setups.filter((x) => x.side === side && x.status === "TRIGGERED" && x.filledBarsAgo === 0)[0];
     if (fv) found.push({ side, kind: fv.kind, lvl: "FVG", entry: fv.entry, sl: fv.sl, risk: Math.abs(fv.entry - fv.sl) });
   }
