@@ -2,6 +2,8 @@
 import { fmt } from "./chart.js";
 import { klines15 } from "./data.js";
 
+// 15m and sub-7/8 signals only came from manual format tests; keep them out of the stats
+export const isLive = (t) => t.tf !== "15m" && t.passed >= 7;
 const DAY = 864e5, MAX_AGE = { "1h": 7 * DAY, "4h": 14 * DAY, "1d": 30 * DAY };
 export const tradeKey = (t) => `o:${t.sym}:${t.tf}:${t.t0}`;
 
@@ -74,8 +76,8 @@ export async function recordClosed(env, t) {
 }
 
 export async function weekly(env, days = 7, now = Date.now()) {
-  const all = ((await env.TRADES.get("closed", "json")) || []).filter((x) => now - x.closed <= days * DAY && x.r !== null);
-  const open = (await loadOpen(env)).filter(([, t]) => !t.closed).length;
+  const all = ((await env.TRADES.get("closed", "json")) || []).filter((x) => now - x.closed <= days * DAY && x.r !== null && isLive(x));
+  const open = (await loadOpen(env)).filter(([, t]) => !t.closed && isLive(t)).length;
   const wins = all.filter((x) => x.r > 0.05), loss = all.filter((x) => x.r < -0.05), be = all.length - wins.length - loss.length;
   const tot = all.reduce((a, x) => a + x.r, 0), dec = wins.length + loss.length;
   const rows = all.slice(-12).map((x) => `${x.r > 0.05 ? "✅" : x.r < -0.05 ? "🛑" : "⚖️"} #${x.sym.replace(/USDT$/, "")} ${x.side} ${x.outcome}  ${R(x.r)}`);
