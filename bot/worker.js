@@ -7,20 +7,26 @@ const esc = (x) => String(x).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt
 
 function caption(s) {
   const L = s.side === "LONG", base = s.sym.replace(/USDT$/, "");
+  const row = (k, t) => `${s.ck[k] ? "✅" : "▫️"} ${t}`;
+  const ck = CHECKS.map(([k, t]) => row(k, t));
+  const pairs = []; for (let i = 0; i < ck.length; i += 2) pairs.push(ck.slice(i, i + 2).join("   "));
   return [
-    `${L ? "🟢" : "🔴"} <b>#${esc(base)}</b> ${s.side} · ${s.tf.toUpperCase()} · ${esc(s.kind)}${s.kind === "EMA RETEST" ? " " + s.lvl : ""}`,
+    `${L ? "🟢" : "🔴"} <b>${L ? "LONG" : "SHORT"} · #${esc(base)}</b>  <i>${s.tf.toUpperCase()} · ${esc(s.kind)}${s.kind === "EMA RETEST" ? " " + s.lvl : ""}</i>`,
+    "━━━━━━━━━━━━━━",
+    `📍 <b>Entry</b>   <code>${fmt(s.entry)}</code>`,
+    `🛑 <b>Stop</b>    <code>${fmt(s.sl)}</code>  (${s.riskPct.toFixed(1)}%)`,
+    `🎯 <b>TP1</b>     <code>${fmt(s.tps[0])}</code>  (1R)`,
+    `🎯 <b>TP2</b>     <code>${fmt(s.tps[1])}</code>`,
+    `🎯 <b>TP3</b>     <code>${fmt(s.tps[2])}</code>`,
+    "━━━━━━━━━━━━━━",
+    `📊 <b>Confirmations ${s.passed}/8</b>`,
+    ...pairs,
+    "━━━━━━━━━━━━━━",
+    "🧠 <b>Why this trade</b>",
+    ...s.reasons.map((x) => "▸ " + esc(x)),
     "",
-    `Entry: <code>${fmt(s.entry)}</code>`,
-    `🛑 SL: <code>${fmt(s.sl)}</code> (${s.riskPct.toFixed(1)}%)`,
-    `🎯 TP1: <code>${fmt(s.tps[0])}</code> (1R) · TP2: <code>${fmt(s.tps[1])}</code> · TP3: <code>${fmt(s.tps[2])}</code>`,
-    "",
-    `<b>Confirmations ${s.passed}/8</b>`,
-    CHECKS.map(([k, t]) => `${s.ck[k] ? "✔" : "✘"} ${t}`).reduce((a, x, i) => a + (i % 2 ? "  ·  " : "\n") + x, "").trim(),
-    "",
-    "<b>Why this trade</b>",
-    ...s.reasons.map((x) => "• " + esc(x)),
-    "",
-    "<i>Not financial advice. No proven edge: wins and losses are both posted. Use your own risk.</i>",
+    "<i>⚠️ Not financial advice. No proven edge; wins and losses both posted. Trade at your own risk.</i>",
+    "<b>— SPYDER Flow Radar</b>",
   ].join("\n");
 }
 
@@ -38,7 +44,7 @@ async function send(env, s, chart) {
 }
 
 export async function run(env, { force = false, batch = 0 } = {}) {
-  const tf = env.TF || "4h", ms = TF_MS[tf], size = +env.BATCH || 25, min = +env.MIN_CONF || 6;
+  const tf = env.TF || "4h", ms = TF_MS[tf], size = +env.BATCH || 25, min = +env.MIN_CONF || 7;
   const sinceClose = Date.now() % ms; // time since the last candle closed
   if (!force && sinceClose > 10 * 60e3) return { skipped: true };
   const wanted = (env.SYMBOLS || "").split(",").map((x) => x.trim().toUpperCase()).filter(Boolean);

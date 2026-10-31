@@ -4,5 +4,5 @@
   "compatibility_date": "2025-01-01",
   "assets": { "directory": "./smc-screener" },
   "triggers": { "crons": ["1 */4 * * *", "2 */4 * * *", "3 */4 * * *", "4 */4 * * *", "5 */4 * * *"] },
-  "vars": { "TF": "4h", "BATCH": "25", "SYMBOLS": "", "MIN_CONF": "6" }
+  "vars": { "TF": "4h", "BATCH": "25", "SYMBOLS": "", "MIN_CONF": "7" }
 }
