@@ -100,6 +100,15 @@ async function notifyUpdate(env, t, ev, info) {
   return tg(env, eventText(t, ev), chart, t.msg);
 }
 
+// Constant-time compare via SHA-256 digests so key length/prefix does not leak through timing.
+async function safeEq(a, b) {
+  const h = async (x) => new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(x)));
+  const [x, y] = await Promise.all([h(a), h(b)]);
+  let d = 0;
+  for (let i = 0; i < x.length; i++) d |= x[i] ^ y[i];
+  return d === 0;
+}
+
 export default {
   scheduled(e, env, ctx) {
     if (e.cron === "*/15 * * * *") ctx.waitUntil(track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
@@ -111,13 +120,20 @@ export default {
   },
   // Manual checks (need ?key=RUN_KEY): /__run?tf=1h|4h|1d&batch=0..4&min=N scans now, /__track checks open trades, /__weekly posts the report, /__ping tests Telegram, /__run?...&test=1 posts up to 2 sample signals (min conf 4, not tracked, not counted).
   async fetch(req, env) {
-    const u = new URL(req.url), ok = env.RUN_KEY && u.searchParams.get("key") === env.RUN_KEY;
+    const u = new URL(req.url);
+    const given = (req.headers.get("authorization") || "").replace(/^Bearer /i, "") || u.searchParams.get("key") || "";
+    const ok = !!env.RUN_KEY && given.length > 0 && (await safeEq(given, env.RUN_KEY));
     if (ok && u.pathname === "/__track") return Response.json(await track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
     if (ok && u.pathname === "/__weekly") { await tg(env, await weekly(env, +u.searchParams.get("days") || 7)); return Response.json({ sent: true }); }
     if (u.pathname === "/api/trades" && env.TRADES) {
+      const cache = caches.default, ck = new Request(u.origin + "/api/trades");
+      const hit = await cache.match(ck);
+      if (hit) return hit;
       const pub = (t) => ({ sym: t.sym, side: t.side, tf: t.tf, kind: t.kind, entry: t.entry, sl: t.sl, tps: t.tps, stage: t.stage, t0: t.t0, passed: t.passed });
       const open = (await loadOpen(env)).filter(([, t]) => isLive(t)).map(([, t]) => pub(t)), closed = ((await env.TRADES.get("closed", "json")) || []).filter(isLive);
-      return Response.json({ open, closed }, { headers: { "cache-control": "public, max-age=60", "access-control-allow-origin": "*" } });
+      const res = Response.json({ open, closed }, { headers: { "cache-control": "public, max-age=60", "access-control-allow-origin": "*" } });
+      await cache.put(ck, res.clone());
+      return res;
     }
     if (ok && u.pathname === "/__run") {
       try { return Response.json(await run(env, { force: true, tf: u.searchParams.get("tf") || undefined, batch: +u.searchParams.get("batch") || 0, minConf: +u.searchParams.get("min") || 0, test: u.searchParams.get("test") === "1" })); } catch (e) { return new Response(String(e.message), { status: 500 }); }
