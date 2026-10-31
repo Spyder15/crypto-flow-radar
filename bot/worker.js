@@ -43,8 +43,8 @@ async function send(env, s, chart) {
   if (!r.ok) throw new Error("telegram " + r.status + " " + (await r.text()));
 }
 
-export async function run(env, { force = false, batch = 0 } = {}) {
-  const tf = env.TF || "4h", ms = TF_MS[tf], size = +env.BATCH || 25, min = +env.MIN_CONF || 7;
+export async function run(env, { force = false, batch = 0, minConf } = {}) {
+  const tf = env.TF || "4h", ms = TF_MS[tf], size = +env.BATCH || 25, min = minConf || +env.MIN_CONF || 7;
   const sinceClose = Date.now() % ms; // time since the last candle closed
   if (!force && sinceClose > 10 * 60e3) return { skipped: true };
   const wanted = (env.SYMBOLS || "").split(",").map((x) => x.trim().toUpperCase()).filter(Boolean);
@@ -77,7 +77,7 @@ export default {
   async fetch(req, env) {
     const u = new URL(req.url);
     if (u.pathname === "/__run" && env.RUN_KEY && u.searchParams.get("key") === env.RUN_KEY) {
-      try { return Response.json(await run(env, { force: true, batch: +u.searchParams.get("batch") || 0 })); } catch (e) { return new Response(String(e.message), { status: 500 }); }
+      try { return Response.json(await run(env, { force: true, batch: +u.searchParams.get("batch") || 0, minConf: +u.searchParams.get("min") || 0 })); } catch (e) { return new Response(String(e.message), { status: 500 }); }
     }
     if (u.pathname === "/__ping" && env.RUN_KEY && u.searchParams.get("key") === env.RUN_KEY) {
       const r = await fetch(`https://api.telegram.org/bot${env.TG_TOKEN}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: env.TG_CHAT, text: "✅ TEST: SPYDER Flow Radar connected. Real signals will appear here." }) });
