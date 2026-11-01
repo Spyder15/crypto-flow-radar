@@ -1,7 +1,7 @@
 const $ = (id) => document.getElementById(id);
 const FAPI = "https://fapi.binance.com/fapi/v1";
 const BURST_MIN = 2.5, FUND_MIN = 0.0005, LIQ_MIN = 50000, MAX_FEED = 200;
-const TG_URL = ""; // set to your Telegram channel link to show the button
+const TG_URL = "https://t.me/Qunatcult"; // set to your Telegram channel link to show the button
 const WHALE_MIN = 1e6, WHALES = ["btcusdt", "ethusdt", "solusdt"];
 let alertsOn = false;
 let feed = [], filter = "all", liq = { n: 0, usd: 0 }, bursts = [], funds = [];
