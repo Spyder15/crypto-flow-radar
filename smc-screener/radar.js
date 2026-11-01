@@ -7,7 +7,7 @@ let alertsOn = false;
 const ev = {}; // per-coin evidence used to build trade ideas
 const E = (s) => (ev[s] ||= { liqL: 0, liqS: 0, flow: 0, wl: 0, ws: 0 });
 let wallets = [];
-let feed = [], filter = "all", liq = { n: 0, usd: 0 }, bursts = [], funds = [];
+let feed = JSON.parse(localStorage.getItem("radarFeed") || "[]"), filter = "all", liq = { n: 0, usd: 0 }, bursts = [], funds = [];
 
 const fmtUsd = (n) => n >= 1e6 ? "$" + (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? "$" + (n / 1e3).toFixed(0) + "K" : "$" + n.toFixed(0);
 const sym = (s) => s.replace(/USDT$/, "");
@@ -18,6 +18,7 @@ function push(type, html, key) {
   if (key && feed.some((e) => e.key === key)) return;
   feed.unshift({ type, html, key, t: Date.now() });
   feed = feed.slice(0, MAX_FEED);
+  try { localStorage.setItem("radarFeed", JSON.stringify(feed)); } catch {}
   if (alertsOn && (type === "whale" || type === "liq" && /\$[\d.]+M/.test(html))) notify(type, html);
   renderFeed();
 }
@@ -196,3 +197,16 @@ function renderWallets() {
 }
 
 loadWallets(); setInterval(loadWallets, 180000);
+
+// ---- Idea track record (from the Telegram radar's KV log) ----
+async function loadRecord() {
+  try {
+    const d = await getJSON("/api/ideas");
+    const done = d.closed.filter((c) => c.res !== "EXPIRED"), wins = done.filter((c) => c.r > 0).length, net = done.reduce((a, c) => a + c.r, 0);
+    const p = (n) => (+n).toPrecision(5);
+    $("recTag").textContent = done.length ? `${wins}W / ${done.length - wins}L · ${net >= 0 ? "+" : ""}${net.toFixed(1)}R` : `${d.open.length} open`;
+    $("rec").innerHTML = "<tr><th>COIN</th><th>SIDE</th><th class='r'>ENTRY</th><th class='r'>SL</th><th class='r'>TP1</th><th>STATUS</th></tr>" +
+      (d.open.concat(d.closed).slice(0, 15).map((i) => `<tr><td>${esc(sym(i.sy))}</td><td class="${i.long ? "good" : "bad"}">${i.long ? "LONG" : "SHORT"}</td><td class="r">${p(i.entry)}</td><td class="r bad">${p(i.sl)}</td><td class="r good">${p(i.t1)}</td><td class="${i.res === "TP1" ? "good" : i.res === "SL" ? "bad" : "dim"}">${i.res ? (i.res === "TP1" ? "+1.5R" : i.res === "SL" ? "-1R" : "expired") : "open"}</td></tr>`).join("") || "<tr><td colspan='6' class='dim'>No ideas posted yet.</td></tr>");
+  } catch { $("recTag").textContent = "unavailable"; }
+}
+loadRecord(); setInterval(loadRecord, 300000);

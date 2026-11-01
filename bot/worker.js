@@ -1,6 +1,7 @@
 import { track, weekly, eventText, loadOpen, isLive } from "./track.js";
 import { radar } from "./radar.js";
 import { whaleWatch } from "./whalewatch.js";
+import { ideaTrack, ideaStats } from "./ideas.js";
 import { TF_MS, CHECKS, buildRow, findSignals, confirmations, trendScore } from "./signals.js";
 import { renderChart, fmt } from "./chart.js";
 import { tickers, klines, openInterest } from "./data.js";
@@ -117,7 +118,8 @@ export default {
       const m = new Date(e.scheduledTime).getUTCMinutes();
       if (m % 15 === 0) ctx.waitUntil(track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
       ctx.waitUntil(whaleWatch(env, (text) => tg(env, text)).catch(() => {}));
-      if (m === 0) ctx.waitUntil(radar(env, (text) => tg(env, text)).catch(() => {}));
+      if (m % 15 === 10) ctx.waitUntil(ideaTrack(env, (text) => tg(env, text)).catch(() => {}));
+      if (m === 5) ctx.waitUntil(radar(env, (text) => tg(env, text)).catch(() => {}));
     }
     else if (e.cron === "30 18 * * *") { // 00:00 IST: daily summary, plus the weekly report when a new week starts in IST (Sunday 18:30 UTC)
       const sunday = new Date(e.scheduledTime).getUTCDay() === 0;
@@ -140,6 +142,8 @@ export default {
     if (ok && u.pathname === "/__whales") return Response.json(await whaleWatch(env, (text) => tg(env, text)));
     if (ok && u.pathname === "/__track") return Response.json(await track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
     if (ok && u.pathname === "/__weekly") { await tg(env, await weekly(env, +u.searchParams.get("days") || 7)); return Response.json({ sent: true }); }
+    if (u.pathname === "/api/ideas" && env.TRADES) return Response.json(await ideaStats(env), { headers: { "cache-control": "public, max-age=60", "access-control-allow-origin": "*" } });
+    if (ok && u.pathname === "/__ideas") return Response.json(await ideaTrack(env, (text) => tg(env, text)));
     if (u.pathname === "/api/trades" && env.TRADES) {
       const cache = caches.default, ck = new Request(u.origin + "/api/trades");
       const hit = await cache.match(ck);

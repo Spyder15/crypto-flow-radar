@@ -1,6 +1,7 @@
 import { tickers, klines } from "./data.js";
+import { addIdea } from "./ideas.js";
 
-const WALLET_NET = 5e6, IDEA_MIN = 3, BURST_MIN = 3, FUND_MIN = 0.05, TOP = 20; // FUND_MIN is in percent (8h rate)
+const WALLET_NET = 5e6, IDEA_MIN = 3, BURST_MIN = 3, FUND_MIN = 0.05, TOP = 15; // FUND_MIN is in percent (8h rate)
 const SITE = "https://crypto-flow-radar.live-scanner.workers.dev/radar.html";
 const fmtUsd = (n) => (n >= 1e6 ? "$" + (n / 1e6).toFixed(1) + "M" : "$" + Math.round(n / 1e3) + "K");
 const sym = (s) => s.replace(/USDT$/, "");
@@ -39,6 +40,7 @@ export async function radar(env, send) {
   for (const i of ideas.sort((a, b) => b.score - a.score).slice(0, 3)) {
     if (await seen(`ri:${i.sy}:${i.long}:${Math.floor(Date.now() / 144e5)}`)) continue;
     const d = i.long ? 1 : -1, p = (n) => n.toPrecision(5);
+    await addIdea(env, { sy: i.sy, long: i.long, entry: i.mark, sl: i.mark - d * i.r, t1: i.mark + d * i.r * 1.5, t2: i.mark + d * i.r * 3, t0: Date.now() });
     lines.push(`🎯 <b>${i.long ? "LONG" : "SHORT"} ${sym(i.sy)}</b> (score ${i.score}) entry ${p(i.mark)} · SL ${p(i.mark - d * i.r)} · TP1 ${p(i.mark + d * i.r * 1.5)} · TP2 ${p(i.mark + d * i.r * 3)}\n   <i>${i.why.join(" · ")}</i>`);
   }
   const out = [];
