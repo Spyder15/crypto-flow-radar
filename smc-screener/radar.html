@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Signal Radar — Crypto Flow Radar</title>
+<meta name="description" content="Live feed of unusual events: whale trades, volume bursts vs each coin's own history, liquidation cascades and crowded funding.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Signal Radar — Crypto Flow Radar">
+<meta property="og:description" content="Whale trades, volume bursts, liquidations and crowded funding, live.">
+<meta property="og:url" content="https://crypto-flow-radar.live-scanner.workers.dev/radar.html">
+<meta property="og:image" content="https://crypto-flow-radar.live-scanner.workers.dev/og-live.png?v=1">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="live.css?v=1">
+<link rel="stylesheet" href="radar.css?v=1">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>SF</b><span>SIGNAL RADAR</span></div>
+  <div class="sub">Unusual events, live · volume bursts sized against each coin's own history · liquidations · crowded funding</div>
+  <nav><a href="live.html">Ledger</a><a href="dashboard.html">Screener</a><a href="./">Home</a></nav>
+</header>
+
+<main>
+  <div class="titlebar"><h1>RADAR</h1><span id="status" class="dim">Loading…</span><span class="spacer"></span><button id="alertBtn" class="pill">🔔 Alerts off</button><a id="tgBtn" class="pill" hidden target="_blank" rel="noopener">Telegram →</a></div>
+
+  <section class="kpis rk" id="kpis"></section>
+
+  <div class="filters" id="filters">
+    <button data-f="all" class="on">All</button>
+    <button data-f="burst">Volume bursts</button>
+    <button data-f="whale">Whales</button>
+    <button data-f="liq">Liquidations</button>
+    <button data-f="funding">Funding</button>
+  </div>
+
+  <section class="panel" style="margin-bottom:10px"><h2>HEATMAP <em>24h change · top 40 by volume</em></h2><div id="heat" class="heat"></div></section>
+
+  <section class="grid2r">
+    <div class="panel"><h2>LIVE FEED <em id="feedTag"></em></h2><div class="scroll tall"><ul id="feed" class="feed"></ul></div></div>
+    <div>
+      <div class="panel"><h2>CROWDED FUNDING <em>8h rate</em></h2><div class="scroll"><table id="fund"></table></div></div>
+      <div class="panel" style="margin-top:10px"><h2>VOLUME BURSTS <em>1h vs 24h avg</em></h2><div class="scroll"><table id="burst"></table></div></div>
+    </div>
+  </section>
+
+  <p class="dim foot">Data: Binance USDT-M futures public API. Volume burst = last closed 1h volume ÷ that coin's own average hourly volume over the prior 24h. Whale = single aggregated trade ≥ $1M on BTC/ETH/SOL. Events are statistical flags, not trade advice.</p>
+</main>
+<script src="radar.js?v=1"></script>
+</body>
+</html>

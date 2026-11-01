@@ -1,4 +1,5 @@
 import { track, weekly, eventText, loadOpen, isLive } from "./track.js";
+import { radar } from "./radar.js";
 import { TF_MS, CHECKS, buildRow, findSignals, confirmations, trendScore } from "./signals.js";
 import { renderChart, fmt } from "./chart.js";
 import { tickers, klines, openInterest } from "./data.js";
@@ -111,7 +112,10 @@ async function safeEq(a, b) {
 
 export default {
   scheduled(e, env, ctx) {
-    if (e.cron === "*/15 * * * *") ctx.waitUntil(track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
+    if (e.cron === "*/15 * * * *") {
+      ctx.waitUntil(track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
+      if (new Date(e.scheduledTime).getUTCMinutes() === 0) ctx.waitUntil(radar(env, (text) => tg(env, text)).catch(() => {}));
+    }
     else if (e.cron === "30 18 * * *") { // 00:00 IST: daily summary, plus the weekly report when a new week starts in IST (Sunday 18:30 UTC)
       const sunday = new Date(e.scheduledTime).getUTCDay() === 0;
       ctx.waitUntil((async () => { await tg(env, await weekly(env, 1)); if (sunday) await tg(env, await weekly(env, 7)); })());
@@ -123,6 +127,7 @@ export default {
     const u = new URL(req.url);
     const given = (req.headers.get("authorization") || "").replace(/^Bearer /i, "") || u.searchParams.get("key") || "";
     const ok = !!env.RUN_KEY && given.length > 0 && (await safeEq(given, env.RUN_KEY));
+    if (ok && u.pathname === "/__radar") return Response.json(await radar(env, (text) => tg(env, text)));
     if (ok && u.pathname === "/__track") return Response.json(await track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
     if (ok && u.pathname === "/__weekly") { await tg(env, await weekly(env, +u.searchParams.get("days") || 7)); return Response.json({ sent: true }); }
     if (u.pathname === "/api/trades" && env.TRADES) {
