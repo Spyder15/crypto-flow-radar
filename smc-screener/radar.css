@@ -20,3 +20,7 @@
 .heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:4px}
 .heat div{padding:8px 6px;text-align:center;font-size:11px;color:#fff}
 .heat b{display:block;font-size:12px}
+.small{font-size:11px;margin:8px 0 0}
+.wrap{white-space:normal}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.chip{border:1px solid var(--line);padding:3px 8px;font-size:11px}.chip i{font-style:normal;margin-left:4px}
