@@ -29,7 +29,7 @@ Needs the KV namespace bound as `TRADES` (see `wrangler.jsonc`). Every posted si
 - Open trades older than 7 days are dropped as EXPIRED.
 - Monday 04:00 UTC (09:30 IST) a weekly report is posted. Results are R-multiples with each trade exiting at its final stop/target.
 
-Manual checks (add `?key=RUN_KEY`): `/__track`, `/__weekly`, `/__radar` (hourly radar post: funding + volume bursts), `/__ping`, `/__run?batch=0..4&min=N`.
+Manual checks (add `?key=RUN_KEY`): `/__track`, `/__weekly`, `/__whales` (diff whale wallets now), `/__radar` (hourly radar post: funding + volume bursts), `/__ping`, `/__run?batch=0..4&min=N`.
 
 ## Backtest
 `node bot/backtest.mjs 1h 40 4000` replays the rules on Bybit history (coins, bars). Findings (40 coins, ~166 days of 1H, net of ~0.13% fees, OI/funding assumed ok so slightly optimistic, in-sample): CHoCH and BOS entries with >=7/8 were positive (+0.23R and +0.46R per trade), EMA retest and Fibonacci pullback were negative, 15M was negative at every confidence level. So live signals are only FVG entries (CHoCH/BOS) on 1H; `findSignals` has opt-in flags `ema` and `fib`.

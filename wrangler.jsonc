@@ -4,6 +4,6 @@
   "compatibility_date": "2025-01-01",
   "assets": { "directory": "./smc-screener" },
   "kv_namespaces": [{ "binding": "TRADES", "id": "a3ccb7e66a9746b6b5f1c000878e72b6" }],
-  "triggers": { "crons": ["1-5 * * * *", "1-5 */4 * * *", "1-5 0 * * *", "*/15 * * * *", "30 18 * * *"] },
+  "triggers": { "crons": ["1-5 * * * *", "1-5 */4 * * *", "1-5 0 * * *", "*/5 * * * *", "30 18 * * *"] },
   "vars": { "TF": "1h", "BATCH": "25", "SYMBOLS": "", "MIN_CONF": "7", "RISK_USD": "100", "MAX_DAY": "12", "INCLUDE": "XAUUSDT,XAGUSDT,CLUSDT,BZUSDT" }
 }
