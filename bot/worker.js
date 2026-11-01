@@ -131,6 +131,12 @@ export default {
     const given = (req.headers.get("authorization") || "").replace(/^Bearer /i, "") || u.searchParams.get("key") || "";
     const ok = !!env.RUN_KEY && given.length > 0 && (await safeEq(given, env.RUN_KEY));
     if (ok && u.pathname === "/__radar") return Response.json(await radar(env, (text) => tg(env, text)));
+    if (ok && u.pathname === "/__sample") {
+      const site = "https://crypto-flow-radar.live-scanner.workers.dev/radar.html", w = (a) => `<a href="https://hypurrscan.io/address/${a}">0x5b5d…c060</a>`;
+      await tg(env, ["<b>🧪 SAMPLE (format preview)</b>", "", "<b>🐋 Whale wallet moves</b>", "", `🟢 ${w("0x5b5d51203a0f9079f8aeb098a6523a13f298c060")} opened <b>SHORT BTC</b> $181.24M · entry 76366`, `➕ ${w("0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00")} added to <b>SHORT ETH</b> $8.55M → $21.39M`, `🔄 ${w("0xb83de012dba672c76a7dbbbf3e459cb59d7d6e36")} flipped to <b>LONG SOL</b> $3.20M · entry 182.4`, `🔴 ${w("0x7fdafde5cfb5465924316eced2d3715494c517d1")} closed <b>LONG HYPE</b> ($5.10M)`, "", `<a href="${site}">Live radar</a> · <i>wallets can hedge elsewhere; not advice</i>`].join("\n"));
+      await tg(env, ["<b>🧪 SAMPLE (format preview)</b>", "", "<b>📡 Signal Radar</b>", "", "💸 <b>POWR</b> funding -0.928% — shorts crowded", "⚡ <b>BEAM</b> 3.1× normal hourly volume, price +7.61%", "", `<a href="${site}">Open live radar</a> · <i>flags, not trade advice</i>`].join("\n"));
+      return Response.json({ sent: 2 });
+    }
     if (ok && u.pathname === "/__whales") return Response.json(await whaleWatch(env, (text) => tg(env, text)));
     if (ok && u.pathname === "/__track") return Response.json(await track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
     if (ok && u.pathname === "/__weekly") { await tg(env, await weekly(env, +u.searchParams.get("days") || 7)); return Response.json({ sent: true }); }
