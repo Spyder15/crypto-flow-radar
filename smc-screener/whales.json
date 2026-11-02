@@ -1,155 +1,155 @@
 {
- "updated": "2026-11-01T08:13:19.957Z",
+ "updated": "2026-11-02T03:08:32.594Z",
  "wallets": [
   {
    "a": "0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00",
    "name": null,
-   "month": 20953712,
-   "all": 217514470
+   "month": 18822661,
+   "all": 217508268
   },
   {
    "a": "0x5b5d51203a0f9079f8aeb098a6523a13f298c060",
    "name": null,
-   "month": 120372706,
-   "all": 213300740
+   "month": 103301413,
+   "all": 209874613
   },
   {
    "a": "0xb83de012dba672c76a7dbbbf3e459cb59d7d6e36",
    "name": null,
-   "month": 96401236,
-   "all": 162126523
+   "month": 89251163,
+   "all": 161519657
   },
   {
    "a": "0x7fdafde5cfb5465924316eced2d3715494c517d1",
    "name": "BobbyBigSize",
-   "month": 26678218,
-   "all": 154651675
+   "month": 23436760,
+   "all": 155229206
   },
   {
    "a": "0x880ac484a1743862989a441d6d867238c7aa311c",
    "name": "x.com/SilkBtc",
-   "month": 2418341,
-   "all": 120817593
+   "month": 1874670,
+   "all": 120801484
   },
   {
-   "a": "0xd47587702a91731dc1089b5db0932cf820151a91",
+   "a": "0x8af700ba841f30e0a3fcb0ee4c4a9d223e1efa05",
    "name": null,
-   "month": 8166864,
-   "all": 69085119
+   "month": 173612,
+   "all": 77327037
+  },
+  {
+   "a": "0x77375a8c9d13bf79afb2a87f1b0ac1dfd5f5bf66",
+   "name": null,
+   "month": 551872,
+   "all": 58364779
   },
   {
    "a": "0x023a3d058020fb76cca98f01b3c48c8938a22355",
    "name": "Auros",
-   "month": 7784914,
-   "all": 56444755
+   "month": 6303888,
+   "all": 56721100
   },
   {
    "a": "0x856c35038594767646266bc7fd68dc26480e910d",
    "name": null,
-   "month": 4779376,
-   "all": 49799544
+   "month": 2775685,
+   "all": 50103623
   },
   {
    "a": "0xfc667adba8d4837586078f4fdcdc29804337ca06",
    "name": null,
-   "month": 20729813,
-   "all": 42412225
+   "month": 19786456,
+   "all": 42140528
   },
   {
    "a": "0x418aa6bf98a2b2bc93779f810330d88cde488888",
    "name": null,
-   "month": 3887703,
-   "all": 36507449
+   "month": 3500221,
+   "all": 36353139
   },
   {
    "a": "0x807a2e2e469df84b299da5f90f15dda4380daca1",
    "name": null,
-   "month": 112973,
-   "all": 34657754
+   "month": 67218,
+   "all": 34636647
   },
   {
    "a": "0xf517639a8872e756ac98d3c65507d2ebc25cc032",
    "name": "NMTD -Thank you Jeff",
-   "month": 2609917,
-   "all": 33265158
+   "month": 2857949,
+   "all": 33037242
   },
   {
    "a": "0xaf0fdd39e5d92499b0ed9f68693da99c0ec1e92e",
    "name": null,
-   "month": 4504201,
-   "all": 31981761
+   "month": 5313851,
+   "all": 31883175
   },
   {
    "a": "0x99967871e6c4f9a5185abc57edede9e9540191f6",
    "name": null,
-   "month": 3990943,
-   "all": 27503974
+   "month": 3718848,
+   "all": 27456455
   },
   {
    "a": "0xa9b95f2a2e7ef219021efc5c04c32761b8553bbd",
    "name": null,
-   "month": 2062513,
-   "all": 27073907
+   "month": 3078820,
+   "all": 27184877
   },
   {
    "a": "0x6859da14835424957a1e6b397d8026b1d9ff7e1e",
    "name": null,
-   "month": 3111110,
-   "all": 25564356
+   "month": 2528732,
+   "all": 25460532
   },
   {
    "a": "0xd4c1f7e8d876c4749228d515473d36f919583d1d",
    "name": null,
-   "month": 5676968,
-   "all": 24190150
+   "month": 4680187,
+   "all": 24233532
   },
   {
    "a": "0xe86b057f5eb764c9738d6b0d38170befd0723664",
    "name": null,
-   "month": 3031889,
-   "all": 24100564
+   "month": 2570456,
+   "all": 24116186
   },
   {
    "a": "0xc926ddba8b7617dbc65712f20cf8e1b58b8598d3",
    "name": null,
-   "month": 3906696,
-   "all": 23506766
+   "month": 3743552,
+   "all": 23417506
   },
   {
    "a": "0x7717a7a245d9f950e586822b8c9b46863ed7bd7e",
    "name": null,
-   "month": 1358119,
-   "all": 23250717
+   "month": 858372,
+   "all": 23362058
   },
   {
    "a": "0xa2d1dd0f09239349354b662f75fbd81f3dbc824e",
    "name": null,
-   "month": 222113,
-   "all": 22151161
+   "month": 1178,
+   "all": 22182165
   },
   {
    "a": "0x3fc56e944aa7b1594c85861b2d46a07f82a2c0c1",
    "name": null,
-   "month": 1891246,
-   "all": 19851037
+   "month": 1735538,
+   "all": 19819608
   },
   {
    "a": "0xb8ebd6ed57f4102be5b1caf60d01dd1c9f270f94",
    "name": null,
-   "month": 164652,
-   "all": 19395069
+   "month": 454430,
+   "all": 19405475
   },
   {
    "a": "0x8cc94dc843e1ea7a19805e0cca43001123512b6a",
    "name": null,
-   "month": 4785775,
-   "all": 18719175
-  },
-  {
-   "a": "0xf605cd3adabbc3110bc3efb85ebe7be57590a527",
-   "name": null,
-   "month": 173041,
-   "all": 18018622
+   "month": 4480701,
+   "all": 18863893
   }
  ]
 }
