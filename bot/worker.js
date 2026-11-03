@@ -1,4 +1,3 @@
-import { paperOpen, paperStatus, paperText, paperReset, paperWatch } from "./paper.js";
 import { track, watchdog, weekly, eventText, loadOpen, isLive } from "./track.js";
 import { radar } from "./radar.js";
 import { whaleWatch } from "./whalewatch.js";
@@ -103,7 +102,6 @@ export async function run(env, { force = false, batch = 0, minConf, tf: tfArg, t
       try { msg = test ? await tg(env, "🧪 <b>TEST (not tracked)</b>\n" + caption(s, env), chart) : await send(env, s, chart); } catch (e) { errors.push(s.sym + " send failed: " + e.message); console.log("send failed", s.sym, e.message); continue; }
       if (env.TRADES && !test) {
         const trade = { sym: s.sym, side: s.side, tf, kind: s.kind, lvl: s.lvl, entry: s.entry, sl: s.sl, tps: s.tps, riskPct: s.riskPct, passed, t0, stage: 0, cursor: 0, msg };
-        trade.paper = await paperOpen(env, trade).catch(() => null);
         await env.TRADES.put(seen, "1", { expirationTtl: 6 * 3600 });
         await env.TRADES.put("d:" + day, String((+(await env.TRADES.get("d:" + day)) || 0) + 1), { expirationTtl: 2 * 86400 });
         await env.TRADES.put(`o:${s.sym}:${tf}:${t0}`, JSON.stringify(trade), { expirationTtl: 33 * 86400 });
@@ -136,14 +134,14 @@ export default {
       const m = new Date(e.scheduledTime).getUTCMinutes();
       if (m % 15 === 0) ctx.waitUntil(track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)).then((r) => console.log("track", JSON.stringify(r))));
       if (m % 15 !== 0 && env.CRYPTO_EXTRAS !== "0") ctx.waitUntil(whaleWatch(env, (text) => tg(env, text)).catch(() => {}));
-      if (m % 15 === 7) ctx.waitUntil(Promise.all([watchdog(env, (text) => tg(env, text)), paperWatch(env, (text) => tg(env, text))]).catch(() => {}));
+      if (m % 15 === 7) ctx.waitUntil(watchdog(env, (text) => tg(env, text)).catch(() => {}));
       if (m % 15 === 5 && m !== 5) ctx.waitUntil(spyderTrack(env, (text, reply, chart) => tg(env, text, chart, reply)).catch(() => {}));
       if (m % 15 === 10 && env.CRYPTO_EXTRAS !== "0") ctx.waitUntil(ideaTrack(env, (text) => tg(env, text)).catch(() => {}));
       if (m === 5 && env.CRYPTO_EXTRAS !== "0") ctx.waitUntil(radar(env, (text) => tg(env, text)).catch(() => {}));
     }
     else if (e.cron === "30 18 * * *") { // 00:00 IST: daily summary, plus the weekly report when a new week starts in IST (Sunday 18:30 UTC)
       const sunday = new Date(e.scheduledTime).getUTCDay() === 0;
-      ctx.waitUntil((async () => { await tg(env, await weekly(env, 1)); if (env.PAPER === "1") await tg(env, paperText(await paperStatus(env))); if (sunday) await tg(env, await weekly(env, 7)); })());
+      ctx.waitUntil((async () => { await tg(env, await weekly(env, 1)); if (sunday) await tg(env, await weekly(env, 7)); })());
     }
     else ctx.waitUntil(run(env, { tf: e.cron === "1-5 * * * *" ? "1h" : e.cron === "1-5 */4 * * *" ? "4h" : "1d", batch: Math.max(0, (new Date(e.scheduledTime).getUTCMinutes() % 15) - 1) })); // minute 1..5 of each candle close = batch 0..4
   },
@@ -161,7 +159,6 @@ export default {
     }
     if (ok && u.pathname === "/__whales") return Response.json(await whaleWatch(env, (text) => tg(env, text)));
     if (ok && u.pathname === "/__spydersample") return Response.json(await spyderSample((text, reply, chart) => tg(env, text, chart, reply)));
-    if (ok && u.pathname === "/__paper") { if (u.searchParams.get("reset") === "1") await paperReset(env); const a = await paperStatus(env); if (u.searchParams.get("send") === "1") await tg(env, paperText(a)); return Response.json(a); }
     if (ok && u.pathname === "/__spyder") return Response.json({ stats: await spyderStats(env), track: await spyderTrack(env, (text, reply, chart) => tg(env, text, chart, reply), 40) });
     if (ok && u.pathname === "/__track") return Response.json(await track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
     if (ok && u.pathname === "/__weekly") { await tg(env, await weekly(env, +u.searchParams.get("days") || 7)); return Response.json({ sent: true }); }

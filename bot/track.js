@@ -1,7 +1,6 @@
 // Trade tracking: KV holds open trades; a 15m cron walks candles and posts TP/SL updates; weekly report from closed trades.
 import { fmt } from "./chart.js";
 import { klines15 } from "./data.js";
-import { paperClose } from "./paper.js";
 
 // 15m and sub-6/8 signals only came from manual format tests; keep them out of the stats
 export const isLive = (t) => t.tf !== "15m" && t.passed >= 6;
@@ -71,7 +70,6 @@ export async function loadOpen(env) {
 }
 
 export async function recordClosed(env, t) {
-  await paperClose(env, t).catch((e) => console.log("paper close failed", e.message));
   const list = (await env.TRADES.get("closed", "json")) || [];
   list.push({ sym: t.sym, side: t.side, tf: t.tf, kind: t.kind, outcome: t.outcome, r: t.r ?? null, opened: t.t0, closed: Date.now(), passed: t.passed, msg: t.msg });
   await env.TRADES.put("closed", JSON.stringify(list.slice(-300)));
