@@ -1,7 +1,7 @@
 // Spyder Strategy (body alignment + body sweep), same rules as bot/backtest-spyder.mjs.
 // Bearish: candle i-1 closes bearish with body >= BODY of its range, its body top aligns with candle i-2's body top (within TOL),
 // candle i sweeps above both body tops and closes back below i-1's top. Enter at the close of i, SL above the sweep high. Bullish is the mirror.
-export function spyderSignal(d, { body = 0.8, tol = 0.003, buf = 0.001 } = {}) {
+export function spyderSignal(d, { body = 0.7, tol = 0.005, buf = 0.001 } = {}) {
   const n = d.length; if (n < 3) return null;
   const a = d[n - 3], b = d[n - 2], c = d[n - 1], rng = b.h - b.l;
   if (!(rng > 0)) return null;
