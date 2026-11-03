@@ -200,3 +200,12 @@ Ek alag experimental strategy `bot/spyder-strategy.js` mein hai aur `bot/spyder.
 - **KV keys**: `sp:o:*` (open), `sp:s:*` (dedupe), `sp:d:*` (daily count), `sp:closed`. Max 8 signals/din, 12 open.
 - **Warning**: `node bot/backtest-spyder.mjs 1h 40 3000` ka result fees ke baad negative ya ~0 tha. Ye sirf live result naapne ke liye hai. `/__spyder?key=RUN_KEY` se stats (win rate, net R) dekho.
 - **Bot 2 (markets, Spyder-only)**: `wrangler.markets.jsonc` alag Cloudflare account par deploy hota hai (`npx wrangler deploy -c wrangler.markets.jsonc`). `ONLY_SPYDER=1` se sirf Spyder chalti hai, `CRYPTO_EXTRAS=0` se whale/ideas/radar band, aur `SYMBOLS` mein gold, silver, oil, forex aur stocks ke 24 Bybit symbols hain. Preview: `/__spydersample?key=RUN_KEY`.
+
+## 18. Paper trading account ($100, max drawdown 3%)
+
+`bot/paper.js` main strategy (CHoCH/BOS, 6+/8) ke signals par ek **fake-money** account chalata hai. Koi real order nahi jata.
+
+- **Rules**: start $100, risk 1% ($1) per trade, fees 0.11% round trip count hote hain. Open trades ka worst-case loss (SL + fees) milake kabhi 3% drawdown ($97 floor) cross nahi ho sakta. Floor touch hote hi account HALT, naye paper trades band, aur Telegram alert.
+- **Vars** (`wrangler.jsonc`): `PAPER=1`, `PAPER_START`, `PAPER_RISK`, `PAPER_MAX_DD`.
+- **Dekhna**: `/__paper?key=RUN_KEY` (`&send=1` Telegram pe bhejta hai, `&reset=1` account reset). Daily summary (00:00 IST) me bhi status aata hai.
+- **Real money se pehle**: 1-2 hafte paper result dekho. Real exchange ke liye API key me sirf Trade permission, Withdraw kabhi nahi.
