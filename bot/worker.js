@@ -1,4 +1,4 @@
-import { track, weekly, eventText, loadOpen, isLive } from "./track.js";
+import { track, watchdog, weekly, eventText, loadOpen, isLive } from "./track.js";
 import { radar } from "./radar.js";
 import { whaleWatch } from "./whalewatch.js";
 import { ideaTrack, ideaStats } from "./ideas.js";
@@ -37,6 +37,17 @@ function caption(s, env = {}) {
   ].join("\n");
 }
 
+// Telegram rate limit (429): wait the requested time (max 20s) and retry once.
+async function tgFetch(url, init) {
+  let r = await fetch(url, init);
+  if (r.status === 429) {
+    const wait = Math.min(20, +(await r.clone().json().catch(() => ({}))).parameters?.retry_after || 3);
+    await new Promise((res) => setTimeout(res, wait * 1000 + 300));
+    r = await fetch(url, init);
+  }
+  return r;
+}
+
 async function tg(env, text, chart, replyTo) {
   const base = `https://api.telegram.org/bot${env.TG_TOKEN}`, rep = replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {};
   if (chart) {
@@ -44,10 +55,10 @@ async function tg(env, text, chart, replyTo) {
     fd.append("chat_id", env.TG_CHAT); fd.append("parse_mode", "HTML"); fd.append("caption", text);
     Object.entries(rep).forEach(([k, v]) => fd.append(k, String(v)));
     fd.append("photo", new Blob([chart], { type: "image/png" }), "chart.png");
-    const r = await fetch(base + "/sendPhoto", { method: "POST", body: fd });
+    const r = await tgFetch(base + "/sendPhoto", { method: "POST", body: fd });
     if (r.ok) return (await r.json()).result.message_id;
   }
-  const r = await fetch(base + "/sendMessage", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: env.TG_CHAT, parse_mode: "HTML", text, disable_web_page_preview: true, ...rep }) });
+  const r = await tgFetch(base + "/sendMessage", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: env.TG_CHAT, parse_mode: "HTML", text, disable_web_page_preview: true, ...rep }) });
   if (!r.ok) throw new Error("telegram " + r.status + " " + (await r.text()));
   return (await r.json()).result.message_id;
 }
@@ -83,7 +94,8 @@ export async function run(env, { force = false, batch = 0, minConf, tf: tfArg, t
         if ((+(await env.TRADES.get("d:" + day)) || 0) >= maxDay) { errors.push("daily signal cap reached"); break; }
       }
       calls += 2; let chart = null; try { chart = await renderChart(r, s); } catch (e) { console.log("chart failed", e.message); }
-      const msg = test ? await tg(env, "🧪 <b>TEST (not tracked)</b>\n" + caption(s, env), chart) : await send(env, s, chart);
+      let msg; // a failed send must not abort the batch; the signal is retried by the next run of this candle only if it was not saved
+      try { msg = test ? await tg(env, "🧪 <b>TEST (not tracked)</b>\n" + caption(s, env), chart) : await send(env, s, chart); } catch (e) { errors.push(s.sym + " send failed: " + e.message); console.log("send failed", s.sym, e.message); continue; }
       if (env.TRADES && !test) {
         const trade = { sym: s.sym, side: s.side, tf, kind: s.kind, lvl: s.lvl, entry: s.entry, sl: s.sl, tps: s.tps, riskPct: s.riskPct, passed, t0, stage: 0, cursor: 0, msg };
         await env.TRADES.put(seen, "1", { expirationTtl: 6 * 3600 });
@@ -99,7 +111,7 @@ export async function run(env, { force = false, batch = 0, minConf, tf: tfArg, t
 
 async function notifyUpdate(env, t, ev, info) {
   let chart = null;
-  try { const k = await klines(t.sym, t.tf); const r = buildRow(t.sym, k, null); if (r) chart = await renderChart(r, { ...t, track: info }); } catch (e) { console.log("chart failed", e.message); }
+  try { if (!info) throw new Error("no chart info"); const k = await klines(t.sym, t.tf); const r = buildRow(t.sym, k, null); if (r) chart = await renderChart(r, { ...t, track: info }); } catch (e) { console.log("chart failed", e.message); }
   return tg(env, eventText(t, ev), chart, t.msg);
 }
 
@@ -116,8 +128,9 @@ export default {
   scheduled(e, env, ctx) {
     if (e.cron === "*/5 * * * *") {
       const m = new Date(e.scheduledTime).getUTCMinutes();
-      if (m % 15 === 0) ctx.waitUntil(track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
-      ctx.waitUntil(whaleWatch(env, (text) => tg(env, text)).catch(() => {}));
+      if (m % 15 === 0) ctx.waitUntil(track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)).then((r) => console.log("track", JSON.stringify(r))));
+      if (m % 15 !== 0) ctx.waitUntil(whaleWatch(env, (text) => tg(env, text)).catch(() => {}));
+      if (m % 15 === 7) ctx.waitUntil(watchdog(env, (text) => tg(env, text)).catch(() => {}));
       if (m % 15 === 10) ctx.waitUntil(ideaTrack(env, (text) => tg(env, text)).catch(() => {}));
       if (m === 5) ctx.waitUntil(radar(env, (text) => tg(env, text)).catch(() => {}));
     }

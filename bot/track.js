@@ -2,8 +2,8 @@
 import { fmt } from "./chart.js";
 import { klines15 } from "./data.js";
 
-// 15m and sub-7/8 signals only came from manual format tests; keep them out of the stats
-export const isLive = (t) => t.tf !== "15m" && t.passed >= 7;
+// 15m and sub-6/8 signals only came from manual format tests; keep them out of the stats
+export const isLive = (t) => t.tf !== "15m" && t.passed >= 6;
 const DAY = 864e5, MAX_AGE = { "1h": 7 * DAY, "4h": 14 * DAY, "1d": 30 * DAY };
 export const tradeKey = (t) => `o:${t.sym}:${t.tf}:${t.t0}`;
 
@@ -31,7 +31,7 @@ export function evaluate(t, candles) {
   return events;
 }
 
-const R = (x) => (Math.abs(x) < 0.05 ? "0.0" : (x > 0 ? "+" : "") + x.toFixed(1)) + "R";
+const R = (x) => typeof x !== "number" ? "" : (Math.abs(x) < 0.05 ? "0.0" : (x > 0 ? "+" : "") + x.toFixed(1)) + "R";
 export function eventText(t, ev) {
   const L = t.side === "LONG", base = t.sym.replace(/USDT$/, ""), head = `${L ? "🟢" : "🔴"} <b>#${base} ${t.side}</b> · ${t.tf.toUpperCase()}`;
   const line = "━━━━━━━━━━━━━━", lv = `📍 Entry <code>${fmt(t.entry)}</code>`;
@@ -71,7 +71,7 @@ export async function loadOpen(env) {
 
 export async function recordClosed(env, t) {
   const list = (await env.TRADES.get("closed", "json")) || [];
-  list.push({ sym: t.sym, side: t.side, tf: t.tf, kind: t.kind, outcome: t.outcome, r: t.r ?? null, opened: t.t0, closed: Date.now(), passed: t.passed });
+  list.push({ sym: t.sym, side: t.side, tf: t.tf, kind: t.kind, outcome: t.outcome, r: t.r ?? null, opened: t.t0, closed: Date.now(), passed: t.passed, msg: t.msg });
   await env.TRADES.put("closed", JSON.stringify(list.slice(-300)));
 }
 
@@ -96,19 +96,41 @@ export async function weekly(env, days = 7, now = Date.now()) {
 export async function track(env, notify) {
   const now = Date.now(), done = [], errors = []; let calls = 0;
   for (const [key, t] of await loadOpen(env)) {
-    if (t.closed) { await env.TRADES.delete(key); continue; }
+    if (t.closed && !t.pending?.length) { await env.TRADES.delete(key); continue; }
     if (now - t.t0 > (MAX_AGE[t.tf] || 7 * DAY)) { t.closed = true; t.outcome = "EXPIRED"; t.r = null; await recordClosed(env, t); await env.TRADES.delete(key); done.push(key + " expired"); continue; }
     if (calls > 36) break; // free plan: 50 subrequests per run
+    if (t.pending?.length) { // alerts that failed to send earlier: retry text-only
+      const left = [];
+      for (const ev of t.pending) { try { calls++; t.msg = (await notify(t, ev, null)) || t.msg; } catch (e) { errors.push("retry " + e.message); left.push(ev); } }
+      t.pending = left.length ? left : undefined;
+      if (t.closed) { if (t.pending) await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 }); else await env.TRADES.delete(key); continue; }
+      await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 });
+    }
     calls += 2; let cs; // candles + chart data
     try { cs = await klines15(t.sym, Math.max(t.t0, (t.cursor || 0) + 1)); } catch (e) { errors.push(e.message); continue; }
     cs = cs.filter((c) => c.t >= t.t0 && c.t > (t.cursor || 0) && c.t + 15 * 60e3 <= now);
     if (!cs.length) continue;
     const events = evaluate(t, cs);
     for (const [i, ev] of events.entries()) {
-      try { calls += 2; t.msg = (await notify(t, ev, trackInfo(t, events, i))) || t.msg; } catch (e) { errors.push("notify " + e.message); }
+      try { calls += 2; t.msg = (await notify(t, ev, trackInfo(t, events, i))) || t.msg; } catch (e) { errors.push("notify " + e.message); (t.pending = t.pending || []).push(ev); }
     }
-    if (t.closed) { await recordClosed(env, t); await env.TRADES.delete(key); } else await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 });
+    if (t.closed) { await recordClosed(env, t); if (t.pending?.length) await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 }); else await env.TRADES.delete(key); } else await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 });
     if (events.length) done.push(`${t.sym} ${events.map((e) => e.type).join(",")}`);
   }
+  await env.TRADES.put("health:track", JSON.stringify({ at: now, ok: !errors.length, errors: errors.slice(0, 3) }), { expirationTtl: 2 * 86400 });
+  if (!errors.length) await env.TRADES.put("health:track:ok", String(now), { expirationTtl: 2 * 86400 });
   return { open: done, errors: errors.slice(0, 5) };
+}
+
+// Self-check (cron): warns on Telegram if tracking has been failing for 45+ min or alerts sit undelivered. One warning per 3 hours.
+export async function watchdog(env, notify, now = Date.now()) {
+  const lastOk = +(await env.TRADES.get("health:track:ok")) || 0, h = await env.TRADES.get("health:track", "json");
+  const open = await loadOpen(env), stuck = open.filter(([, t]) => t.pending?.length).length;
+  const issues = [];
+  if (open.length && lastOk && now - lastOk > 45 * 60e3) issues.push(`Trade tracking has not succeeded for ${Math.round((now - lastOk) / 60e3)} min. Last errors: ${(h?.errors || []).join(" | ").slice(0, 300) || "n/a"}`);
+  if (stuck) issues.push(`${stuck} trade(s) have TP/SL alerts that failed to send (retrying every 15 min).`);
+  if (!issues.length || (await env.TRADES.get("health:warned"))) return { issues };
+  await env.TRADES.put("health:warned", "1", { expirationTtl: 3 * 3600 });
+  await notify("⚠️ <b>Radar health warning</b>\n" + issues.map((x) => "• " + x.replace(/[&<>]/g, "")).join("\n"));
+  return { issues, warned: true };
 }

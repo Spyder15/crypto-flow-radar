@@ -5,11 +5,13 @@ const OI_IV = { "15m": "15min", "1h": "1h", "4h": "4h", "1d": "1d" };
 
 async function get(path) {
   let last = "";
-  for (const h of HOSTS) {
-    try {
-      const r = await fetch(h + path, { headers: { "user-agent": "Mozilla/5.0", accept: "application/json" } });
-      if (r.ok) { const j = await r.json(); if (j.retCode === 0) return j.result; last = "retCode " + j.retCode; } else last = String(r.status);
-    } catch (e) { last = e.message; }
+  for (let round = 0; round < 1; round++) { // one pass only: every failed host costs a subrequest (free plan limit 50 per run)
+    for (const h of HOSTS) {
+      try {
+        const r = await fetch(h + path, { headers: { "user-agent": "Mozilla/5.0", accept: "application/json" } });
+        if (r.ok) { const j = await r.json(); if (j.retCode === 0) return j.result; last = "retCode " + j.retCode; } else last = String(r.status);
+      } catch (e) { last = e.message; }
+    }
   }
   throw new Error(`${path} -> ${last}`);
 }
