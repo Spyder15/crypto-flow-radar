@@ -1,0 +1,10 @@
+{
+ "equity": 100,
+ "peak": 100,
+ "halted": false,
+ "alerted": false,
+ "open": [],
+ "closed": [],
+ "seen": {},
+ "days": {}
+}

@@ -1,0 +1,11 @@
+{
+  "startBalance": 100,
+  "riskPct": 1,
+  "maxDrawdownPct": 3,
+  "feeRoundTrip": 0.0011,
+  "minConfirmations": 6,
+  "timeframe": "1h",
+  "topSymbols": 25,
+  "maxOpenTrades": 3,
+  "maxTradesPerDay": 4
+}

@@ -1,0 +1,1 @@
+{ "name": "bybit-paper-bot", "version": "1.0.0", "type": "module", "private": true, "scripts": { "start": "node src/bot.js", "reset": "node src/bot.js --reset" } }
