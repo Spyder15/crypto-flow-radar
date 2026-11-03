@@ -1,0 +1,9 @@
+{
+  "name": "crypto-flow-radar",
+  "main": "bot/worker.js",
+  "compatibility_date": "2025-01-01",
+  "assets": { "directory": "./smc-screener" },
+  "kv_namespaces": [{ "binding": "TRADES", "id": "cc52e83a6d764dadabf28b31444dcd4e" }],
+  "triggers": { "crons": ["1-5 * * * *", "1-5 */4 * * *", "1-5 0 * * *", "*/5 * * * *", "30 18 * * *"] },
+  "vars": { "TF": "1h", "BATCH": "25", "SYMBOLS": "XAUUSDT,XAUTUSDT,XAGUSDT,CLUSDT,BZUSDT,EURUSDUSDT,GBPUSDUSDT,USDJPYUSDT,AAPLUSDT,TSLAUSDT,NVDAUSDT,MSTRUSDT,COINUSDT,HOODUSDT,CRCLUSDT,ORCLUSDT,MUUSDT,SKHYNIXUSDT,SNDKUSDT,SPYUSDT,SPCXUSDT,KORUUSDT,SOXLUSDT,SOXSUSDT", "MIN_CONF": "6", "RISK_USD": "100", "MAX_DAY": "12", "INCLUDE": "", "CRYPTO_EXTRAS": "0", "ONLY_SPYDER": "1" }
+}

@@ -32,10 +32,14 @@ export function chartConfig(r, s, bars = 90) {
     tEntry: tag(s.entry, fmt(s.entry), "#eab308", "#111"), tSl: tag(s.sl, fmt(s.sl), "#e11d48"),
     tTp1: tag(s.tps[0], fmt(s.tps[0]), "#2563eb"), tTp2: tag(s.tps[1], fmt(s.tps[1]), "#2563eb"), tTp3: tag(s.tps[2], fmt(s.tps[2]), "#4f46e5"),
   };
+  if (s.single) { // one fixed target (Spyder strategy): keep only the TP2 slot and call it the target
+    ["tp1", "tp3", "nTp1", "nTp3", "tTp1", "tTp3"].forEach((k) => delete ann[k]);
+    ann.nTp2.content = [`TARGET (${s.rr}R)`]; ann.nTp2.color = "#60a5fa";
+  }
   const tr = s.track;
   if (tr) {
-    for (let i = 0; i < tr.tpHit; i++) ann["nTp" + (i + 1)].content = [`TP${i + 1} ✔ HIT`], ann["nTp" + (i + 1)].color = "#4ade80";
-    if (tr.slCur != null) {
+    if (!s.single) for (let i = 0; i < tr.tpHit; i++) ann["nTp" + (i + 1)].content = [`TP${i + 1} ✔ HIT`], ann["nTp" + (i + 1)].color = "#4ade80";
+    if (tr.slCur != null && !s.single) {
       ann.curSl = line(tr.slCur, "#fb923c", "", [8, 4]); // same level as ENTRY/TP1, so relabel those instead of stacking labels
       if (tr.slCur === s.entry) { ann.nEntry.content = ["ENTRY = NEW SL (BE)"]; ann.nEntry.color = "#fb923c"; } else { ann.nTp1.content = ["TP1 ✔ HIT = NEW SL"]; ann.nTp1.color = "#fb923c"; }
     }
@@ -49,7 +53,7 @@ export function chartConfig(r, s, bars = 90) {
   const ema = (label, arr, color) => ({ type: "line", label, yAxisID: "y", data: ts.map((t, i) => ({ x: t, y: arr[from + i] })), borderColor: color, borderWidth: 1.3, pointRadius: 0, fill: false });
   if (s.kind === "EMA RETEST") sets.push(ema("EMA50", r.e50, "#38bdf8"), ema("EMA200", r.e200, "#f59e0b"));
   sets.push({ type: "bar", label: "RSI-50", yAxisID: "y2", data: ts.map((t, i) => ({ x: t, y: rs[from + i] - 50 })), backgroundColor: ts.map((t, i) => (rs[from + i] >= 50 ? "rgba(34,197,94,0.75)" : "rgba(239,68,68,0.75)")), barPercentage: 1, categoryPercentage: 1 });
-  const head = tr ? `${s.sym}, ${s.tf.toUpperCase()}  |  ${L ? "LONG" : "SHORT"}  |  ${tr.title}` : `${s.sym}, ${s.tf.toUpperCase()}  |  ${L ? "POTENTIAL UPSIDE MOVE" : "POTENTIAL DOWNSIDE MOVE"}  |  ${s.kind}${s.kind === "EMA RETEST" ? " " + s.lvl : ""}  |  ${s.passed}/8 CONFIRMED`;
+  const head = s.single && !tr ? `${s.sym}, ${s.tf.toUpperCase()}  |  ${L ? "POTENTIAL UPSIDE MOVE" : "POTENTIAL DOWNSIDE MOVE"}  |  SPYDER BODY SWEEP  |  TARGET ${s.rr}R` : tr ? `${s.sym}, ${s.tf.toUpperCase()}  |  ${L ? "LONG" : "SHORT"}  |  ${tr.title}` : `${s.sym}, ${s.tf.toUpperCase()}  |  ${L ? "POTENTIAL UPSIDE MOVE" : "POTENTIAL DOWNSIDE MOVE"}  |  ${s.kind}${s.kind === "EMA RETEST" ? " " + s.lvl : ""}  |  ${s.passed}/8 CONFIRMED`;
   return {
     version: "3", backgroundColor: BG, width: 1100, height: 700, format: "png",
     chart: {

@@ -190,3 +190,13 @@ Bybit history, OI aur funding history ke saath, fees ke baad (~0.13%). Approx (4
 - Root `README.md` sirf placeholder hai; asli docs `bot/README.md` aur ye guide hain.
 - `bot/README.md` mein weekly report ka time "Monday 04:00 UTC" likha hai, lekin code mein daily summary 18:30 UTC par hai aur weekly Sunday ko saath mein jaata hai.
 - Telegram mein entry message gayab hone ka ek case (TAO) tha jiski wajah confirm nahi hui. Ab `msg` ID save hone se agli baar check ho sakta hai.
+
+## 17. Spyder Strategy (experimental, paper-tracked)
+
+Ek alag experimental strategy `bot/spyder-strategy.js` mein hai aur `bot/spyder.js` main worker ke andar chalti hai (free plan par account mein sirf 5 crons allowed hain, isliye alag worker nahi).
+
+- **Rules**: 1H par pichli candle ki body (>=80% of range) bearish/bullish, uska body edge usse pehli candle se align (tol 0.3%), phir current candle dono bodies ko sweep karke wapas andar close kare. Entry usi close par, SL sweep wick ke bahar, fixed TP 2R (1:2), chart ke saath.
+- **Kahan chalti hai**: 1H scan mein jo candles main bot pehle se fetch karta hai unhi par check hota hai (extra data call nahi). Tracking `*/5` cron par minute :20, :35, :50 par.
+- **KV keys**: `sp:o:*` (open), `sp:s:*` (dedupe), `sp:d:*` (daily count), `sp:closed`. Max 8 signals/din, 12 open.
+- **Warning**: `node bot/backtest-spyder.mjs 1h 40 3000` ka result fees ke baad negative ya ~0 tha. Ye sirf live result naapne ke liye hai. `/__spyder?key=RUN_KEY` se stats (win rate, net R) dekho.
+- **Bot 2 (markets, Spyder-only)**: `wrangler.markets.jsonc` alag Cloudflare account par deploy hota hai (`npx wrangler deploy -c wrangler.markets.jsonc`). `ONLY_SPYDER=1` se sirf Spyder chalti hai, `CRYPTO_EXTRAS=0` se whale/ideas/radar band, aur `SYMBOLS` mein gold, silver, oil, forex aur stocks ke 24 Bybit symbols hain. Preview: `/__spydersample?key=RUN_KEY`.

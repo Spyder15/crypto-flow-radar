@@ -4,6 +4,7 @@ import { whaleWatch } from "./whalewatch.js";
 import { ideaTrack, ideaStats } from "./ideas.js";
 import { TF_MS, CHECKS, buildRow, findSignals, confirmations, trendScore } from "./signals.js";
 import { renderChart, fmt } from "./chart.js";
+import { spyderCheck, spyderTrack, spyderStats, spyderSample } from "./spyder.js";
 import { tickers, klines, openInterest } from "./data.js";
 
 // Per-timeframe strategies, picked from the backtest (bot/README.md).
@@ -68,15 +69,18 @@ export async function run(env, { force = false, batch = 0, minConf, tf: tfArg, t
   const tf = tfArg || env.TF || "1h", ms = TF_MS[tf], size = +env.BATCH || 25, min = minConf || (test ? 4 : +env.MIN_CONF || 7);
   const sinceClose = Date.now() % ms; // time since the last candle closed
   if (!force && sinceClose > 10 * 60e3) return { skipped: true };
+  if (env.ONLY_SPYDER === "1" && tf !== "1h") return { skipped: true }; // Spyder strategy only runs on 1H
   const wanted = (env.SYMBOLS || "").split(",").map((x) => x.trim().toUpperCase()).filter(Boolean);
   const tk = await tickers(), fund = {}; tk.forEach((t) => { fund[t.symbol] = t.fund; });
-  const list = wanted.length ? wanted.map((symbol) => ({ symbol })) : tk.filter((t) => !SKIP.test(t.symbol.replace(/USDT$/, "")) && t.vol > 0).sort((a, b) => b.vol - a.vol).slice(batch * size, (batch + 1) * size);
+  const list = wanted.length ? wanted.map((symbol) => ({ symbol })).slice(batch * size, (batch + 1) * size) : tk.filter((t) => !SKIP.test(t.symbol.replace(/USDT$/, "")) && t.vol > 0).sort((a, b) => b.vol - a.vol).slice(batch * size, (batch + 1) * size);
   if (batch === 4) (env.INCLUDE || "").split(",").map((x) => x.trim().toUpperCase()).filter(Boolean).forEach((symbol) => list.push({ symbol })); // extra symbols ride in the last batch
   const day = new Date().toISOString().slice(0, 10), maxDay = +env.MAX_DAY || 12;
   const sent = [], errors = []; let calls = 1; // free plan: max 50 subrequests per run
   for (const t of list) {
     let k; calls++; try { k = await klines(t.symbol, tf); } catch (e) { errors.push(e.message); continue; }
     const r = buildRow(t.symbol, k, fund[t.symbol] ?? null); if (!r) continue;
+    if (tf === "1h" && !test && env.TRADES && calls + 14 <= 48) { try { calls += await spyderCheck(env, t.symbol, r.d, (text, reply, chart) => tg(env, text, chart, reply)); } catch (e) { errors.push("spyder " + e.message); } } // experimental Spyder strategy on the same 1H candles
+    if (env.ONLY_SPYDER === "1") continue; // this deployment runs only the Spyder strategy
     let oi;
     for (const s of findSignals(r, tf, STRAT[tf] || {})) {
       let ck = confirmations(r, s.side, tf, 0), passed = Object.values(ck).filter(Boolean).length;
@@ -129,10 +133,11 @@ export default {
     if (e.cron === "*/5 * * * *") {
       const m = new Date(e.scheduledTime).getUTCMinutes();
       if (m % 15 === 0) ctx.waitUntil(track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)).then((r) => console.log("track", JSON.stringify(r))));
-      if (m % 15 !== 0) ctx.waitUntil(whaleWatch(env, (text) => tg(env, text)).catch(() => {}));
+      if (m % 15 !== 0 && env.CRYPTO_EXTRAS !== "0") ctx.waitUntil(whaleWatch(env, (text) => tg(env, text)).catch(() => {}));
       if (m % 15 === 7) ctx.waitUntil(watchdog(env, (text) => tg(env, text)).catch(() => {}));
-      if (m % 15 === 10) ctx.waitUntil(ideaTrack(env, (text) => tg(env, text)).catch(() => {}));
-      if (m === 5) ctx.waitUntil(radar(env, (text) => tg(env, text)).catch(() => {}));
+      if (m % 15 === 5 && m !== 5) ctx.waitUntil(spyderTrack(env, (text, reply, chart) => tg(env, text, chart, reply)).catch(() => {}));
+      if (m % 15 === 10 && env.CRYPTO_EXTRAS !== "0") ctx.waitUntil(ideaTrack(env, (text) => tg(env, text)).catch(() => {}));
+      if (m === 5 && env.CRYPTO_EXTRAS !== "0") ctx.waitUntil(radar(env, (text) => tg(env, text)).catch(() => {}));
     }
     else if (e.cron === "30 18 * * *") { // 00:00 IST: daily summary, plus the weekly report when a new week starts in IST (Sunday 18:30 UTC)
       const sunday = new Date(e.scheduledTime).getUTCDay() === 0;
@@ -153,6 +158,8 @@ export default {
       return Response.json({ sent: 2 });
     }
     if (ok && u.pathname === "/__whales") return Response.json(await whaleWatch(env, (text) => tg(env, text)));
+    if (ok && u.pathname === "/__spydersample") return Response.json(await spyderSample((text, reply, chart) => tg(env, text, chart, reply)));
+    if (ok && u.pathname === "/__spyder") return Response.json({ stats: await spyderStats(env), track: await spyderTrack(env, (text, reply, chart) => tg(env, text, chart, reply), 40) });
     if (ok && u.pathname === "/__track") return Response.json(await track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)));
     if (ok && u.pathname === "/__weekly") { await tg(env, await weekly(env, +u.searchParams.get("days") || 7)); return Response.json({ sent: true }); }
     if (u.pathname === "/api/ideas" && env.TRADES) return Response.json(await ideaStats(env), { headers: { "cache-control": "public, max-age=60", "access-control-allow-origin": "*" } });
