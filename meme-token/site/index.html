@@ -96,6 +96,7 @@ footer{color:var(--mut);font-size:10px;padding:10px 16px 30px;max-width:1000px;l
   <section class="panel" style="margin-top:12px">
     <h2><span id="mctitle">Top 100 coins</span><em id="mlive">loading…</em></h2>
     <div class="bar" id="mbar"></div>
+    <input id="mcq" placeholder="Search any coin in the list..." autocomplete="off" spellcheck="false" style="background:var(--panel2);border:1px solid var(--line);color:var(--txt);font:inherit;padding:6px 10px;width:260px;margin-bottom:8px">
     <div class="tw" id="mcoins"></div>
   </section>
 </div>
@@ -316,7 +317,7 @@ load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
     M.cats = SEC.map(([id, n]) => { const c = m.get(id); if (!c || !c.market_cap) return null; const ch = nn(c.market_cap_change_24h); return { id, n, mc: c.market_cap, ch, flow: c.market_cap - c.market_cap / (1 + ch / 100), vol: nn(c.volume_24h) }; }).filter(Boolean);
   });
   const getK = () => ld("k", async () => {
-    const sel = M.sel, a = await jget(`${CG}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&price_change_percentage=1h,24h,7d${sel ? "&category=" + sel : ""}`);
+    const sel = M.sel, a = await jget(`${CG}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&price_change_percentage=1h,24h,7d${sel ? "&category=" + sel : ""}`);
     if (sel !== M.sel) return;
     M.coins = a.map((c) => ({ id: c.id, sym: String(c.symbol).toUpperCase(), name: c.name, img: c.image, p: c.current_price, mc: nn(c.market_cap), vol: nn(c.total_volume), c1: c.price_change_percentage_1h_in_currency, c24: c.price_change_percentage_24h_in_currency, c7: c.price_change_percentage_7d_in_currency, rank: c.market_cap_rank, fl: nn(c.market_cap) - nn(c.market_cap) / (1 + nn(c.price_change_percentage_24h_in_currency) / 100) }));
   });
@@ -352,14 +353,14 @@ load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
   const STB = /USD|DAI|TUSD|EUR/;
   function coins() {
     const sel = M.cats.find((c) => c.id === M.sel);
-    $("mctitle").textContent = sel ? sel.n + " · top coins" : "Top 100 coins";
+    $("mctitle").textContent = (sel ? sel.n + " · " : "") + (M.q ? "search results" : M.more ? "top 250 coins" : "top 100 coins");
     $("mfttl").textContent = sel ? sel.n + " · token money flow" : "Token money flow";
     const fl = M.coins.filter((c) => !STB.test(c.sym)), row = (c) => `<div class="wr"><b>${esc(c.sym)}</b><span class="${c.fl >= 0 ? "up" : "dn"}">${sgb(c.fl)}</span>${pc(c.c24)}<span class="st sp">vol ${big(c.vol)}</span></div>`;
     $("mfin").innerHTML = '<div class="wh2" style="margin-top:0">Most money IN</div>' + (fl.filter((c) => c.fl > 0).sort((a, b) => b.fl - a.fl).slice(0, 10).map(row).join("") || '<div class="st">-</div>');
     $("mfout").innerHTML = '<div class="wh2" style="margin-top:0">Most money OUT</div>' + (fl.filter((c) => c.fl < 0).sort((a, b) => a.fl - b.fl).slice(0, 10).map(row).join("") || '<div class="st">-</div>');
-    $("mbar").innerHTML = PRE.map(([k, l, sk, sd]) => `<span class="chip${M.sk === sk && M.sd === sd ? " on" : ""}" data-p="${k}">${l}</span>`).join("") + (sel ? '<span class="chip" data-p="x">✕ clear sector</span>' : "");
+    $("mbar").innerHTML = PRE.map(([k, l, sk, sd]) => `<span class="chip${M.sk === sk && M.sd === sd ? " on" : ""}" data-p="${k}">${l}</span>`).join("") + `<span class="chip${M.more ? " on" : ""}" data-p="m">Show 250</span>` + (sel ? '<span class="chip" data-p="x">✕ clear sector</span>' : "");
     const v = (c, k) => k === "vm" ? (c.mc ? c.vol / c.mc : 0) : k === "sym" ? c.sym : k === "tf" ? tfv(c.sym) ?? -1e15 : c[k] ?? -1e9;
-    const rows = M.coins.slice().sort((a, b) => M.sk === "sym" ? M.sd * a.sym.localeCompare(b.sym) : M.sd * (v(a, M.sk) - v(b, M.sk)));
+    const q = (M.q || "").toLowerCase(), all = M.coins.filter((c) => !q || c.sym.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)).sort((a, b) => M.sk === "sym" ? M.sd * a.sym.localeCompare(b.sym) : M.sd * (v(a, M.sk) - v(b, M.sk))), rows = q ? all : all.slice(0, M.more ? 250 : 100);
     $("mcoins").innerHTML = rows.length ? `<table><thead><tr>${COLS.map(([k, l]) => `<th class="${k === M.sk ? "on" : ""}" data-s="${k}">${l}${k === M.sk ? (M.sd < 0 ? " ▼" : " ▲") : ""}</th>`).join("")}</tr></thead><tbody>${rows.map((c) => `<tr><td class="st">${c.rank ?? ""}</td><td><img class="cimg" loading="lazy" src="${esc(c.img)}" alt=""><b>${esc(c.sym)}</b> <span class="st">${esc(c.name)}</span></td><td><b data-px="${c.sym}">${px(c.p)}</b></td><td>${pc(c.c1)}</td><td data-c24="${c.sym}">${pc(c.c24)}</td><td>${pc(c.c7)}</td><td><span class="${c.fl >= 0 ? "up" : "dn"}">${sgb(c.fl)}</span></td><td data-tf="${c.sym}">${tfh(c.sym)}</td><td>${big(c.mc)}</td><td>${big(c.vol)}</td><td class="st">${c.mc ? (c.vol / c.mc * 100).toFixed(1) + "%" : "-"}</td></tr>`).join("")}</tbody></table>` : '<div class="st" style="padding:14px">Loading coins…</div>';
     live();
   }
@@ -378,16 +379,17 @@ load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
   const grpOf = (s) => { const u = U.get(s); return u?.meme ? "Meme" : s === "BTC" || s === "ETH" || (u && u.rank <= 10) ? "Major" : "Alt"; };
   const thOf = (s) => { const v = U.get(s)?.vol || 0; return s === "BTC" || s === "ETH" ? 5e5 : v > 1e9 ? 2e5 : v > 1e8 ? 1e5 : 5e4; };
   const getU = () => ld("u", async () => {
-    const q = "/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1", [a, m] = await Promise.all([jget(CG + q), jget(CG + q + "&category=meme-token")]);
-    for (const c of a) U.set(String(c.symbol).toUpperCase(), { rank: c.market_cap_rank, vol: nn(c.total_volume), meme: false });
-    for (const c of m) U.set(String(c.symbol).toUpperCase(), { rank: c.market_cap_rank ?? 999, vol: nn(c.total_volume), meme: true });
+    const q = "/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250", sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let p = 1; p <= 4; p++) { try { for (const c of await jget(`${CG}${q}&page=${p}`)) U.set(String(c.symbol).toUpperCase(), { rank: c.market_cap_rank, vol: nn(c.total_volume), meme: false }); } catch (e) { /* partial is fine */ } await sleep(1200); }
+    for (let p = 1; p <= 2; p++) { try { for (const c of await jget(`${CG}${q}&page=${p}&category=meme-token`)) U.set(String(c.symbol).toUpperCase(), { rank: c.market_cap_rank ?? 999, vol: nn(c.total_volume), meme: true }); } catch (e) { /* partial is fine */ } await sleep(1200); }
   });
+  let waitW = 0;
   function connectW() {
-    const syms = [...U.keys()].filter((s) => M.px[s] && !STB.test(s));
-    if (!syms.length) { setTimeout(connectW, 1500); return; }
+    const syms = Object.keys(M.px).filter((s) => !STB.test(s) && !/(UP|DOWN|BULL|BEAR)$/.test(s));
+    if (!syms.length || (!U.size && waitW++ < 6)) { setTimeout(connectW, 1500); return; }
     let ws; try { ws = new WebSocket("wss://stream.binance.com:9443/stream"); } catch (e) { return; }
     subN = syms.length;
-    ws.onopen = () => { for (let i = 0; i < syms.length; i += 100) ws.send(JSON.stringify({ method: "SUBSCRIBE", params: syms.slice(i, i + 100).map((s) => s.toLowerCase() + "usdt@aggTrade"), id: i + 1 })); };
+    ws.onopen = () => { for (let i = 0; i < syms.length; i += 100) setTimeout(() => ws.readyState === 1 && ws.send(JSON.stringify({ method: "SUBSCRIBE", params: syms.slice(i, i + 100).map((s) => s.toLowerCase() + "usdt@aggTrade"), id: i + 1 })), i / 100 * 350); };
     ws.onmessage = (m) => { try { const d = JSON.parse(m.data).data; if (!d) return; const s = d.s.slice(0, -4), u = +d.p * +d.q, f = F[s] || (F[s] = { b: 0, s: 0 }); if (d.m) f.s += u; else f.b += u; if (u >= thOf(s)) { W.unshift({ s, u, buy: !d.m, ts: d.T, p: +d.p, g: grpOf(s) }); if (W.length > 800) W.length = 800; } } catch (e) { /* ignore bad frame */ } };
     ws.onclose = () => setTimeout(connectW, 4000); ws.onerror = () => ws.close();
   }
@@ -410,9 +412,10 @@ load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
   }
   document.querySelector(".nav").onclick = (e) => { const v = e.target.dataset?.v; if (!v) return; document.body.dataset.v = v; document.querySelectorAll(".nv").forEach((n) => n.classList.toggle("on", n.dataset.v === v)); $("v-mkt").hidden = v !== "mkt"; $("v-meme").hidden = v !== "meme"; $("q").style.display = v === "meme" ? "" : "none"; };
   $("mtiles").onclick = (e) => { const t = e.target.closest(".stile"); if (!t) return; M.sel = M.sel === t.dataset.id ? null : t.dataset.id; M.coins = []; coins(); getK(); };
-  $("mbar").onclick = (e) => { const p = e.target.dataset?.p; if (!p) return; if (p === "x") { M.sel = null; M.coins = []; coins(); getK(); return; } const [, , sk, sd] = PRE.find((x) => x[0] === p); M.sk = sk; M.sd = sd; coins(); };
+  $("mbar").onclick = (e) => { const p = e.target.dataset?.p; if (!p) return; if (p === "m") { M.more = !M.more; coins(); return; } if (p === "x") { M.sel = null; M.coins = []; coins(); getK(); return; } const [, , sk, sd] = PRE.find((x) => x[0] === p); M.sk = sk; M.sd = sd; coins(); };
   $("mcoins").onclick = (e) => { const k = e.target.dataset?.s; if (!k) return; if (M.sk === k) M.sd = -M.sd; else { M.sk = k; M.sd = k === "rank" || k === "sym" ? 1 : -1; } coins(); };
   getG(); getF(); getC(); getK(); getS(); getU(); connect(); connectW(); setInterval(getU, 600000);
+  $("mcq").oninput = (e) => { M.q = e.target.value.trim(); coins(); };
   $("mwf").onclick = (e) => { const g = e.target.dataset?.g; if (g) { grp = g; whales(); } };
   setInterval(() => { if (document.body.dataset.v === "mkt") whales(); }, 1000);
   setInterval(getG, 60000); setInterval(getC, 90000); setInterval(getK, 45000); setInterval(getF, 600000); setInterval(getS, 600000); setInterval(status, 1000);
