@@ -50,15 +50,18 @@
     }
     if (document.body.dataset.v === "mkt") renderSub();
   }
+  const LQS = { bin: false, okx: false };
   function connectL() {
     let ws; try { ws = new WebSocket("wss://fstream.binance.com/ws/!forceOrder@arr"); } catch (e) { return; }
+    ws.onopen = () => { LQS.bin = true; }; 
     ws.onmessage = (m) => { try { const o = JSON.parse(m.data).o; if (!o) return; LQ.unshift({ s: o.s.replace(/USDT$/, ""), long: o.S === "SELL", u: +o.ap * +o.z || +o.p * +o.q, ts: o.T }); if (LQ.length > 1500) LQ.length = 1500; } catch (e) { /* ignore frame */ } };
-    ws.onclose = () => setTimeout(connectL, 5000); ws.onerror = () => ws.close();
+    ws.onclose = () => { LQS.bin = false; setTimeout(connectL, 5000); }; ws.onerror = () => ws.close();
   }
 
   const OKX = { ct: {} };
   function connectO() {
     let ws; try { ws = new WebSocket("wss://ws.okx.com:8443/ws/v5/public"); } catch (e) { return; }
+    ws.addEventListener("open", () => { LQS.okx = true; });
     jget("/api/okx-inst").then((o) => { for (const k in o) OKX.ct[k] = { v: o[k][0], usd: !!o[k][1] }; }).catch(() => {});
     ws.onopen = () => ws.send(JSON.stringify({ op: "subscribe", args: [{ channel: "liquidation-orders", instType: "SWAP" }] }));
     ws.onmessage = (m) => {
@@ -68,7 +71,7 @@
         if (LQ.length > 1500) LQ.length = 1500;
       } catch (e) { /* ignore frame */ }
     };
-    ws.onclose = () => setTimeout(connectO, 5000); ws.onerror = () => ws.close();
+    ws.onclose = () => { LQS.okx = false; setTimeout(connectO, 5000); }; ws.onerror = () => ws.close();
   }
 
   function rDeriv() {
@@ -468,10 +471,10 @@
     const g = agg[LM.coin] || coins[0], price = g && priceOf(g.c);
     let body = '<div class="st" style="padding:10px">loading whale positions (takes ~10s)…</div>';
     if (g && price) {
-      const B = 30, lo = price * 0.6, hi = price * 1.4, st = (hi - lo) / B, bk = Array.from({ length: B }, (_, i) => ({ p: lo + (i + 0.5) * st, l: 0, s: 0 }));
+      const lqs = g.rows.map((r) => r.liq), B = 30, lo = Math.max(price * 0.2, Math.min(price * 0.6, ...lqs) * 0.98), hi = Math.min(price * 5, Math.max(price * 1.4, ...lqs) * 1.02), st = (hi - lo) / B, bk = Array.from({ length: B }, (_, i) => ({ p: lo + (i + 0.5) * st, l: 0, s: 0 }));
       for (const r of g.rows) { const i = Math.floor((r.liq - lo) / st); if (i >= 0 && i < B) bk[i][r.long ? "l" : "s"] += r.val; }
       const mx = Math.max(1, ...bk.map((b) => b.l + b.s));
-      const cas = [2, 5, 10, 20].map((d) => { const dn = g.rows.filter((r) => r.long && r.liq >= price * (1 - d / 100) && r.liq <= price).reduce((a, r) => a + r.val, 0), up = g.rows.filter((r) => !r.long && r.liq <= price * (1 + d / 100) && r.liq >= price).reduce((a, r) => a + r.val, 0); return [d, dn, up]; });
+      const cas = [2, 5, 10, 20, 50, 100].map((d) => { const dn = g.rows.filter((r) => r.long && r.liq >= price * (1 - d / 100) && r.liq <= price).reduce((a, r) => a + r.val, 0), up = g.rows.filter((r) => !r.long && r.liq <= price * (1 + d / 100) && r.liq >= price).reduce((a, r) => a + r.val, 0); return [d, dn, up]; });
       body = `<div class="mk7">${kc("Price", px(price), g.c)}${kc("Long liquidations below", big(g.rows.filter((r) => r.long && r.liq < price).reduce((a, r) => a + r.val, 0)), "whale longs at risk", "dn")}${kc("Short liquidations above", big(g.rows.filter((r) => !r.long && r.liq > price).reduce((a, r) => a + r.val, 0)), "whale shorts at risk", "up")}${kc("Positions counted", g.rows.length, "from " + n + " whale wallets")}</div><div class="wh2">Liquidation cascade: notional forced to close if price moves</div><div class="tw"><table><thead><tr><th style="text-align:left">Move</th><th>Price</th><th>Longs liquidated (drop)</th><th>Price</th><th>Shorts liquidated (rise)</th></tr></thead><tbody>${cas.map(([d, dn, up]) => `<tr><td style="text-align:left"><b>±${d}%</b></td><td>${px(price * (1 - d / 100))}</td><td class="dn">${big(dn)}</td><td>${px(price * (1 + d / 100))}</td><td class="up">${big(up)}</td></tr>`).join("")}</tbody></table></div><div class="wh2">Liquidation map: whale liquidation prices (${esc(g.c)})</div><div class="tw" style="max-height:60vh"><table><thead><tr><th style="text-align:left">Price level</th><th>Distance</th><th>Long liq</th><th style="width:35%"></th><th>Short liq</th></tr></thead><tbody>${bk.slice().reverse().map((b) => `<tr${Math.abs(b.p - price) < st / 2 ? ' style="background:#1a1408"' : ""}><td style="text-align:left"><b>${px(b.p)}</b></td><td>${ps((b.p / price - 1) * 100, 1)}</td><td class="dn">${b.l ? big(b.l) : "-"}</td><td><div style="height:8px;background:${b.p < price ? "#ff4d4d" : "#2fd27a"};width:${((b.l + b.s) / mx * 100).toFixed(0)}%"></div></td><td class="up">${b.s ? big(b.s) : "-"}</td></tr>`).join("")}</tbody></table></div>`;
     }
     $("s-liq").innerHTML = panel("Liquidation map & cascade", "built from live positions of the biggest Hyperliquid whales · not the whole market", `<div class="bar">${chips}</div>${body}<div class="mlegend" style="margin-top:8px">This is a partial map: it only counts the ~${n || 40} whale wallets we poll, so real exchange-wide liquidations are larger. Cross-margin liquidation prices are estimates from Hyperliquid. For market-wide forced closes see the Derivatives tab (live Binance liquidations).</div>`);
@@ -732,7 +735,7 @@
     const body = rows.map((s) => `<tr><td style="text-align:left"><b>${esc(s)}</b></td>${Array.from({ length: N }, (_, j) => { const c = cell[s + "|" + (N - 1 - j)]; if (!c) return '<td class="lmc"></td>'; const t = c.l + c.s, a = (0.15 + 0.8 * Math.sqrt(t / mx)).toFixed(2); return `<td class="lmc" title="${big(c.l)} long · ${big(c.s)} short liquidated" style="background:${c.l >= c.s ? `rgba(229,72,77,${a})` : `rgba(20,167,108,${a})`}"></td>`; }).join("")}<td>${big(tot[s])}</td></tr>`).join("");
     const lg_ = L.filter((x) => x.long).reduce((a, x) => a + x.u, 0), sh = L.filter((x) => !x.long).reduce((a, x) => a + x.u, 0);
     const wb = `<div class="bar">${[[9e5, "15m"], [36e5, "1h"], [144e5, "4h"]].map(([v, l]) => `<span class="chip${LH.win === v ? " on" : ""}" data-lw="${v}">${l}</span>`).join("")}</div>`;
-    $("s-lmap").innerHTML = panel("Liquidation heatmap", "live Binance futures liquidations · columns = minutes ago (right = now)", wb + `<div class="mk7">${kc("Long liquidations", big(lg_), "longs wiped (red)", "dn")}${kc("Short liquidations", big(sh), "shorts wiped (green)", "up")}${kc("Events", L.length, "in window")}</div>` + (rows.length ? `<div class="tw" style="margin-top:8px"><table class="lmt"><thead>${head}</thead><tbody>${body}</tbody></table></div>` : '<div class="st" style="padding:14px">waiting for liquidations…</div>') + '<div class="mlegend">Red cell = mostly longs liquidated, green = mostly shorts. Brighter = bigger. Data starts when you open the page (the exchange stream has no history), so the heatmap fills up over time.</div>');
+    $("s-lmap").innerHTML = panel("Liquidation heatmap", "live Binance + OKX liquidations · " + (LQS.bin ? "Binance ✓ " : "Binance ✗ ") + (LQS.okx ? "OKX ✓" : "OKX ✗") + " · columns = minutes ago (right = now)", wb + `<div class="mk7">${kc("Long liquidations", big(lg_), "longs wiped (red)", "dn")}${kc("Short liquidations", big(sh), "shorts wiped (green)", "up")}${kc("Events", L.length, "in window")}</div>` + (rows.length ? `<div class="tw" style="margin-top:8px"><table class="lmt"><thead>${head}</thead><tbody>${body}</tbody></table></div>` : '<div class="st" style="padding:14px">waiting for liquidations…</div>') + '<div class="mlegend">Red cell = mostly longs liquidated, green = mostly shorts. Brighter = bigger. Data starts when you open the page (the exchange stream has no history), so the heatmap fills up over time.</div>');
   }
   $("s-lmap").onclick = (e) => { const t = e.target.closest("[data-lw]"); if (t) { LH.win = +t.dataset.lw; rLmap(); } };
 
