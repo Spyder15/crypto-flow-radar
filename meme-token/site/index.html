@@ -78,6 +78,8 @@ footer{color:var(--mut);font-size:10px;padding:10px 16px 30px;max-width:1000px;l
 .sub{margin-top:10px;border:1px solid var(--line);background:var(--panel);overflow-x:auto;white-space:nowrap}.sub .tab{display:inline-block}
 .bell{cursor:pointer;border:1px solid var(--line);padding:5px 10px;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--mut);user-select:none}.bell.on{color:#000;background:var(--acc);border-color:var(--acc)}
 .star{cursor:pointer;color:var(--acc);font-size:14px;user-select:none}#mcoins th:nth-child(-n+2),#mcoins td:nth-child(-n+2){text-align:left}
+#mcoins td{padding:4px 8px;font-variant-numeric:tabular-nums}#mcoins .cimg{width:16px;height:16px}#mcoins tr:nth-child(even) td{background:#0b0b0b}
+#mcoins{max-height:78vh;overflow:auto}
 tr.cr{display:table-row;margin:0;font-size:inherit;cursor:pointer}tr.cr:hover td{background:#121212}
 #toasts{position:fixed;right:12px;bottom:12px;display:flex;flex-direction:column;gap:6px;z-index:30;max-width:min(380px,calc(100vw - 24px))}
 .toast{background:#111;border:1px solid var(--acc);border-left:4px solid var(--acc);padding:9px 12px;font-size:12px;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.6)}
@@ -386,9 +388,10 @@ load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
     const fl = M.coins.filter((c) => !STB.test(c.sym)), row = (c) => `<div class="wr"><b>${esc(c.sym)}</b><span class="${c.fl >= 0 ? "up" : "dn"}">${sgb(c.fl)}</span>${pc(c.c24)}<span class="st sp">vol ${big(c.vol)}</span></div>`;
     $("mfin").innerHTML = '<div class="wh2" style="margin-top:0">Most money IN</div>' + (fl.filter((c) => c.fl > 0).sort((a, b) => b.fl - a.fl).slice(0, 10).map(row).join("") || '<div class="st">-</div>');
     $("mfout").innerHTML = '<div class="wh2" style="margin-top:0">Most money OUT</div>' + (fl.filter((c) => c.fl < 0).sort((a, b) => a.fl - b.fl).slice(0, 10).map(row).join("") || '<div class="st">-</div>');
-    $("mbar").innerHTML = PRE.map(([k, l, sk, sd]) => `<span class="chip${M.sk === sk && M.sd === sd ? " on" : ""}" data-p="${k}">${l}</span>`).join("") + `<span class="chip${M.more ? " on" : ""}" data-p="m">Show 250</span>` + (sel ? '<span class="chip" data-p="x">✕ clear sector</span>' : "");
+    $("mbar").innerHTML = PRE.map(([k, l, sk, sd]) => `<span class="chip${M.sk === sk && M.sd === sd ? " on" : ""}" data-p="${k}">${l}</span>`).join("") + `<span class="chip${M.more ? " on" : ""}" data-p="m">Show 250</span><span class="chip${M.stb ? " on" : ""}" data-p="s">${M.stb ? "Stables shown" : "Hide stables"}</span><span class="chip" data-p="csv">⬇ CSV</span>` + (sel ? '<span class="chip" data-p="x">✕ clear sector</span>' : "");
     const v = (c, k) => k === "vm" ? (c.mc ? c.vol / c.mc : 0) : k === "sym" ? c.sym : k === "tf" ? tfv(c.sym) ?? -1e15 : c[k] ?? -1e9;
-    const q = (M.q || "").toLowerCase(), all = M.coins.filter((c) => !q || c.sym.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)).sort((a, b) => M.sk === "sym" ? M.sd * a.sym.localeCompare(b.sym) : M.sd * (v(a, M.sk) - v(b, M.sk))), rows = q ? all : all.slice(0, M.more ? 250 : 100);
+    const q = (M.q || "").toLowerCase(), all = M.coins.filter((c) => (M.stb || !STB.test(c.sym)) && (!q || c.sym.toLowerCase().includes(q) || c.name.toLowerCase().includes(q))).sort((a, b) => M.sk === "sym" ? M.sd * a.sym.localeCompare(b.sym) : M.sd * (v(a, M.sk) - v(b, M.sk))), rows = q ? all : all.slice(0, M.more ? 250 : 100);
+    M.view = rows;
     $("mcoins").innerHTML = rows.length ? `<table><thead><tr>${COLS.map(([k, l]) => `<th class="${k === M.sk ? "on" : ""}" data-s="${k}">${l}${k === M.sk ? (M.sd < 0 ? " ▼" : " ▲") : ""}</th>`).join("")}</tr></thead><tbody>${rows.map((c) => `<tr data-sym="${esc(c.sym)}" class="cr"><td class="st">${c.rank ?? ""}</td><td><span class="star" data-star="${esc(c.sym)}">${window.SP?.star?.(c.sym) ?? "☆"}</span> <img class="cimg" loading="lazy" src="${esc(c.img)}" alt=""><b>${esc(c.sym)}</b> <span class="st">${esc(c.name)}</span></td><td><b data-px="${c.sym}">${px(c.p)}</b></td><td>${pc(c.c1)}</td><td data-c24="${c.sym}">${pc(c.c24)}</td><td>${pc(c.c7)}</td><td><span class="${c.fl >= 0 ? "up" : "dn"}">${sgb(c.fl)}</span></td><td data-tf="${c.sym}">${tfh(c.sym)}</td><td>${big(c.mc)}</td><td>${big(c.vol)}</td><td class="st">${c.mc ? (c.vol / c.mc * 100).toFixed(1) + "%" : "-"}</td></tr>`).join("")}</tbody></table>` : '<div class="st" style="padding:14px">Loading coins…</div>';
     live();
   }
@@ -440,7 +443,12 @@ load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
   }
   document.querySelector(".nav").onclick = (e) => { const v = e.target.dataset?.v; if (!v) return; document.body.dataset.v = v; document.querySelectorAll(".nv").forEach((n) => n.classList.toggle("on", n.dataset.v === v)); $("v-mkt").hidden = v !== "mkt"; $("v-meme").hidden = v !== "meme"; $("q").style.display = v === "meme" ? "" : "none"; };
   $("mtiles").onclick = (e) => { const t = e.target.closest(".stile"); if (!t) return; M.sel = M.sel === t.dataset.id ? null : t.dataset.id; M.coins = []; coins(); getK(); };
-  $("mbar").onclick = (e) => { const p = e.target.dataset?.p; if (!p) return; if (p === "m") { M.more = !M.more; coins(); return; } if (p === "x") { M.sel = null; M.coins = []; coins(); getK(); return; } const [, , sk, sd] = PRE.find((x) => x[0] === p); M.sk = sk; M.sd = sd; coins(); };
+  $("mbar").onclick = (e) => { const p = e.target.dataset?.p; if (!p) return; if (p === "m") { M.more = !M.more; coins(); return; } if (p === "s") { M.stb = !M.stb; coins(); return; } if (p === "csv") { csv(); return; } if (p === "x") { M.sel = null; M.coins = []; coins(); getK(); return; } const [, , sk, sd] = PRE.find((x) => x[0] === p); M.sk = sk; M.sd = sd; coins(); };
+  function csv() {
+    const q = (s) => '"' + String(s ?? "").replace(/"/g, '""') + '"', H = ["rank", "symbol", "name", "price", "chg_1h", "chg_24h", "chg_7d", "flow_24h_usd", "mcap", "vol_24h"];
+    const b = new Blob([[H.join(","), ...(M.view || []).map((c) => [c.rank, c.sym, c.name, c.p, c.c1, c.c24, c.c7, c.fl, c.mc, c.vol].map(q).join(","))].join("\n")], { type: "text/csv" }), a = document.createElement("a");
+    a.href = URL.createObjectURL(b); a.download = "spyder-coins-" + new Date().toISOString().slice(0, 10) + ".csv"; a.click();
+  }
   $("mcoins").onclick = (e) => { const k = e.target.dataset?.s; if (!k) return; if (M.sk === k) M.sd = -M.sd; else { M.sk = k; M.sd = k === "rank" || k === "sym" ? 1 : -1; } coins(); };
   getG(); getF(); getC(); getK(); getS(); getU(); connect(); connectW(); setInterval(getU, 600000);
   $("mcq").oninput = (e) => { M.q = e.target.value.trim(); coins(); };
