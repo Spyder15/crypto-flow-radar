@@ -56,7 +56,7 @@ footer{color:var(--mut);font-size:11px;padding:10px 20px 30px;max-width:900px}
   <section><h2>Heating up</h2><div class="sub">most buyers per token</div>
     <div class="bar" style="padding:0 0 10px" id="wins"></div><div id="heat"></div></section>
 </main>
-<footer>Data is public on-chain / market data from GeckoTerminal and GoPlus, refreshed every few minutes, and can be delayed, incomplete or wrong. SAFE badges are automatic checks, not guarantees. Nothing here is financial advice. Memecoins carry a very high risk of total loss. Always check a token yourself.</footer>
+<footer>Data is public on-chain / market data from GeckoTerminal and GoPlus, scanned live from your browser every few seconds, and can be delayed, incomplete or wrong. SAFE badges are automatic checks, not guarantees. Nothing here is financial advice. Memecoins carry a very high risk of total loss. Always check a token yourself.</footer>
 <script>
 const CH = { all: "All", solana: "SOL", eth: "ETH", base: "Base", bsc: "BSC", robinhood: "RH", "sui-network": "SUI", arbitrum: "ARB", polygon_pos: "POLY", avax: "AVAX", ton: "TON", abstract: "ABS", hyperevm: "HYPE", sonic: "SONIC", tron: "TRX", aptos: "APT", monad: "MON", megaeth: "MEGA" };
 const DX = { eth: "ethereum", polygon_pos: "polygon", avax: "avalanche", "sui-network": "sui", hyperevm: "hyperliquid" };
@@ -99,7 +99,7 @@ function render() {
   const cut = Date.now() - win * 36e5;
   const heat = D.heating.map((h) => { const b = h.buys.filter((x) => x.ts >= cut && x.usd >= +$("min").value); return { token: h.token, b, buyers: new Set(b.map((x) => x.w)).size }; }).filter((h) => h.buyers && pass(h.token, 0)).sort((a, b) => b.buyers - a.buyers || b.b.reduce((s, x) => s + x.usd, 0) - a.b.reduce((s, x) => s + x.usd, 0)).slice(0, 25);
   $("heat").innerHTML = heat.length ? heat.map((h) => { const t = D.tokens[h.token]; return `<div class="card">${head(t)}<div class="row" style="margin-top:6px"><span><b>${h.buyers}</b> <span class="st">buyer${h.buyers > 1 ? "s" : ""}</span></span><span class="buy">${usd(h.b.reduce((s, x) => s + x.usd, 0))}</span><span class="st">total bought</span></div>${info(t)}</div>`; }).join("") : '<div class="empty">Nothing heating up in this window.</div>';
-  $("live").textContent = "LIVE · updated " + ago(D.updated) + " ago";
+  $("live").textContent = LV.last ? "LIVE · scanning · last tick " + ago(LV.last) + " ago" : "LIVE · snapshot " + ago(D.updated) + " old";
 }
 function chips() { $("chains").innerHTML = Object.entries(CH).filter(([k]) => k === "all" || !D || (D.chains || {})[k] || Object.values(D.tokens).some((t) => t.net === k)).map(([k, v]) => `<span class="chip${k === chain ? " on" : ""}" data-c="${k}">${v}</span>`).join(""); }
 chips();
@@ -110,8 +110,54 @@ document.addEventListener("click", (e) => {
   if (w) { win = +w.dataset.w; document.querySelectorAll("[data-w]").forEach((x) => x.classList.toggle("on", x === w)); render(); }
 });
 $("min").onchange = $("safe").onchange = render;
-async function load() { try { D = await (await fetch("data.json?t=" + Date.now())).json(); chips(); render(); } catch (e) { $("live").textContent = "waiting for data..."; } }
-load(); setInterval(load, 30000); setInterval(render, 10000);
+const LV = { feed: [], keys: new Set(), flow: {}, i: 0, last: 0 };
+const nn = (x) => Number(x) || 0, K = (tk, b) => tk + "|" + b.w + "|" + b.ts;
+function rebuildFlow() {
+  const fl = Object.entries(D.tokens).filter(([, t]) => t.flow).map(([k, t]) => ({ token: k, buy: Math.round(t.flow.buy), sell: Math.round(t.flow.sell), net: Math.round(t.flow.buy - t.flow.sell) }));
+  D.inflow = fl.filter((x) => x.net > 0).sort((a, b) => b.net - a.net).slice(0, 25); D.outflow = fl.filter((x) => x.net < 0).sort((a, b) => a.net - b.net).slice(0, 25);
+}
+function addBuy(tk, b) {
+  const key = K(tk, b); if (LV.keys.has(key)) return false; LV.keys.add(key);
+  D.feed.unshift({ ...b, token: tk }); let h = D.heating.find((x) => x.token === tk);
+  if (!h) D.heating.push(h = { token: tk, buys: [], buyers: 0 });
+  h.buys.unshift(b); return true;
+}
+function applyLive() { for (const x of LV.feed) addBuy(x.token, x); D.feed.sort((a, b) => b.ts - a.ts); }
+async function load() {
+  try {
+    const d = await (await fetch("data.json?t=" + Date.now())).json();
+    if (D && d.updated === D.updated) return;
+    D = d; LV.keys = new Set(D.feed.map((f) => K(f.token, f))); LV.flow = {}; for (const x of LV.feed.splice(0)) if (Date.now() - x.ts < 864e5 && addBuy(x.token, x)) LV.feed.push(x);
+    D.feed.sort((a, b) => b.ts - a.ts); chips(); render();
+  } catch (e) { if (!D) $("live").textContent = "waiting for data..."; }
+}
+// Live scan: the browser itself polls GeckoTerminal (open CORS, ~24 calls/min) pool by pool, so new buys and flow appear within seconds/minutes.
+async function scan() {
+  let wait = 2500;
+  try {
+    const ks = D ? Object.keys(D.tokens).filter((k) => D.tokens[k].pool) : [];
+    if (ks.length) {
+      const k = ks[LV.i++ % ks.length], t = D.tokens[k];
+      const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/${t.net}/pools/${t.pool}/trades`, { headers: { accept: "application/json" } });
+      if (r.status === 429) wait = 20000;
+      else if (r.ok) {
+        const trades = (await r.json()).data, now = Date.now(), f = { buy: 0, sell: 0, at: now }, add = [];
+        for (const { attributes: a } of trades) {
+          const ts = Date.parse(a.block_timestamp), v = nn(a.volume_in_usd); if (a.is_anomalous) continue;
+          if (now - ts <= 36e5) { if (a.kind === "buy") f.buy += v; else f.sell += v; }
+          if (a.kind === "buy" && v >= (D.minBuyUsd || 500) && now - ts <= 864e5) add.push({ w: a.tx_from_address, name: null, usd: Math.round(v), ts });
+        }
+        const old = LV.flow[k] || t.flow || { buy: 0, sell: 0 }, c = D.chains[t.net] || (D.chains[t.net] = { buy: 0, sell: 0, net: 0, vol24h: 0, pools: 0 });
+        c.buy = Math.max(0, c.buy + f.buy - old.buy); c.sell = Math.max(0, c.sell + f.sell - old.sell); c.net = c.buy - c.sell;
+        LV.flow[k] = f; t.flow = f; rebuildFlow();
+        for (const b of add) if (addBuy(k, b)) LV.feed.push({ ...b, token: k });
+        D.feed.sort((a, b) => b.ts - a.ts); LV.last = now; render();
+      }
+    }
+  } catch (e) { wait = 8000; }
+  setTimeout(scan, wait);
+}
+load(); setInterval(load, 60000); setInterval(render, 5000); scan();
 </script>
 </body>
 </html>
