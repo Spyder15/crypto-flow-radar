@@ -1,7 +1,5 @@
 name: Meme trench feed
 on:
-  schedule:
-    - cron: "*/15 * * * *"
   workflow_dispatch:
 permissions:
   contents: write
