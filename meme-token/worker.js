@@ -20,8 +20,9 @@ export default {
     }
     if (u.pathname === "/api/push/run") {
       if (!env.PUSH_RUN_KEY || req.headers.get("x-run-key") !== env.PUSH_RUN_KEY) return new Response("{}", { status: 403 });
-      await checkRules(env); return new Response('{"ok":1}');
+      await checkRules(env, u.origin); return new Response('{"ok":1}');
     }
+    if (u.pathname === "/api/liqhist") return liqHist(req, env);
     if (u.pathname.startsWith("/api/push/")) return pushApi(req, env, u.pathname);
     if (u.pathname !== "/api/etf") return env.ASSETS.fetch(req);
     const cache = caches.default, key = new Request(u.origin + "/api/etf");
@@ -128,3 +129,24 @@ async function macro(origin) {
   }
 }
 
+
+// Liquidation history: browsers upload completed 5-minute buckets; one KV write per 5 min at most (free tier limit is ~1000 writes/day).
+const BUCKET = 3e5, KEEP = 288;
+async function liqHist(req, env) {
+  if (!env.PUSH) return new Response('{"b":[]}', { headers: J });
+  const raw = await env.PUSH.get("liqh"), cur = raw ? JSON.parse(raw) : { at: 0, b: [] };
+  if (req.method !== "POST") return new Response(JSON.stringify({ b: cur.b }), { headers: { ...J, "cache-control": "public, max-age=30" } });
+  let body; try { body = await req.json(); } catch (e) { return new Response("{}", { status: 400, headers: J }); }
+  const now = Date.now(); if (now - cur.at < BUCKET - 5e3) return new Response('{"ok":0}', { headers: J });
+  const num = (v) => (isFinite(v) && v >= 0 ? Math.min(Math.round(v), 1e10) : 0), map = new Map(cur.b.map((x) => [x.t, x]));
+  for (const x of (Array.isArray(body.b) ? body.b : []).slice(0, 24)) {
+    const t = Math.floor(+x.t / BUCKET) * BUCKET; if (!(t > now - KEEP * BUCKET) || t > now - BUCKET) continue;
+    const c = {}; for (const [k, v] of Object.entries(x.c || {}).slice(0, 8)) if (/^[A-Z0-9]{1,12}$/.test(k) && Array.isArray(v)) c[k] = [num(v[0]), num(v[1])];
+    const n = { t, l: num(x.l), s: num(x.s), c }, o = map.get(t);
+    if (!o) map.set(t, n);
+    else { o.l = Math.max(o.l, n.l); o.s = Math.max(o.s, n.s); for (const k in c) { const p = o.c[k] || [0, 0]; o.c[k] = [Math.max(p[0], c[k][0]), Math.max(p[1], c[k][1])]; } }
+  }
+  const b = [...map.values()].filter((x) => x.t > now - KEEP * BUCKET).sort((a, z) => a.t - z.t);
+  await env.PUSH.put("liqh", JSON.stringify({ at: now, b }));
+  return new Response('{"ok":1}', { headers: J });
+}

@@ -273,6 +273,14 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 - Alert Rules run in the page; with **Push ON** they are also checked server-side (price/24h/funding on Hyperliquid) every ~5 min by `.github/workflows/push-check.yml` -> `POST /api/push/run` (secret `PUSH_RUN_KEY`). Cloudflare free plan has no cron slot left. Keys: `VAPID_PRIVATE` secret, `VAPID_PUBLIC` var, KV `PUSH`.
 - PWA: `manifest.webmanifest`, `icon.svg`; on iPhone add to Home Screen first.
 
+### 19.4e Coin, History, Liq History, Calc, Paper + extras
+- **Coin**: ek coin ka price, funding, OI, whales, liquidations, 7d charts. **History**: funding + OI + price 3/7/20 din.
+- **Liq History**: 24h liquidation bars. Browser har 5 min me completed bucket server (`/api/liqhist`, KV `liqh`, max 1 write/5 min) pe bhejta hai. Sirf wahi time dikhta hai jab koi site khole tha.
+- **Calc**: position size / risk + PnL. **Paper**: nakli paise se trading (SL/TP/liquidation har 2s, page khula ho tab).
+- **Bybit** liquidation stream bhi judi (Binance + OKX + Bybit).
+- **Alert Rules**: naye metrics RSI 14 (1h) aur Price vs 50-SMA (1h). Push me **Whale alerts** (top 20 HL whales, $1M+ open/close/flip) aur **Discord/Slack webhook** (Telegram nahi).
+- **Screener**: filters save karo (💾). **Tabs pin**: tab pe double-click. **⬇ CSV**: current tab ki tables download. **Hinglish** button: labels Hinglish me.
+
 ### 19.4c Buildix-style tabs (Screener, HL Whales, Options, Cycles, Macro)
 - **Screener**: 179+ Hyperliquid perps + HIP-3 markets (stocks, commodities, FX; `dex:coin` names) via `api.hyperliquid.xyz/info` (CORS ok), 5s refresh. Signal = rule score (24h momentum, funding, session OI/price) - heuristic, not advice.
 - **HL Whales**: `meme-token/hl-snapshot.js` (run in the GitHub workflow every 30 min, writes `site/hl-snap.json`, git-ignored) trims the 40 MB leaderboard and 14 MB vaults files (no CORS). Browser then polls live `clearinghouseState` for the top 40 whales (net long/short per coin), top traders by 30d PnL, top 100 vaults, and a wallet explorer (any 0x address: positions, leverage, liq distance).

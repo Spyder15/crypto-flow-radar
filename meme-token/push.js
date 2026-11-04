@@ -44,6 +44,8 @@ export async function sendPush(sub, payload, env) {
 
 const sid = async (endpoint) => b64u(await crypto.subtle.digest("SHA-256", enc.encode(endpoint)));
 const J = { "content-type": "application/json" };
+const HOOK = /^https:\/\/(discord(app)?\.com\/api\/webhooks\/\d+\/[\w-]+|hooks\.slack\.com\/services\/[\w/]+)$/;
+const METRICS = ["price", "chg24", "fund", "rsi", "vsma"];
 // Keep an index of subscriber ids so the checker only needs KV reads (the free tier allows few list/write ops per day).
 async function idxSet(env, id, add) {
   const cur = JSON.parse((await env.PUSH.get("idx")) || "[]"), has = cur.includes(id);
@@ -56,42 +58,97 @@ export async function pushApi(req, env, path) {
   if (path === "/api/push/key") return new Response(JSON.stringify({ key: env.VAPID_PUBLIC }), { headers: J });
   if (req.method !== "POST") return new Response("{}", { status: 405, headers: J });
   let b; try { b = await req.json(); } catch (e) { return new Response("{}", { status: 400, headers: J }); }
-  if (path === "/api/push/unsub") { if (b.endpoint) { const id = await sid(b.endpoint); await env.PUSH.delete(id); await idxSet(env, id, false); } return new Response('{"ok":1}', { headers: J }); }
-  const s = b.sub;
-  if (!s?.endpoint?.startsWith("https://") || !s.keys?.p256dh || !s.keys?.auth) return new Response("{}", { status: 400, headers: J });
-  const rules = (Array.isArray(b.rules) ? b.rules : []).slice(0, 20).filter((r) => r && typeof r.s === "string" && ["price", "chg24", "fund"].includes(r.m) && [">", "<"].includes(r.op) && isFinite(r.v)).map((r) => ({ id: r.id, s: r.s.slice(0, 12), m: r.m, op: r.op, v: +r.v, once: !!r.once }));
-  const id = await sid(s.endpoint), old = JSON.parse((await env.PUSH.get(id)) || "{}");
-  await env.PUSH.put(id, JSON.stringify({ sub: { endpoint: s.endpoint, keys: s.keys }, rules, fired: old.fired || {} }));
+  if (path === "/api/push/unsub") {
+    for (const k of [b.endpoint, typeof b.cid === "string" && b.cid ? "hook:" + b.cid : null]) if (k) { const id = await sid(k); if (await env.PUSH.get(id)) { await env.PUSH.delete(id); await idxSet(env, id, false); } }
+    return new Response('{"ok":1}', { headers: J });
+  }
+  const s = b.sub, hook = typeof b.hook === "string" && HOOK.test(b.hook) ? b.hook : null, cid = typeof b.cid === "string" ? b.cid.slice(0, 40) : "";
+  const hasSub = s?.endpoint?.startsWith("https://") && s.keys?.p256dh && s.keys?.auth;
+  if (!hasSub && !(hook && cid)) return new Response("{}", { status: 400, headers: J });
+  const rules = (Array.isArray(b.rules) ? b.rules : []).slice(0, 20).filter((r) => r && typeof r.s === "string" && METRICS.includes(r.m) && [">", "<"].includes(r.op) && isFinite(r.v)).map((r) => ({ id: r.id, s: r.s.slice(0, 12), m: r.m, op: r.op, v: +r.v, once: !!r.once }));
+  const id = await sid(hasSub ? s.endpoint : "hook:" + cid), old = JSON.parse((await env.PUSH.get(id)) || "{}");
+  await env.PUSH.put(id, JSON.stringify({ sub: hasSub ? { endpoint: s.endpoint, keys: s.keys } : undefined, hook: hook || undefined, whale: !!b.whale, rules, fired: old.fired || {} }));
   await idxSet(env, id, true);
+  if (hasSub && cid) { const hid = await sid("hook:" + cid); if (await env.PUSH.get(hid)) { await env.PUSH.delete(hid); await idxSet(env, hid, false); } }
   return new Response('{"ok":1}', { headers: J });
 }
 
 const fmt = (n) => (Math.abs(n) >= 100 ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : String(+n.toPrecision(4)));
-const NAMES = { price: "Price", chg24: "24h change", fund: "Funding (ann.)" };
+const NAMES = { price: "Price", chg24: "24h change", fund: "Funding (ann.)", rsi: "RSI 14 (1h)", vsma: "Price vs 50-SMA (1h)" };
+const UNIT = { price: "", chg24: "%", fund: "%", rsi: "", vsma: "%" };
+const hl = (body) => fetch("https://api.hyperliquid.xyz/info", { method: "POST", headers: J, body: JSON.stringify(body) }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))));
 
-export async function checkRules(env) {
+// Wilder RSI(14) and distance from the 50-period SMA, from 1h closes.
+export function indicators(closes) {
+  const out = {}; if (closes.length < 51) return out;
+  let g = 0, l = 0;
+  for (let i = 1; i <= 14; i++) { const d = closes[i] - closes[i - 1]; if (d >= 0) g += d; else l -= d; }
+  g /= 14; l /= 14;
+  for (let i = 15; i < closes.length; i++) { const d = closes[i] - closes[i - 1]; g = (g * 13 + Math.max(d, 0)) / 14; l = (l * 13 + Math.max(-d, 0)) / 14; }
+  out.rsi = l === 0 ? 100 : 100 - 100 / (1 + g / l);
+  const last = closes.slice(-50), sma = last.reduce((a, x) => a + x, 0) / 50;
+  out.vsma = (closes[closes.length - 1] / sma - 1) * 100;
+  return out;
+}
+
+async function notify(rec, title, body) {
+  const hook = rec.hook ? fetch(rec.hook, { method: "POST", headers: J, body: JSON.stringify({ content: `**${title}**\n${body}`, text: `*${title}*\n${body}` }) }).catch(() => 0) : null;
+  return hook;
+}
+
+// Top Hyperliquid whales (from the 30-min snapshot): alert on $1M+ positions opened, closed or flipped. Baseline lives in KV key "wpos".
+async function whaleEvents(env, origin) {
+  const snap = await (await env.ASSETS.fetch(new Request(origin + "/hl-snap.json"))).json(), top = (snap.whales || []).slice(0, 20), cur = {};
+  await Promise.all(top.map(async (w) => {
+    try { const st = await hl({ type: "clearinghouseState", user: w.a }); cur[w.a] = {}; for (const { position: p } of st.assetPositions) cur[w.a][p.coin] = Math.round(Math.sign(+p.szi) * +p.positionValue); } catch (e) { /* skip wallet */ }
+  }));
+  const prev = JSON.parse((await env.PUSH.get("wpos")) || "null"), ev = [], BIG = 1e6, SMALL = 25e4;
+  if (prev?.p) for (const a in cur) for (const c of new Set([...Object.keys(cur[a]), ...Object.keys(prev.p[a] || {})])) {
+    if (!prev.p[a]) continue;
+    const o = prev.p[a][c] || 0, n = cur[a][c] || 0, who = a.slice(0, 6) + "…" + a.slice(-4), side = (v) => (v > 0 ? "LONG" : "SHORT");
+    if (Math.abs(o) < SMALL && Math.abs(n) >= BIG) ev.push(`🐋 ${who} opened ${side(n)} ${c} $${fmt(Math.abs(n) / 1e6)}M`);
+    else if (Math.abs(o) >= BIG && Math.abs(n) < SMALL) ev.push(`🐋 ${who} closed ${side(o)} ${c} (was $${fmt(Math.abs(o) / 1e6)}M)`);
+    else if (Math.abs(o) >= BIG && Math.abs(n) >= BIG && Math.sign(o) !== Math.sign(n)) ev.push(`🐋 ${who} flipped ${c} ${side(o)} → ${side(n)} $${fmt(Math.abs(n) / 1e6)}M`);
+  }
+  if (Object.keys(cur).length && (!prev?.p || ev.length || Date.now() - (prev.at || 0) > 6 * 36e5)) await env.PUSH.put("wpos", JSON.stringify({ at: Date.now(), p: { ...(prev?.p || {}), ...cur } }));
+  return ev.slice(0, 5);
+}
+
+export async function checkRules(env, origin) {
   if (!env.PUSH || !env.VAPID_PRIVATE) return;
-  const ids = JSON.parse((await env.PUSH.get("idx")) || "[]");
-  if (!ids.length || !ids.some(Boolean)) return;
-  if (!(await Promise.all(ids.map((i) => env.PUSH.get(i)))).some((x) => x && JSON.parse(x).rules.length)) return;
-  const r = await fetch("https://api.hyperliquid.xyz/info", { method: "POST", headers: J, body: JSON.stringify({ type: "metaAndAssetCtxs" }) });
-  if (!r.ok) return;
-  const [meta, ctx] = await r.json(), M = {};
-  meta.universe.forEach((u, i) => { const c = ctx[i], p = +c.markPx, pd = +c.prevDayPx; M[u.name] = { price: p, chg24: pd ? (p / pd - 1) * 100 : null, fund: +c.funding * 24 * 365 * 100 }; });
-  for (const id of ids) {
-    const k = { name: id };
-    const raw = await env.PUSH.get(k.name); if (!raw) continue;
-    const rec = JSON.parse(raw); let dirty = false;
+  const ids = JSON.parse((await env.PUSH.get("idx")) || "[]").filter(Boolean);
+  if (!ids.length) return;
+  const recs = (await Promise.all(ids.map(async (id) => { const raw = await env.PUSH.get(id); return raw ? { id, rec: JSON.parse(raw) } : null; }))).filter(Boolean);
+  const wantWhale = recs.some((x) => x.rec.whale), wantRules = recs.some((x) => x.rec.rules.length);
+  if (!wantWhale && !wantRules) return;
+  const M = {};
+  if (wantRules) {
+    const [meta, ctx] = await hl({ type: "metaAndAssetCtxs" });
+    meta.universe.forEach((u, i) => { const c = ctx[i], p = +c.markPx, pd = +c.prevDayPx; M[u.name] = { price: p, chg24: pd ? (p / pd - 1) * 100 : null, fund: +c.funding * 24 * 365 * 100 }; });
+    const coins = [...new Set(recs.flatMap((x) => x.rec.rules.filter((r) => r.m === "rsi" || r.m === "vsma").map((r) => r.s)))].filter((c) => M[c]).slice(0, 8);
+    await Promise.all(coins.map(async (c) => {
+      try { const k = await hl({ type: "candleSnapshot", req: { coin: c, interval: "1h", startTime: Date.now() - 90 * 36e5 } }); Object.assign(M[c], indicators(k.map((x) => +x.c))); } catch (e) { /* no indicator this run */ }
+    }));
+  }
+  const wev = wantWhale ? await whaleEvents(env, origin).catch(() => []) : [];
+  for (const { id, rec } of recs) {
+    let dirty = false, dead = false;
+    const send = async (title, body) => {
+      if (rec.hook) await notify(rec, title, body);
+      if (rec.sub) { const st = await sendPush(rec.sub, { title, body }, env).catch(() => 0); if (st === 404 || st === 410) { if (rec.hook) { rec.sub = undefined; dirty = true; } else dead = true; } }
+    };
     for (const rule of [...rec.rules]) {
       const v = M[rule.s]?.[rule.m]; if (v == null || !isFinite(v)) continue;
       if (!(rule.op === ">" ? v > rule.v : v < rule.v)) continue;
       const now = Date.now();
       if (!rule.once && now - (rec.fired[rule.id] || 0) < 18e5) continue;
-      const st = await sendPush(rec.sub, { title: `${rule.s} ${NAMES[rule.m]} ${rule.op} ${fmt(rule.v)}`, body: `Now ${fmt(v)}${rule.m === "price" ? "" : "%"} (Hyperliquid)` }, env).catch(() => 0);
-      if (st === 404 || st === 410) { await env.PUSH.delete(k.name); await idxSet(env, k.name, false); dirty = false; break; }
+      await send(`${rule.s} ${NAMES[rule.m]} ${rule.op} ${fmt(rule.v)}`, `Now ${fmt(v)}${UNIT[rule.m]} (Hyperliquid)`);
+      if (dead && !rec.hook) break;
       rec.fired[rule.id] = now; dirty = true;
       if (rule.once) rec.rules = rec.rules.filter((x) => x.id !== rule.id);
     }
-    if (dirty) await env.PUSH.put(k.name, JSON.stringify(rec));
+    if (rec.whale && !(dead && !rec.hook)) for (const e of wev) await send("Whale move", e);
+    if (dead && !rec.hook) { await env.PUSH.delete(id); await idxSet(env, id, false); continue; }
+    if (dirty) await env.PUSH.put(id, JSON.stringify(rec));
   }
 }

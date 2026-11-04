@@ -21,18 +21,18 @@
 
   // ---------- sub tabs ----------
   const wrap = $("v-mkt");
-  for (const id of ["scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "flow", "lmap", "cmp", "gas", "pf", "fmap", "bas", "sm", "bt", "rules", "multi", "views", "brief", "watch"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
+  for (const id of ["scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "flow", "lmap", "cmp", "gas", "pf", "fmap", "bas", "sm", "bt", "rules", "multi", "views", "brief", "watch", "coin", "calc", "paper", "lhist", "hist"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
   function show(u) {
     if (u === "views") window.__ls = sub;
     sub = u;
     document.querySelectorAll("#subtabs .tab").forEach((t) => t.classList.toggle("on", t.dataset.u === u));
-    for (const id of ["over", "scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "flow", "lmap", "cmp", "gas", "pf", "fmap", "bas", "sm", "bt", "rules", "multi", "views", "brief", "watch"]) $("s-" + id).hidden = id !== u;
-    LAZY[u]?.();
+    for (const id of ["over", "scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "flow", "lmap", "cmp", "gas", "pf", "fmap", "bas", "sm", "bt", "rules", "multi", "views", "brief", "watch", "coin", "calc", "paper", "lhist", "hist"]) $("s-" + id).hidden = id !== u;
+    LAZY[u]?.(); window.SP.xl?.[u]?.();
     renderSub();
     setHash();
   }
   $("subtabs").onclick = (e) => { const u = e.target.dataset?.u; if (u) show(u); };
-  function renderSub() { if ((sub === "jrn" || sub === "ask") && $("s-" + sub).innerHTML) return; ({ scr: rScr, hlw: rHlw, liq: rLiq, hype: rHype, onc: rOn, jrn: rJrn, ask: rAsk, map: rMap, soc: rSoc, flow: rFlow, lmap: rLmap, cmp: rCmp, gas: rGas, pf: rPf, fmap: rFmap, bas: rBas, sm: rSm, bt: rBt, rules: rRules, multi: rMulti, views: rViews, brief: rBrief, opt: rOpt, cyc: rCyc, mac: rMac, deriv: rDeriv, mov: rMov, chain: rChain, watch: rWatch })[sub]?.(); }
+  function renderSub() { if ((sub === "jrn" || sub === "ask") && $("s-" + sub).innerHTML) return; ({ scr: rScr, hlw: rHlw, liq: rLiq, hype: rHype, onc: rOn, jrn: rJrn, ask: rAsk, map: rMap, soc: rSoc, flow: rFlow, lmap: rLmap, cmp: rCmp, gas: rGas, pf: rPf, fmap: rFmap, bas: rBas, sm: rSm, bt: rBt, rules: rRules, multi: rMulti, views: rViews, brief: rBrief, opt: rOpt, cyc: rCyc, mac: rMac, deriv: rDeriv, mov: rMov, chain: rChain, watch: rWatch })[sub]?.(); window.SP.xr?.[sub]?.(); }
 
   // ---------- data: derivatives ----------
   const lg = (fn) => async () => { try { await fn(); } catch (e) { /* keep stale data */ } if (document.body.dataset.v === "mkt") renderSub(); };
@@ -50,12 +50,26 @@
     }
     if (document.body.dataset.v === "mkt") renderSub();
   }
-  const LQS = { bin: false, okx: false };
+  const LQS = { bin: false, okx: false, byb: false };
   function connectL() {
     let ws; try { ws = new WebSocket("wss://fstream.binance.com/ws/!forceOrder@arr"); } catch (e) { return; }
     ws.onopen = () => { LQS.bin = true; }; 
     ws.onmessage = (m) => { try { const o = JSON.parse(m.data).o; if (!o) return; LQ.unshift({ s: o.s.replace(/USDT$/, ""), long: o.S === "SELL", u: +o.ap * +o.z || +o.p * +o.q, ts: o.T }); if (LQ.length > 1500) LQ.length = 1500; } catch (e) { /* ignore frame */ } };
     ws.onclose = () => { LQS.bin = false; setTimeout(connectL, 5000); }; ws.onerror = () => ws.close();
+  }
+
+  const BYB = "BTC ETH SOL XRP DOGE BNB HYPE SUI ADA LINK AVAX PEPE WIF TON LTC".split(" ").map((c) => (c === "PEPE" ? "1000PEPE" : c) + "USDT");
+  function connectB() {
+    let ws, ping; try { ws = new WebSocket("wss://stream.bybit.com/v5/public/linear"); } catch (e) { return; }
+    ws.onopen = () => { LQS.byb = true; ws.send(JSON.stringify({ op: "subscribe", args: BYB.map((x) => "allLiquidation." + x) })); ping = setInterval(() => { try { ws.send('{"op":"ping"}'); } catch (e) { /* closed */ } }, 20000); };
+    ws.onmessage = (m) => {
+      try {
+        const d = JSON.parse(m.data); if (!String(d.topic).startsWith("allLiquidation")) return;
+        for (const x of d.data) LQ.unshift({ s: x.s.replace(/USDT$/, "").replace(/^1000/, ""), long: x.S === "Buy", u: +x.v * +x.p, ts: +x.T });
+        if (LQ.length > 1500) LQ.length = 1500;
+      } catch (e) { /* ignore frame */ }
+    };
+    ws.onclose = () => { LQS.byb = false; clearInterval(ping); setTimeout(connectB, 5000); }; ws.onerror = () => ws.close();
   }
 
   const OKX = { ct: {} };
@@ -201,12 +215,20 @@
     const tr = rows.slice(0, 200).map((r) => `<tr class="cr"${M.px[r.s] ? ` data-sym="${esc(r.s)}"` : ""}><td><span class="star" data-star="${esc(r.s)}">${star(r.s)}</span> <b>${esc(r.s)}</b>${r.dex ? "" : '<span class="st">-PERP</span>'}</td><td class="${sigc(r.sig)}"><b>${r.sig}</b></td><td class="st" style="text-align:left">${esc(r.tags.join(" · "))}</td><td>${px(r.p)}</td><td>${ps(r.chg)}</td><td>${big(r.vol)}</td><td>${big(r.oi)}</td><td>${ps(r.oid)}</td><td class="${r.fa > 40 ? "dn" : r.fa < -10 ? "up" : ""}">${r.fa >= 0 ? "+" : ""}${r.fa.toFixed(1)}%</td><td>${r.vo.toFixed(2)}</td></tr>`).join("");
     const keep = document.activeElement?.id === "scq", sc = $("s-scr").querySelector(".tw")?.scrollTop || 0;
     $("s-scr").innerHTML = panel("Hyperliquid perp screener", "live from Hyperliquid · refreshes every 5s · click a row for its chart (Binance-listed coins)", `${kpi}<div class="wh2">Hot right now</div><div class="tiles" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px">${cards}</div><div class="bar" style="margin-top:12px">${chip("sig", "all", "All")}${chip("sig", "buy", "Buy")}${chip("sig", "sell", "Sell")}${chip("sig", "strong", "Strong only")}<span class="st">|</span>${chip("cls", "all", "All markets")}${chip("cls", "crypto", "Crypto perps")}${chip("cls", "dex", "HIP-3 (stocks, commodities, FX)")}<input id="scq" value="${esc(HL.q)}" placeholder="Search pair…" autocomplete="off" spellcheck="false" style="background:#fff;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 8px;font:inherit;width:160px"></div><div class="mlegend" style="margin:0 0 8px">Signal = rule-based score of 24h momentum, funding (crowded side fades), and session OI/price flow. It is a screening heuristic, not a prediction or advice. OI Δ counts only since you opened this page.</div><div class="tw" style="max-height:70vh"><table><thead><tr>${th}</tr></thead><tbody>${tr || '<tr><td colspan="10" class="st">'+(HL.rows.length ? "no pairs match this filter" : "loading Hyperliquid…")+'</td></tr>'}</tbody></table></div>`);
-    const tw = $("s-scr").querySelector(".tw"); if (tw) tw.scrollTop = sc;
+    const tw = $("s-scr").querySelector(".tw");
+    if (tw) {
+      const SV = LS.get("scrSaved", {}), sb = document.createElement("div"); sb.className = "bar";
+      sb.innerHTML = '<span class="st">Saved filters:</span>' + Object.keys(SV).map((n) => `<span class="chip" data-sv="${esc(n)}">${esc(n)}</span><span class="st" data-svd="${esc(n)}" style="cursor:pointer">✕</span>`).join("") + '<span class="chip on" data-svs="1">💾 Save current</span>';
+      tw.parentNode.insertBefore(sb, tw); tw.scrollTop = sc;
+    }
     if (keep) { const i = $("scq"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
   }
   $("s-scr").onclick = (e) => {
-    const sf = e.target.dataset?.sf, ss = e.target.dataset?.ss;
-    if (sf) { const [k, v] = sf.split(":"); HL[k] = v; rScr(); } else if (ss) { HL.sd = HL.sk === ss ? -HL.sd : -1; HL.sk = ss; rScr(); }
+    const sf = e.target.dataset?.sf, ss = e.target.dataset?.ss, d = e.target.dataset || {};
+    if (d.svs) { const n = (prompt("Name for this filter set:") || "").trim().slice(0, 20); if (n) { const SV = LS.get("scrSaved", {}); SV[n] = { cls: HL.cls, sig: HL.sig, q: HL.q, sk: HL.sk, sd: HL.sd }; LS.set("scrSaved", SV); rScr(); } }
+    else if (d.sv) { Object.assign(HL, LS.get("scrSaved", {})[d.sv] || {}); rScr(); }
+    else if (d.svd) { const SV = LS.get("scrSaved", {}); delete SV[d.svd]; LS.set("scrSaved", SV); rScr(); }
+    else if (sf) { const [k, v] = sf.split(":"); HL[k] = v; rScr(); } else if (ss) { HL.sd = HL.sk === ss ? -HL.sd : -1; HL.sk = ss; rScr(); }
   };
   $("s-scr").oninput = (e) => { if (e.target.id === "scq") { HL.q = e.target.value; rScr(); } };
   getHL(); setInterval(getHL, 5000);
@@ -735,7 +757,7 @@
     const body = rows.map((s) => `<tr><td style="text-align:left"><b>${esc(s)}</b></td>${Array.from({ length: N }, (_, j) => { const c = cell[s + "|" + (N - 1 - j)]; if (!c) return '<td class="lmc"></td>'; const t = c.l + c.s, a = (0.15 + 0.8 * Math.sqrt(t / mx)).toFixed(2); return `<td class="lmc" title="${big(c.l)} long · ${big(c.s)} short liquidated" style="background:${c.l >= c.s ? `rgba(229,72,77,${a})` : `rgba(20,167,108,${a})`}"></td>`; }).join("")}<td>${big(tot[s])}</td></tr>`).join("");
     const lg_ = L.filter((x) => x.long).reduce((a, x) => a + x.u, 0), sh = L.filter((x) => !x.long).reduce((a, x) => a + x.u, 0);
     const wb = `<div class="bar">${[[9e5, "15m"], [36e5, "1h"], [144e5, "4h"]].map(([v, l]) => `<span class="chip${LH.win === v ? " on" : ""}" data-lw="${v}">${l}</span>`).join("")}</div>`;
-    $("s-lmap").innerHTML = panel("Liquidation heatmap", "live Binance + OKX liquidations · " + (LQS.bin ? "Binance ✓ " : "Binance ✗ ") + (LQS.okx ? "OKX ✓" : "OKX ✗") + " · columns = minutes ago (right = now)", wb + `<div class="mk7">${kc("Long liquidations", big(lg_), "longs wiped (red)", "dn")}${kc("Short liquidations", big(sh), "shorts wiped (green)", "up")}${kc("Events", L.length, "in window")}</div>` + (rows.length ? `<div class="tw" style="margin-top:8px"><table class="lmt"><thead>${head}</thead><tbody>${body}</tbody></table></div>` : '<div class="st" style="padding:14px">waiting for liquidations…</div>') + '<div class="mlegend">Red cell = mostly longs liquidated, green = mostly shorts. Brighter = bigger. Data starts when you open the page (the exchange stream has no history), so the heatmap fills up over time.</div>');
+    $("s-lmap").innerHTML = panel("Liquidation heatmap", "live Binance + OKX + Bybit liquidations · " + (LQS.bin ? "Binance ✓ " : "Binance ✗ ") + (LQS.okx ? "OKX ✓ " : "OKX ✗ ") + (LQS.byb ? "Bybit ✓" : "Bybit ✗") + " · columns = minutes ago (right = now)", wb + `<div class="mk7">${kc("Long liquidations", big(lg_), "longs wiped (red)", "dn")}${kc("Short liquidations", big(sh), "shorts wiped (green)", "up")}${kc("Events", L.length, "in window")}</div>` + (rows.length ? `<div class="tw" style="margin-top:8px"><table class="lmt"><thead>${head}</thead><tbody>${body}</tbody></table></div>` : '<div class="st" style="padding:14px">waiting for liquidations…</div>') + '<div class="mlegend">Red cell = mostly longs liquidated, green = mostly shorts. Brighter = bigger. Data starts when you open the page (the exchange stream has no history), so the heatmap fills up over time.</div>');
   }
   $("s-lmap").onclick = (e) => { const t = e.target.closest("[data-lw]"); if (t) { LH.win = +t.dataset.lw; rLmap(); } };
 
@@ -966,11 +988,12 @@
 
   // ---------- Custom alert rules ----------
   const RL = { list: LS.get("rules", []), draft: { s: "BTC", m: "price", op: ">", v: "" } };
-  const RMET = { price: "Price ($)", chg24: "24h change (%)", c5m: "5m move (%)", fund: "Funding (annualised %)" };
-  const rlVal = (r) => { const s = r.s; if (r.m === "price") return pxOf(s); if (r.m === "chg24") return M.px[s]?.ch; if (r.m === "c5m") return MV[s]?.c5m; if (r.m === "fund") { const h = HL.rows.find((x) => x.s === s && !x.dex); if (h) return h.fa; const f = DV.fund.find((x) => x.s === s); return f ? f.fr * 3 * 365 : null; } return null; };
+  const RMET = { price: "Price ($)", chg24: "24h change (%)", c5m: "5m move (%)", fund: "Funding (annualised %)", rsi: "RSI 14 (1h)", vsma: "Price vs 50-SMA 1h (%)" };
+  const IND = {};
+  const rlVal = (r) => { const s = r.s; if (r.m === "price") return pxOf(s); if (r.m === "chg24") return M.px[s]?.ch; if (r.m === "c5m") return MV[s]?.c5m; if (r.m === "rsi" || r.m === "vsma") return IND[s]?.[r.m] ?? null; if (r.m === "fund") { const h = HL.rows.find((x) => x.s === s && !x.dex); if (h) return h.fa; const f = DV.fund.find((x) => x.s === s); return f ? f.fr * 3 * 365 : null; } return null; };
   function evalRules() { for (const r of RL.list) { if (!r.on) continue; const v = rlVal(r); if (v == null || !isFinite(v)) continue; if (r.op === ">" ? v > r.v : v < r.v) { fire(`🔔 ${r.s} ${RMET[r.m].split(" (")[0]} ${r.op} ${r.v} (now ${fnum(v)})`, "rule" + r.id, 18e5, true); if (r.once) r.on = false, LS.set("rules", RL.list); } } }
   function rRules() {
-    if (["rls", "rlv"].includes(document.activeElement?.id)) return;
+    if (["rls", "rlv", "hkurl"].includes(document.activeElement?.id)) return;
     const d = RL.draft, bar = `<div class="bar"><input id="rls" value="${esc(d.s)}" style="${inpS};width:90px"><select id="rlm" style="${inpS}">${Object.entries(RMET).map(([k, l]) => `<option value="${k}"${d.m === k ? " selected" : ""}>${l}</option>`).join("")}</select><select id="rlo" style="${inpS}"><option${d.op === ">" ? " selected" : ""}>&gt;</option><option${d.op === "<" ? " selected" : ""}>&lt;</option></select><input id="rlv" type="number" step="any" value="${esc(d.v)}" placeholder="value" style="${inpS};width:110px"><label class="st"><input type="checkbox" id="rlon"> once</label><span class="chip on" data-rl="add">Add rule</span></div>`;
     const tb = RL.list.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Rule</th><th>Now</th><th>Status</th><th></th></tr></thead><tbody>${RL.list.map((r, i) => { const v = rlVal(r); return `<tr><td style="text-align:left"><b>${esc(r.s)}</b> ${esc(RMET[r.m])} ${r.op === ">" ? "&gt;" : "&lt;"} ${r.v}${r.once ? ' <span class="st">(once)</span>' : ""}</td><td>${fnum(v)}</td><td><span class="chip${r.on ? " on" : ""}" data-rl="tg" data-i="${i}">${r.on ? "armed" : "off"}</span></td><td><span class="st" data-rl="del" data-i="${i}" style="cursor:pointer">✕</span></td></tr>`; }).join("")}</tbody></table></div>` : '<div class="st" style="padding:12px">No rules yet. Example: BTC price &gt; 90000, or SOL funding &lt; -30.</div>';
     $("s-rules").innerHTML = panel("Custom alert rules", "checked every 5s while this page is open · fires a toast + browser notification (needs the 🔔 permission)", bar + tb + '<div class="mlegend">Each rule re-fires at most once per 30 minutes. Armed rules are saved in this browser. Browser-closed alerts: see Push below.</div>' + `<div id="pushbox"></div>`);
@@ -982,6 +1005,14 @@
     else if (a === "tg") { const r = RL.list[+t.dataset.i]; r.on = !r.on; LS.set("rules", RL.list); rRules(); pushSync(); }
     else if (a === "del") { RL.list.splice(+t.dataset.i, 1); LS.set("rules", RL.list); rRules(); pushSync(); }
     else if (a === "push") pushToggle();
+    else if (a === "whale") { PS.whale = !PS.whale; LS.set("pwhale", PS.whale); pushUi(); pushSync(); }
+    else if (a === "hook") {
+      const v = $("hkurl").value.trim();
+      if (v && !/^https:\/\/(discord(app)?\.com\/api\/webhooks\/\d+\/[\w-]+|hooks\.slack\.com\/services\/[\w/]+)$/.test(v)) { PS.msg = "Webhook must be a Discord or Slack incoming-webhook URL."; pushUi(); return; }
+      PS.msg = ""; PS.hook = v; LS.set("hook", v);
+      if (v) pushSync(); else if (!PS.sub) fetch("/api/push/unsub", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cid: PS.cid }) }).catch(() => {}); else pushSync();
+      pushUi();
+    }
   };
   setInterval(evalRules, 5000);
 
@@ -1038,19 +1069,19 @@
   $("s-brief").onclick = (e) => { const t = e.target.closest("[data-bf]"); if (!t) return; if (t.dataset.bf === "print") window.print(); else { const txt = briefText().join("\n"); (navigator.clipboard?.writeText(txt) || Promise.reject()).then(() => { t.textContent = "Copied ✓"; }, () => prompt("Copy", txt)); } };
 
   // ---------- Browser-closed push (Web Push via the worker) ----------
-  const PS = { sub: null, on: false, msg: "", key: null };
+  const PS = { sub: null, on: false, msg: "", key: null, hook: LS.get("hook", ""), whale: LS.get("pwhale", false), cid: LS.get("cid", null) || (() => { const c = Math.random().toString(36).slice(2) + Date.now().toString(36); LS.set("cid", c); return c; })() };
   const b64u = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - s.length % 4) % 4)), (c) => c.charCodeAt(0));
   async function pushState() { try { const r = await navigator.serviceWorker.ready; PS.sub = await r.pushManager.getSubscription(); PS.on = !!PS.sub; } catch (e) { PS.on = false; } }
   async function pushSync() {
-    if (!PS.sub) return;
-    try { await fetch("/api/push/sub", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sub: PS.sub.toJSON(), rules: RL.list.filter((r) => r.on).map(({ id, s, m, op, v, once }) => ({ id, s, m, op, v, once })) }) }); } catch (e) { /* retried on next change */ }
+    if (!PS.sub && !PS.hook) return;
+    try { await fetch("/api/push/sub", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cid: PS.cid, hook: PS.hook || undefined, whale: PS.whale, sub: PS.sub ? PS.sub.toJSON() : undefined, rules: RL.list.filter((r) => r.on).map(({ id, s, m, op, v, once }) => ({ id, s, m, op, v, once })) }) }); } catch (e) { /* retried on next change */ }
   }
   async function pushToggle() {
     PS.msg = "";
     try {
       if (!("PushManager" in window) || !navigator.serviceWorker) throw new Error("this browser does not support push (on iPhone: add the site to Home Screen first)");
       const r = await navigator.serviceWorker.ready;
-      if (PS.on) { await fetch("/api/push/unsub", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: PS.sub.endpoint }) }); await PS.sub.unsubscribe(); PS.sub = null; PS.on = false; }
+      if (PS.on) { await fetch("/api/push/unsub", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: PS.sub.endpoint }) }); await PS.sub.unsubscribe(); PS.sub = null; PS.on = false; if (PS.hook) await pushSync(); }
       else {
         if ((await Notification.requestPermission()) !== "granted") throw new Error("notification permission denied");
         const { key } = await (await fetch("/api/push/key")).json(); if (!key) throw new Error("push is not configured on the server yet");
@@ -1061,7 +1092,9 @@
   }
   async function pushUi() {
     const b = $("pushbox"); if (!b) return; await pushState();
-    b.innerHTML = `<div style="margin-top:12px"><div class="st" style="margin-bottom:6px">PUSH · alerts even when the browser is closed</div><span class="chip${PS.on ? " on" : ""}" data-rl="push">${PS.on ? "Push ON · click to turn off" : "Turn on push alerts"}</span> ${PS.msg ? `<span class="dn">${esc(PS.msg)}</span>` : ""}<div class="mlegend">Your armed rules above are sent to the server, which checks them every ~5 min against Hyperliquid prices/funding and sends a push to this device. Needs a browser with notification permission.</div></div>`;
+    b.innerHTML = `<div style="margin-top:12px"><div class="st" style="margin-bottom:6px">PUSH · alerts even when the browser is closed</div><span class="chip${PS.on ? " on" : ""}" data-rl="push">${PS.on ? "Push ON · click to turn off" : "Turn on push alerts"}</span> ${PS.msg ? `<span class="dn">${esc(PS.msg)}</span>` : ""}<div class="mlegend">Your armed rules above are sent to the server, which checks them every ~5 min against Hyperliquid prices/funding/RSI and sends a push to this device. Needs a browser with notification permission.</div>
+      <div class="bar" style="margin-top:10px"><span class="chip${PS.whale ? " on" : ""}" data-rl="whale">🐋 Whale alerts ${PS.whale ? "ON" : "OFF"}</span><span class="st">push when a top Hyperliquid whale opens, closes or flips a $1M+ position</span></div>
+      <div class="bar" style="margin-top:6px"><input id="hkurl" value="${esc(PS.hook)}" placeholder="Discord / Slack webhook URL (optional)" style="${inpS};width:340px;max-width:100%"><span class="chip on" data-rl="hook">Save webhook</span></div><div class="mlegend">Webhook = the same alerts also post to your Discord/Slack channel (no Telegram). Leave empty and save to remove.</div></div>`;
   }
 
   document.addEventListener("click", (e) => { const g = e.target.closest?.("[data-go]"); const i = g && $(g.dataset.go); if (i) i.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
@@ -1085,12 +1118,14 @@
     hype: () => { lazy("snap", () => getSnap().then(getWhalePos), 6e5); lazy("hype", getHype, 12e4); },
     onc: () => lazy("onc", getOn, 36e5),
   };
-  setInterval(() => { if (document.body.dataset.v === "mkt") LAZY[sub]?.(); }, 15000);
+  setInterval(() => { if (document.body.dataset.v === "mkt") LAZY[sub]?.(); window.SP.xl?.[sub]?.(); }, 15000);
+
+  Object.assign(window.SP, { x: { LS, hlPost, jget, lazy, fire, HL, HW, MV, RL, RMET, IND, LQ, LQS, DV, pxOf, fnum, inpS, kc, panel, ps, cls, sleep, star, rlVal, kl, sigc, getWhalePos, getSnap } });
 
   // ---------- boot ----------
   getStbl(); setInterval(getStbl, 3600000);
   getFund(); setInterval(getFund, 20000);
-  connectL(); connectO();
+  connectL(); connectO(); connectB();
   const waitPx = setInterval(() => { if (Object.keys(M.px).length > 50) { clearInterval(waitPx); getOI(); getMov(); setInterval(getOI, 120000); setInterval(() => getMov().then(checkMovers), 45000); } }, 1000);
   getChains(); setInterval(getChains, 900000); getEtf(); setInterval(getEtf, 900000); getSol(); setInterval(getSol, 10000);
   setInterval(() => { checkAlerts(); if (document.body.dataset.v === "mkt" && (sub === "deriv" || sub === "watch")) renderSub(); }, 1000);
