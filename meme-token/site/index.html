@@ -77,7 +77,8 @@ footer{color:var(--mut);font-size:10px;padding:10px 16px 30px;max-width:1000px;l
 .bd{font-size:10px;font-weight:800;padding:1px 6px;letter-spacing:.06em}.bd.up{background:rgba(47,210,122,.18)}.bd.dn{background:rgba(255,77,77,.18)}
 .sub{margin-top:10px;border:1px solid var(--line);background:var(--panel);overflow-x:auto;white-space:nowrap}.sub .tab{display:inline-block}
 .bell{cursor:pointer;border:1px solid var(--line);padding:5px 10px;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--mut);user-select:none}.bell.on{color:#000;background:var(--acc);border-color:var(--acc)}
-.star{cursor:pointer;color:var(--acc);font-size:14px;user-select:none}tr.cr{cursor:pointer}tr.cr:hover td{background:#121212}
+.star{cursor:pointer;color:var(--acc);font-size:14px;user-select:none}#mcoins th:nth-child(-n+2),#mcoins td:nth-child(-n+2){text-align:left}
+tr.cr{display:table-row;margin:0;font-size:inherit;cursor:pointer}tr.cr:hover td{background:#121212}
 #toasts{position:fixed;right:12px;bottom:12px;display:flex;flex-direction:column;gap:6px;z-index:30;max-width:min(380px,calc(100vw - 24px))}
 .toast{background:#111;border:1px solid var(--acc);border-left:4px solid var(--acc);padding:9px 12px;font-size:12px;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.6)}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:20;display:flex;align-items:center;justify-content:center;padding:12px}.modal[hidden]{display:none}
