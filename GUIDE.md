@@ -212,6 +212,7 @@ TrenchWatch jaisi live website: kaun se meme tokens me bade buys aa rahe hain au
 ### 19.1 Site me kya dikhta hai
 **Do views (header me toggle):** **MARKET FLOW** (default, poora crypto market) aur **MEME TRENCH** (neeche wala, on-chain memecoins).
 - **MARKET FLOW**: verdict (RISK-ON/OFF), Total mcap, 24h vol, BTC dominance, Altcoins mcap, Fear & Greed, Stablecoin supply (24h/7d). **Sector heatmap**: Layer 1/2, DeFi, AI, Memecoins, NFT, Gaming, RWA, DePIN, Privacy, Stablecoins, ecosystems... har sector ka 24h mcap change = paisa IN/OUT. Tile click = us sector ke top coins. Niche top-100 coins table (1h/24h/7d, mcap, volume; gainers/losers/volume sort) aur Binance WebSocket se price ~1s me live. Data: CoinGecko, DefiLlama, alternative.me (sab open CORS, key nahi chahiye).
+- **Token money flow**: top 10 coins jisme sabse zyada paisa IN / OUT (24h mcap change $); sector tile click karo to usi sector ke tokens. **Whale radar**: Binance aggTrade WebSocket se BTC/ETH ($500k+) aur baaki top coins ($100k+) ke bade trades (BUY/SELL), last 30 min me kaun si coin me whales BUY/SELL kar rahe hain, aur memecoins ke on-chain whale wallets. Coin table me "Live net buying" = taker buy minus sell (page khula hone ke baad se). Exchange whales anonymous hote hain, wallet naam sirf on-chain memes me.
 - **MEME TRENCH** details:
 - **Ticker tape** (sabse upar): chains ka net flow scroll hota rehta hai.
 - **Search box** (header): symbol / address se token dhundo.
