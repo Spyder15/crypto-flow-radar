@@ -21,17 +21,18 @@
 
   // ---------- sub tabs ----------
   const wrap = $("v-mkt");
-  for (const id of ["scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "flow", "lmap", "cmp", "gas", "pf", "watch"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
+  for (const id of ["scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "flow", "lmap", "cmp", "gas", "pf", "fmap", "bas", "sm", "bt", "rules", "multi", "views", "brief", "watch"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
   function show(u) {
+    if (u === "views") window.__ls = sub;
     sub = u;
     document.querySelectorAll("#subtabs .tab").forEach((t) => t.classList.toggle("on", t.dataset.u === u));
-    for (const id of ["over", "scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "flow", "lmap", "cmp", "gas", "pf", "watch"]) $("s-" + id).hidden = id !== u;
+    for (const id of ["over", "scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "flow", "lmap", "cmp", "gas", "pf", "fmap", "bas", "sm", "bt", "rules", "multi", "views", "brief", "watch"]) $("s-" + id).hidden = id !== u;
     LAZY[u]?.();
     renderSub();
     setHash();
   }
   $("subtabs").onclick = (e) => { const u = e.target.dataset?.u; if (u) show(u); };
-  function renderSub() { if ((sub === "jrn" || sub === "ask") && $("s-" + sub).innerHTML) return; ({ scr: rScr, hlw: rHlw, liq: rLiq, hype: rHype, onc: rOn, jrn: rJrn, ask: rAsk, map: rMap, soc: rSoc, flow: rFlow, lmap: rLmap, cmp: rCmp, gas: rGas, pf: rPf, opt: rOpt, cyc: rCyc, mac: rMac, deriv: rDeriv, mov: rMov, chain: rChain, watch: rWatch })[sub]?.(); }
+  function renderSub() { if ((sub === "jrn" || sub === "ask") && $("s-" + sub).innerHTML) return; ({ scr: rScr, hlw: rHlw, liq: rLiq, hype: rHype, onc: rOn, jrn: rJrn, ask: rAsk, map: rMap, soc: rSoc, flow: rFlow, lmap: rLmap, cmp: rCmp, gas: rGas, pf: rPf, fmap: rFmap, bas: rBas, sm: rSm, bt: rBt, rules: rRules, multi: rMulti, views: rViews, brief: rBrief, opt: rOpt, cyc: rCyc, mac: rMac, deriv: rDeriv, mov: rMov, chain: rChain, watch: rWatch })[sub]?.(); }
 
   // ---------- data: derivatives ----------
   const lg = (fn) => async () => { try { await fn(); } catch (e) { /* keep stale data */ } if (document.body.dataset.v === "mkt") renderSub(); };
@@ -809,7 +810,9 @@
   $("thm").onclick = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
   function setHash() { const x = sub === "map" ? TM.sym : sub === "flow" ? FL.sym : ""; try { history.replaceState(null, "", "#" + sub + (x ? "/" + x : "")); } catch (e) { /* file:// etc */ } }
   function fromHash() {
-    const [u, s] = decodeURIComponent(location.hash.slice(1)).split("/");
+    const hv = location.hash.slice(1);
+    if (hv.startsWith("v=")) { try { applyView(JSON.parse(decodeURIComponent(escape(atob(hv.slice(2)))))); } catch (e) { /* bad link */ } return; }
+    const [u, s] = decodeURIComponent(hv).split("/");
     if (!u || !$("s-" + u) || !document.querySelector(`#subtabs [data-u="${u}"]`)) return;
     if (s) { const S_ = s.toUpperCase(); if (u === "map") { TM.sym = S_; TM.kSym = null; } if (u === "flow") { FL.sym = S_; FL.book = FL.k = null; } }
     document.body.dataset.v = "mkt"; document.querySelectorAll(".nv").forEach((n) => n.classList.toggle("on", n.dataset.v === "mkt"));
@@ -823,11 +826,228 @@
     else if (sub === "lmap") rLmap();
     else if (sub === "gas") lazy("gas", getGas, 15e3);
     else if (sub === "cmp" && !CP.corr) lazy("corr", getCorr, 3e3);
+    else if (sub === "fmap") rFmap();
+    else if (sub === "bas") { lazy("bas", getBasis, 6e4); lazy("ls", getLS, 3e5); }
+    else if (sub === "sm") { lazy("sm", getSM, 6e4); rSm(); }
+    else if (sub === "multi") lazy("mu", getMulti, 3e4);
     else if (sub === "pf") rPf();
   }, 2000);
 
+  // ---------- helpers for the next group of tabs ----------
+  const ago_ = (t) => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 90 ? Math.round(s) + "s" : s < 5400 ? Math.round(s / 60) + "m" : s < 172800 ? Math.round(s / 3600) + "h" : Math.round(s / 86400) + "d"; };
+  const sgn = (v) => (v >= 0 ? "+" : "-") + big(Math.abs(v));
+  function candles(k, w = 600, h = 240) {
+    if (!k?.length) return '<div class="st" style="padding:14px">no data</div>';
+    const lo = Math.min(...k.map((x) => +x[3])), hi = Math.max(...k.map((x) => +x[2])), n = k.length, bw = w / n, Y = (v) => 8 + (hi - v) / (hi - lo || 1) * (h - 16);
+    const body = k.map((x, i) => { const o = +x[1], c = +x[4], up = c >= o, col = up ? "#14a76c" : "#e5484d", cx = (i + 0.5) * bw; return `<line x1="${cx.toFixed(1)}" x2="${cx.toFixed(1)}" y1="${Y(+x[2]).toFixed(1)}" y2="${Y(+x[3]).toFixed(1)}" stroke="${col}"/><rect x="${(cx - bw * 0.35).toFixed(1)}" y="${Y(Math.max(o, c)).toFixed(1)}" width="${(bw * 0.7).toFixed(1)}" height="${Math.max(1, Math.abs(Y(o) - Y(c))).toFixed(1)}" fill="${col}"/>`; }).join("");
+    return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto"><text x="3" y="11" fill="#7b8497" font-size="10">${fnum(hi)}</text><text x="3" y="${h - 3}" fill="#7b8497" font-size="10">${fnum(lo)}</text>${body}</svg>`;
+  }
+
+  // ---------- Funding / OI / change heatmap ----------
+  const FM = { m: "fa" };
+  function rFmap() {
+    const rows = HL.rows.filter((r) => !r.dex && r.oi > 0).sort((a, b) => b.oi - a.oi).slice(0, 80);
+    const M_ = { fa: ["Funding (annualised)", (r) => r.fa, (v) => (v >= 0 ? "+" : "") + v.toFixed(0) + "%", 60], chg: ["24h change", (r) => r.chg, (v) => (v >= 0 ? "+" : "") + v.toFixed(1) + "%", 10], oid: ["OI change (session)", (r) => r.oid, (v) => (v >= 0 ? "+" : "") + v.toFixed(1) + "%", 5], vo: ["Volume / OI", (r) => r.vo * 25, (v) => (v / 25).toFixed(1) + "x", 100] }[FM.m];
+    const col = (v) => { const a = Math.min(1, Math.abs(v) / M_[3]), t = (0.12 + a * 0.7).toFixed(2); return FM.m === "fa" ? (v >= 0 ? `rgba(229,72,77,${t})` : `rgba(74,163,255,${t})`) : FM.m === "vo" ? `rgba(245,154,35,${t})` : v >= 0 ? `rgba(20,167,108,${t})` : `rgba(229,72,77,${t})`; };
+    const bar = `<div class="bar">${[["fa", "Funding"], ["chg", "24h change"], ["oid", "OI change"], ["vo", "Volume / OI"]].map(([k, l]) => `<span class="chip${FM.m === k ? " on" : ""}" data-fm="${k}">${l}</span>`).join("")}</div>`;
+    const grid = rows.length ? `<div class="fgrid">${rows.map((r) => { const v = M_[1](r); return `<div class="fc" data-fs="${esc(r.s)}" title="${esc(r.s)} · OI ${big(r.oi)} · ${r.tags.join(", ")}" style="background:${col(v)}"><b>${esc(r.s)}</b><span>${M_[2](v)}</span><i>${big(r.oi)}</i></div>`; }).join("")}</div>` : '<div class="st" style="padding:14px">loading Hyperliquid data…</div>';
+    const ex = rows.slice().sort((a, b) => b.fa - a.fa), lst = (a) => a.slice(0, 5).map((r) => `<div class="wr"><b>${esc(r.s)}</b><span class="${cls(r.fa)}">${r.fa.toFixed(0)}%</span><span class="sp st">OI ${big(r.oi)}</span></div>`).join("");
+    $("s-fmap").innerHTML = panel("Funding / OI heatmap", "top 80 Hyperliquid perps by open interest · tile size is equal, click a tile for orderflow · " + M_[0], bar + grid + (FM.m === "fa" && rows.length ? `<div class="two" style="margin-top:10px"><div><div class="st">Most crowded longs (pay funding)</div>${lst(ex)}</div><div><div class="st">Most crowded shorts (get paid)</div>${lst(ex.slice().reverse())}</div></div>` : "") + '<div class="mlegend">Red = longs paying shorts (crowded long, squeeze-down risk). Blue = shorts paying longs (crowded short, squeeze-up risk). Extreme funding is a contrarian warning, not a signal on its own.</div>');
+  }
+  $("s-fmap").onclick = (e) => { const m = e.target.closest("[data-fm]"); if (m) { FM.m = m.dataset.fm; rFmap(); return; } const t = e.target.closest("[data-fs]"); if (t) { location.hash = "flow/" + t.dataset.fs; } };
+
+  // ---------- Basis, long/short ratios, spot vs perp ----------
+  const BS = { fut: null, ls: null, vol: null };
+  const getBasis = lg(async () => {
+    const [d, t] = await Promise.allSettled([jget("https://dapi.binance.com/dapi/v1/premiumIndex"), jget(FA + "/fapi/v1/ticker/24hr")]);
+    if (d.status === "fulfilled") BS.fut = d.value.filter((x) => /_\d{6}$/.test(x.symbol) && /^(BTC|ETH)USD_/.test(x.symbol)).map((x) => { const e = x.symbol.slice(-6), exp = Date.UTC(2000 + +e.slice(0, 2), +e.slice(2, 4) - 1, +e.slice(4, 6), 8), days = (exp - Date.now()) / 864e5, prem = +x.markPrice / +x.indexPrice - 1; return { s: x.symbol, c: x.pair.slice(0, 3), days, prem: prem * 100, apr: days > 0.5 ? prem * 365 / days * 100 : null, mark: +x.markPrice, idx: +x.indexPrice }; }).sort((a, b) => a.c.localeCompare(b.c) || a.days - b.days);
+    if (t.status === "fulfilled") BS.vol = t.value.filter((x) => x.symbol.endsWith("USDT") && !x.symbol.includes("_")).map((x) => ({ s: x.symbol.slice(0, -4), pv: +x.quoteVolume })).filter((x) => M.px[x.s]?.q > 0 && !STB.test(x.s)).map((x) => ({ ...x, sv: M.px[x.s].q, r: x.pv / M.px[x.s].q })).sort((a, b) => b.pv - a.pv).slice(0, 25);
+  });
+  const getLS = lg(async () => {
+    const syms = topByVol(12, perps()); if (syms.length < 5) { lazyAt.ls = 0; return; }
+    BS.ls = (await Promise.all(syms.map(async (s) => { try { const [a, b] = await Promise.all([jget(`${FA}/futures/data/topLongShortPositionRatio?symbol=${s}USDT&period=1h&limit=24`), jget(`${FA}/futures/data/globalLongShortAccountRatio?symbol=${s}USDT&period=1h&limit=24`)]); return { s, top: +a.at(-1).longAccount * 100, all: +b.at(-1).longAccount * 100, hist: b.map((x) => +x.longShortRatio) }; } catch (e) { return null; } }))).filter(Boolean);
+  });
+  function rBas() {
+    const bt = BS.fut?.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Contract</th><th>Days left</th><th>Mark</th><th>Index</th><th>Premium</th><th>Annualised basis</th></tr></thead><tbody>${BS.fut.map((x) => `<tr><td style="text-align:left"><b>${esc(x.s)}</b></td><td>${x.days.toFixed(0)}</td><td>${fnum(x.mark)}</td><td>${fnum(x.idx)}</td><td>${ps(x.prem, 2)}</td><td>${x.apr == null ? "-" : ps(x.apr, 1)}</td></tr>`).join("")}</tbody></table></div><div class="mlegend">Basis = futures price above spot, annualised. High basis = leveraged demand (and the cash-and-carry yield); near zero or negative = fear.</div>` : '<div class="st" style="padding:10px">loading…</div>';
+    const ls = BS.ls ? `<div class="tw"><table><thead><tr><th style="text-align:left">Coin</th><th>Top traders long</th><th>All accounts long</th><th>Retail vs top</th><th>24h trend (all accts L/S)</th></tr></thead><tbody>${BS.ls.map((x) => { const d = x.all - x.top; return `<tr><td style="text-align:left"><b>${esc(x.s)}</b></td><td>${x.top.toFixed(1)}%</td><td>${x.all.toFixed(1)}%</td><td class="${d >= 0 ? "dn" : "up"}">${d >= 0 ? "retail more long" : "retail more short"} (${d >= 0 ? "+" : ""}${d.toFixed(1)})</td><td style="width:140px">${lineSvg(x.hist, "#4aa3ff", 26)}</td></tr>`; }).join("")}</tbody></table></div><div class="mlegend">Source: Binance futures. Top traders = largest accounts by position size. When retail is far more long than the top traders, the move is often late.</div>` : '<div class="st" style="padding:10px">loading…</div>';
+    const sv = BS.vol ? `<div class="tw"><table><thead><tr><th style="text-align:left">Coin</th><th>Perp volume</th><th>Spot volume</th><th>Perp / spot</th><th>Read</th></tr></thead><tbody>${BS.vol.map((x) => `<tr><td style="text-align:left"><b>${esc(x.s)}</b></td><td>${big(x.pv)}</td><td>${big(x.sv)}</td><td>${x.r.toFixed(1)}x</td><td class="${x.r > 6 ? "dn" : x.r < 2 ? "up" : "st"}">${x.r > 6 ? "leverage-driven" : x.r < 2 ? "spot-driven" : "mixed"}</td></tr>`).join("")}</tbody></table></div><div class="mlegend">Binance perp vs spot 24h volume, top 25 perps. Very high perp/spot means price is moved by leverage, so it is fragile.</div>` : '<div class="st" style="padding:10px">loading…</div>';
+    $("s-bas").innerHTML = panel("Futures basis", "Binance coin-margined quarterly futures vs index", bt) + panel("Long / short ratio", "Binance top traders vs all accounts, top 12 by volume", ls, "margin-top:12px") + panel("Spot vs perp volume", "who is driving the market", sv, "margin-top:12px");
+  }
+
+  // ---------- Smart-money feed (Hyperliquid whale fills) ----------
+  const SM = { fills: [], at: 0, min: 25e3 };
+  const getSM = lg(async () => {
+    if (!HW.snap) await getSnap();
+    const ws = (HW.snap?.whales || []).slice(0, 25), out = [];
+    await Promise.all(ws.map(async (w, i) => { try { for (const f of (await hlPost({ type: "userFills", user: w.a })).slice(0, 40)) out.push({ a: w.a, rank: i + 1, c: f.coin, d: f.dir, px: +f.px, u: +f.px * +f.sz, t: f.time, pnl: +f.closedPnl }); } catch (e) { /* skip wallet */ } }));
+    SM.fills = out.sort((a, b) => b.t - a.t).slice(0, 600); SM.at = Date.now();
+  });
+  function rSm() {
+    const f = SM.fills.filter((x) => x.u >= SM.min), h = f.filter((x) => Date.now() - x.t < 36e5), net = {};
+    for (const x of h) { if (/Open Long|Close Short/.test(x.d)) net[x.c] = (net[x.c] || 0) + x.u; else if (/Open Short|Close Long/.test(x.d)) net[x.c] = (net[x.c] || 0) - x.u; }
+    const top = Object.entries(net).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 8);
+    const bar = `<div class="bar">${[1e4, 25e3, 1e5, 5e5].map((v) => `<span class="chip${SM.min === v ? " on" : ""}" data-sm="${v}">≥ ${big(v)}</span>`).join("")}</div>`;
+    const kp = `<div class="mk7">${kc("Fills shown", f.length, "top 25 whales, recent")}${kc("Last hour", h.length, "fills ≥ threshold")}${top.slice(0, 2).map(([c, v]) => kc("Net flow " + esc(c), sgn(v), v >= 0 ? "net buying (1h)" : "net selling (1h)", cls(v))).join("")}</div>`;
+    const tb = f.length ? `<div class="tw" style="max-height:60vh"><table><thead><tr><th style="text-align:left">When</th><th>Whale</th><th>Coin</th><th>Action</th><th>Size</th><th>Price</th><th>Closed PnL</th></tr></thead><tbody>${f.slice(0, 120).map((x) => `<tr><td style="text-align:left">${ago_(x.t)}</td><td><a href="https://app.hyperliquid.xyz/explorer/address/${esc(x.a)}" target="_blank" rel="noopener">#${x.rank} ${esc(x.a.slice(0, 6))}…</a></td><td><b>${esc(x.c)}</b></td><td class="${/Long/.test(x.d) === /Open/.test(x.d) ? "up" : "dn"}">${esc(x.d)}</td><td>${big(x.u)}</td><td>${fnum(x.px)}</td><td>${x.pnl ? `<span class="${cls(x.pnl)}">${sgn(x.pnl)}</span>` : '<span class="st">-</span>'}</td></tr>`).join("")}</tbody></table></div>` : `<div class="st" style="padding:14px">${SM.at ? "no fills above the threshold" : "loading whale fills…"}</div>`;
+    $("s-sm").innerHTML = panel("Smart-money tracker", "live fills of the top Hyperliquid whales · refreshes every minute", bar + kp + tb + '<div class="mlegend">Open Long / Close Short = buying pressure, Open Short / Close Long = selling pressure. Whales hedge and run vaults, so one fill is not a signal; look for several whales on the same side.</div>');
+  }
+  $("s-sm").onclick = (e) => { const t = e.target.closest("[data-sm]"); if (t) { SM.min = +t.dataset.sm; rSm(); } };
+
+  // ---------- Backtester ----------
+  const BT = { s: "BTC", st: "sma", a: 20, b: 50, rng: 730, fee: 0.1, res: null, busy: false };
+  const smaA = (c, n) => c.map((_, i) => (i + 1 < n ? null : c.slice(i + 1 - n, i + 1).reduce((a, v) => a + v, 0) / n));
+  const rsiA = (c, n = 14) => { const r = c.map(() => null); let g = 0, l = 0; for (let i = 1; i < c.length; i++) { const d = c[i] - c[i - 1]; if (i <= n) { g += Math.max(d, 0); l += Math.max(-d, 0); if (i === n) r[i] = 100 - 100 / (1 + g / (l || 1e-9)); } else { g = (g * (n - 1) + Math.max(d, 0)) / n; l = (l * (n - 1) + Math.max(-d, 0)) / n; r[i] = 100 - 100 / (1 + g / (l || 1e-9)); } } return r; };
+  const STRATS = { sma: ["SMA cross (fast above slow)", "fast", "slow", 20, 50], rsi: ["RSI dip buy (buy < A, sell > B)", "buy below", "sell above", 30, 55], dch: ["Breakout (N-day high, exit M-day low)", "entry N", "exit M", 20, 10], dip: ["Buy the dip (drop A% in a day, hold B days)", "drop %", "hold days", 5, 5] };
+  function runBt(k) {
+    const c = k.map((x) => +x[4]), h = k.map((x) => +x[2]), l = k.map((x) => +x[3]), n = c.length, fee = BT.fee / 100, a = BT.a, b = BT.b;
+    let pos = false, entry = 0, eq = 1, hold = 0; const curve = [1], trades = [];
+    const f1 = smaA(c, a), f2 = smaA(c, b), r = rsiA(c);
+    for (let i = 1; i < n; i++) {
+      const ret = c[i] / c[i - 1] - 1; if (pos) eq *= 1 + ret;
+      let sig = pos;
+      if (BT.st === "sma") sig = f1[i - 1] != null && f2[i - 1] != null && f1[i - 1] > f2[i - 1];
+      else if (BT.st === "rsi") { if (!pos && r[i - 1] != null && r[i - 1] < a) sig = true; else if (pos && r[i - 1] > b) sig = false; }
+      else if (BT.st === "dch") { const hi = i - 1 >= a ? Math.max(...h.slice(i - 1 - a, i - 1)) : Infinity, lo = i - 1 >= b ? Math.min(...l.slice(i - 1 - b, i - 1)) : -Infinity; if (!pos && c[i - 1] > hi) sig = true; else if (pos && c[i - 1] < lo) sig = false; }
+      else if (BT.st === "dip") { if (!pos && c[i - 1] / c[i - 2] - 1 < -a / 100) { sig = true; hold = 0; } else if (pos && ++hold >= b) sig = false; }
+      if (sig && !pos) { pos = true; entry = eq; eq *= 1 - fee; }
+      else if (!sig && pos) { eq *= 1 - fee; trades.push({ t: k[i][0], r: eq / entry - 1 }); pos = false; }
+      curve.push(eq);
+    }
+    if (pos) trades.push({ t: k[n - 1][0], r: eq / entry - 1, open: true });
+    let pk = 1, dd = 0; for (const v of curve) { pk = Math.max(pk, v); dd = Math.min(dd, v / pk - 1); }
+    const dr = curve.slice(1).map((v, i) => v / curve[i] - 1), mu = dr.reduce((p, q) => p + q, 0) / dr.length, sd = Math.sqrt(dr.reduce((p, q) => p + (q - mu) ** 2, 0) / dr.length) || 1e-9;
+    const bh = c.map((v) => v / c[0]), wins = trades.filter((t) => t.r > 0);
+    return { curve, bh, trades, ret: (eq - 1) * 100, bhRet: (bh.at(-1) - 1) * 100, dd: dd * 100, sharpe: mu / sd * Math.sqrt(365), win: trades.length ? wins.length / trades.length * 100 : 0, avg: trades.length ? trades.reduce((p, q) => p + q.r, 0) / trades.length * 100 : 0, days: n, inMkt: curve.length ? 0 : 0 };
+  }
+  async function doBt() {
+    BT.busy = true; BT.res = null; rBt();
+    try {
+      let k = await jget(`${BA}/api/v3/klines?symbol=${encodeURIComponent(BT.s)}USDT&interval=1d&limit=1000`); k = k.slice(-BT.rng);
+      BT.res = k.length < 60 ? { err: "not enough history for this coin" } : runBt(k);
+    } catch (e) { BT.res = { err: "no Binance USDT data for " + BT.s }; }
+    BT.busy = false; rBt();
+  }
+  function rBt() {
+    if (["btS", "btA", "btB", "btF"].includes(document.activeElement?.id)) return;
+    const st = STRATS[BT.st], r = BT.res;
+    const form = `<div class="bar"><input id="btS" value="${esc(BT.s)}" style="${inpS};width:90px"><select id="btT" style="${inpS}">${Object.entries(STRATS).map(([k, v]) => `<option value="${k}"${BT.st === k ? " selected" : ""}>${v[0]}</option>`).join("")}</select><label class="st">${st[1]} <input id="btA" type="number" value="${BT.a}" style="${inpS};width:70px"></label><label class="st">${st[2]} <input id="btB" type="number" value="${BT.b}" style="${inpS};width:70px"></label><select id="btR" style="${inpS}">${[[365, "1 year"], [730, "2 years"], [1000, "~2.7 years (max)"]].map(([v, l]) => `<option value="${v}"${BT.rng === v ? " selected" : ""}>${l}</option>`).join("")}</select><label class="st">fee % <input id="btF" type="number" step="0.01" value="${BT.fee}" style="${inpS};width:70px"></label><span class="chip on" data-bt="run">${BT.busy ? "running…" : "Run backtest"}</span></div>`;
+    let out = '<div class="st" style="padding:14px">Pick a coin and a rule, then run. Long-only, daily candles, trades at the next day\'s open-equivalent, fee charged each side.</div>';
+    if (r?.err) out = `<div class="dn" style="padding:10px">${esc(r.err)}</div>`;
+    else if (r) {
+      const W_ = 900, H_ = 240, all = [...r.curve, ...r.bh], lo = Math.min(...all), hi = Math.max(...all), Y = (v) => H_ - 10 - (v - lo) / (hi - lo || 1) * (H_ - 20), P = (a) => a.map((v, i) => (i ? "L" : "M") + (i / (a.length - 1) * W_).toFixed(1) + " " + Y(v).toFixed(1)).join("");
+      out = `<div class="mk7">${kc("Strategy return", ps(r.ret, 1), "after fees", "")}${kc("Buy & hold", ps(r.bhRet, 1), "same period")}${kc("Max drawdown", r.dd.toFixed(1) + "%", "strategy", "dn")}${kc("Trades", r.trades.length, "win rate " + r.win.toFixed(0) + "%")}${kc("Avg trade", ps(r.avg, 2), "")}${kc("Sharpe (rough)", r.sharpe.toFixed(2), "annualised")}</div><svg viewBox="0 0 ${W_} ${H_}" style="width:100%;height:auto;margin-top:8px"><path d="${P(r.bh)}" fill="none" stroke="#9aa3b5" stroke-width="1.4"/><path d="${P(r.curve)}" fill="none" stroke="#f59a23" stroke-width="2"/></svg><div class="mlegend"><b style="color:#f59a23">━ strategy</b> &nbsp; <b style="color:#9aa3b5">━ buy &amp; hold</b></div>${r.trades.length ? `<div class="tw" style="max-height:30vh;margin-top:8px"><table><thead><tr><th style="text-align:left">Exit date</th><th>Result</th></tr></thead><tbody>${r.trades.slice(-15).reverse().map((t) => `<tr><td style="text-align:left">${new Date(t.t).toLocaleDateString()}${t.open ? " (open)" : ""}</td><td>${ps(t.r * 100, 1)}</td></tr>`).join("")}</tbody></table></div>` : ""}<div class="mlegend">${r.ret > r.bhRet ? "Beat buy &amp; hold on this sample." : "Did not beat simply holding."} Past results on one coin are not proof: tweaking parameters until it looks good is overfitting. Try other coins and periods before trusting any rule. The Screener signal itself can't be backtested because it needs live Hyperliquid snapshots that have no free history.</div>`;
+    }
+    $("s-bt").innerHTML = panel("Strategy backtester", "test simple rules on Binance daily history", form + out);
+  }
+  $("s-bt").onclick = (e) => { if (e.target.closest("[data-bt=run]") && !BT.busy) { BT.s = ($("btS").value.trim().toUpperCase().replace(/USDT$/, "")) || "BTC"; BT.a = +$("btA").value; BT.b = +$("btB").value; BT.rng = +$("btR").value; BT.fee = +$("btF").value || 0; doBt(); } };
+  $("s-bt").onchange = (e) => { if (e.target.id === "btT") { BT.st = e.target.value; BT.a = STRATS[BT.st][3]; BT.b = STRATS[BT.st][4]; BT.res = null; rBt(); } };
+
+  // ---------- Custom alert rules ----------
+  const RL = { list: LS.get("rules", []), draft: { s: "BTC", m: "price", op: ">", v: "" } };
+  const RMET = { price: "Price ($)", chg24: "24h change (%)", c5m: "5m move (%)", fund: "Funding (annualised %)" };
+  const rlVal = (r) => { const s = r.s; if (r.m === "price") return pxOf(s); if (r.m === "chg24") return M.px[s]?.ch; if (r.m === "c5m") return MV[s]?.c5m; if (r.m === "fund") { const h = HL.rows.find((x) => x.s === s && !x.dex); if (h) return h.fa; const f = DV.fund.find((x) => x.s === s); return f ? f.fr * 3 * 365 : null; } return null; };
+  function evalRules() { for (const r of RL.list) { if (!r.on) continue; const v = rlVal(r); if (v == null || !isFinite(v)) continue; if (r.op === ">" ? v > r.v : v < r.v) { fire(`🔔 ${r.s} ${RMET[r.m].split(" (")[0]} ${r.op} ${r.v} (now ${fnum(v)})`, "rule" + r.id, 18e5, true); if (r.once) r.on = false, LS.set("rules", RL.list); } } }
+  function rRules() {
+    if (["rls", "rlv"].includes(document.activeElement?.id)) return;
+    const d = RL.draft, bar = `<div class="bar"><input id="rls" value="${esc(d.s)}" style="${inpS};width:90px"><select id="rlm" style="${inpS}">${Object.entries(RMET).map(([k, l]) => `<option value="${k}"${d.m === k ? " selected" : ""}>${l}</option>`).join("")}</select><select id="rlo" style="${inpS}"><option${d.op === ">" ? " selected" : ""}>&gt;</option><option${d.op === "<" ? " selected" : ""}>&lt;</option></select><input id="rlv" type="number" step="any" value="${esc(d.v)}" placeholder="value" style="${inpS};width:110px"><label class="st"><input type="checkbox" id="rlon"> once</label><span class="chip on" data-rl="add">Add rule</span></div>`;
+    const tb = RL.list.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Rule</th><th>Now</th><th>Status</th><th></th></tr></thead><tbody>${RL.list.map((r, i) => { const v = rlVal(r); return `<tr><td style="text-align:left"><b>${esc(r.s)}</b> ${esc(RMET[r.m])} ${r.op === ">" ? "&gt;" : "&lt;"} ${r.v}${r.once ? ' <span class="st">(once)</span>' : ""}</td><td>${fnum(v)}</td><td><span class="chip${r.on ? " on" : ""}" data-rl="tg" data-i="${i}">${r.on ? "armed" : "off"}</span></td><td><span class="st" data-rl="del" data-i="${i}" style="cursor:pointer">✕</span></td></tr>`; }).join("")}</tbody></table></div>` : '<div class="st" style="padding:12px">No rules yet. Example: BTC price &gt; 90000, or SOL funding &lt; -30.</div>';
+    $("s-rules").innerHTML = panel("Custom alert rules", "checked every 5s while this page is open · fires a toast + browser notification (needs the 🔔 permission)", bar + tb + '<div class="mlegend">Each rule re-fires at most once per 30 minutes. Armed rules are saved in this browser. Browser-closed alerts: see Push below.</div>' + `<div id="pushbox"></div>`);
+    pushUi();
+  }
+  $("s-rules").onclick = (e) => {
+    const t = e.target.closest("[data-rl]"); if (!t) return; const a = t.dataset.rl;
+    if (a === "add") { const s = $("rls").value.trim().toUpperCase().replace(/USDT$/, ""), v = parseFloat($("rlv").value); if (!s || !isFinite(v)) return; RL.draft = { s, m: $("rlm").value, op: $("rlo").value, v: "" }; RL.list.push({ id: Date.now(), s, m: $("rlm").value, op: $("rlo").value, v, once: $("rlon").checked, on: true }); LS.set("rules", RL.list); rRules(); pushSync(); }
+    else if (a === "tg") { const r = RL.list[+t.dataset.i]; r.on = !r.on; LS.set("rules", RL.list); rRules(); pushSync(); }
+    else if (a === "del") { RL.list.splice(+t.dataset.i, 1); LS.set("rules", RL.list); rRules(); pushSync(); }
+    else if (a === "push") pushToggle();
+  };
+  setInterval(evalRules, 5000);
+
+  // ---------- Multi-chart ----------
+  const MU = { cells: LS.get("multi", [{ s: "BTC", iv: "1h" }, { s: "ETH", iv: "1h" }, { s: "SOL", iv: "4h" }, { s: "BNB", iv: "1d" }]), k: {} };
+  const getMulti = lg(async () => { await Promise.all(MU.cells.map(async (c, i) => { try { MU.k[i] = { key: c.s + c.iv, d: await kl(c.s, c.iv, 90) }; } catch (e) { MU.k[i] = { key: c.s + c.iv, d: [] }; } })); });
+  function rMulti() {
+    if (document.activeElement?.dataset?.mc != null) return;
+    $("s-multi").innerHTML = `<div class="mgrid">${MU.cells.map((c, i) => { const k = MU.k[i]?.d, last = k?.at(-1), chg = k?.length ? (+last[4] / +k[0][1] - 1) * 100 : null; return `<section class="panel"><div class="bar" style="padding:0 0 6px"><input data-mc="${i}" value="${esc(c.s)}" style="${inpS};width:80px;font-weight:700"><select data-mi="${i}" style="${inpS}">${["5m", "15m", "1h", "4h", "1d"].map((v) => `<option${c.iv === v ? " selected" : ""}>${v}</option>`).join("")}</select><span class="sp" style="margin-left:auto">${last ? "$" + fnum(+last[4]) + " " : ""}${ps(chg)}</span></div>${k ? candles(k, 600, 230) : '<div class="st" style="padding:14px">loading…</div>'}</section>`; }).join("")}</div><div class="mlegend" style="margin-top:8px">Edit a coin (Binance symbol) and press Enter, or change the interval. Layout is saved in this browser. Last 90 candles each.</div>`;
+  }
+  $("s-multi").onchange = (e) => { const i = e.target.dataset.mi; if (i != null) { MU.cells[i].iv = e.target.value; LS.set("multi", MU.cells); getMulti(); } };
+  $("s-multi").onkeydown = (e) => { const i = e.target.dataset?.mc; if (i != null && e.key === "Enter") { MU.cells[i].s = e.target.value.trim().toUpperCase().replace(/USDT$/, "") || "BTC"; LS.set("multi", MU.cells); e.target.blur(); getMulti(); } };
+
+  // ---------- Saved views ----------
+  const VW = { list: LS.get("views", []) };
+  const curView = () => ({ sub: sub === "views" ? "over" : sub, tm: TM.sym, fl: FL.sym, cp: CP.syms, mu: MU.cells });
+  const viewLink = (v) => location.origin + "/#v=" + btoa(unescape(encodeURIComponent(JSON.stringify(v))));
+  function applyView(v) { if (v.tm) { TM.sym = v.tm; TM.kSym = null; } if (v.fl) { FL.sym = v.fl; FL.book = FL.k = null; } if (v.cp) { CP.syms = v.cp; LS.set("cmp", v.cp); } if (v.mu) { MU.cells = v.mu; LS.set("multi", v.mu); MU.k = {}; getMulti(); } show(v.sub || "over"); }
+  function rViews() {
+    if (document.activeElement?.id === "vwn") return;
+    const bar = `<div class="bar"><input id="vwn" placeholder="name this layout" style="${inpS};width:200px" autocomplete="off"><span class="chip on" data-vw="save">Save current tab + coins</span></div>`;
+    const tb = VW.list.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Name</th><th>Opens</th><th></th></tr></thead><tbody>${VW.list.map((x, i) => `<tr><td style="text-align:left"><b>${esc(x.n)}</b></td><td class="st">${esc(x.v.sub)}</td><td><span class="chip on" data-vw="open" data-i="${i}">Open</span> <span class="chip" data-vw="copy" data-i="${i}">Copy link</span> <span class="st" data-vw="del" data-i="${i}" style="cursor:pointer">✕</span></td></tr>`).join("")}</tbody></table></div>` : '<div class="st" style="padding:12px">No saved views. Go to any tab, set up coins, then come back here and save.</div>';
+    $("s-views").innerHTML = panel("Saved views", "layouts live in this browser · links carry the layout so you can share them", bar + tb + '<div class="mlegend">A view stores the tab you were on plus the selected coins for Treemap, Orderflow, Compare and Multi-chart. A copied link opens exactly that layout for anyone.</div>');
+  }
+  $("s-views").onclick = (e) => {
+    const t = e.target.closest("[data-vw]"); if (!t) return; const a = t.dataset.vw, i = +t.dataset.i;
+    if (a === "save") { const n = $("vwn").value.trim() || "View " + (VW.list.length + 1); VW.list.push({ n, v: { ...curView(), sub: window.__ls || "over" } }); LS.set("views", VW.list); rViews(); }
+    else if (a === "open") applyView(VW.list[i].v);
+    else if (a === "copy") { const l = viewLink(VW.list[i].v); (navigator.clipboard?.writeText(l) || Promise.reject()).then(() => { t.textContent = "Copied ✓"; }, () => prompt("Copy this link", l)); }
+    else if (a === "del") { VW.list.splice(i, 1); LS.set("views", VW.list); rViews(); }
+  };
+
+  // ---------- Daily market brief ----------
+  function briefText() {
+    const g = M.g, fng = M.fng?.[0], now = Date.now(), L = LQ.filter((x) => now - x.ts < 864e5), ll = L.filter((x) => x.long).reduce((a, x) => a + x.u, 0), ls = L.filter((x) => !x.long).reduce((a, x) => a + x.u, 0);
+    const co = (M.coins || []).filter((c) => !STB.test(c.sym) && c.mc > 5e9), up = co.slice().sort((a, b) => b.c24 - a.c24).slice(0, 3), dn = co.slice().sort((a, b) => a.c24 - b.c24).slice(0, 3);
+    const hl = HL.rows.filter((r) => !r.dex && r.oi > 2e6), cr = hl.slice().sort((a, b) => b.fa - a.fa)[0], sh = hl.slice().sort((a, b) => a.fa - b.fa)[0];
+    const f = (c) => `${c.sym} ${(c.c24 >= 0 ? "+" : "") + c.c24.toFixed(1)}%`, L_ = [];
+    L_.push("SPYDER daily brief · " + new Date().toLocaleString());
+    if (g) L_.push(`Market: ${big(g.total_market_cap.usd)} (${g.market_cap_change_percentage_24h_usd >= 0 ? "+" : ""}${g.market_cap_change_percentage_24h_usd.toFixed(2)}% 24h) · BTC dominance ${g.market_cap_percentage.btc.toFixed(1)}%`);
+    if (M.px.BTC) L_.push(`BTC $${fnum(M.px.BTC.p)} (${M.px.BTC.ch >= 0 ? "+" : ""}${M.px.BTC.ch.toFixed(1)}%) · ETH $${fnum(M.px.ETH?.p)} (${(M.px.ETH?.ch >= 0 ? "+" : "") + (M.px.ETH?.ch || 0).toFixed(1)}%)`);
+    if (fng) L_.push(`Fear & Greed: ${fng.value} (${fng.value_classification})`);
+    if (up.length) L_.push("Top gainers (>$5B cap): " + up.map(f).join(", ") + " · Top losers: " + dn.map(f).join(", "));
+    if (cr && sh) L_.push(`Funding extremes: ${cr.s} ${cr.fa.toFixed(0)}% (crowded long), ${sh.s} ${sh.fa.toFixed(0)}% (crowded short)`);
+    L_.push(`Liquidations seen this session: ${big(ll)} longs, ${big(ls)} shorts`);
+    if (GS.eth != null) L_.push(`ETH gas ${GS.eth.toFixed(2)} gwei` + (GS.btc ? ` · BTC fastest fee ${GS.btc.fastestFee} sat/vB` : ""));
+    if (SM.fills.length) { const h = SM.fills.filter((x) => now - x.t < 36e5 && x.u >= 25e3); const net = {}; for (const x of h) { if (/Open Long|Close Short/.test(x.d)) net[x.c] = (net[x.c] || 0) + x.u; else if (/Open Short|Close Long/.test(x.d)) net[x.c] = (net[x.c] || 0) - x.u; } const t = Object.entries(net).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0]; if (t) L_.push(`Whales (1h): biggest net flow ${t[0]} ${sgn(t[1])}`); }
+    return L_;
+  }
+  function rBrief() {
+    const L = briefText();
+    $("s-brief").innerHTML = panel("Daily market brief", "auto-generated from the live data on this page", `<div class="bar"><span class="chip on" data-bf="copy">Copy text</span><span class="chip" data-bf="print">Print / PDF</span></div><div class="brief">${L.map((l, i) => i ? `<p>${esc(l)}</p>` : `<h3>${esc(l)}</h3>`).join("")}</div><div class="mlegend">Facts only: no prediction. Open Network, Smart-money and Liq Heatmap first so the brief includes whale, gas and liquidation lines.</div>`);
+  }
+  $("s-brief").onclick = (e) => { const t = e.target.closest("[data-bf]"); if (!t) return; if (t.dataset.bf === "print") window.print(); else { const txt = briefText().join("\n"); (navigator.clipboard?.writeText(txt) || Promise.reject()).then(() => { t.textContent = "Copied ✓"; }, () => prompt("Copy", txt)); } };
+
+  // ---------- Browser-closed push (Web Push via the worker) ----------
+  const PS = { sub: null, on: false, msg: "", key: null };
+  const b64u = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - s.length % 4) % 4)), (c) => c.charCodeAt(0));
+  async function pushState() { try { const r = await navigator.serviceWorker.ready; PS.sub = await r.pushManager.getSubscription(); PS.on = !!PS.sub; } catch (e) { PS.on = false; } }
+  async function pushSync() {
+    if (!PS.sub) return;
+    try { await fetch("/api/push/sub", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sub: PS.sub.toJSON(), rules: RL.list.filter((r) => r.on).map(({ id, s, m, op, v, once }) => ({ id, s, m, op, v, once })) }) }); } catch (e) { /* retried on next change */ }
+  }
+  async function pushToggle() {
+    PS.msg = "";
+    try {
+      if (!("PushManager" in window) || !navigator.serviceWorker) throw new Error("this browser does not support push (on iPhone: add the site to Home Screen first)");
+      const r = await navigator.serviceWorker.ready;
+      if (PS.on) { await fetch("/api/push/unsub", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: PS.sub.endpoint }) }); await PS.sub.unsubscribe(); PS.sub = null; PS.on = false; }
+      else {
+        if ((await Notification.requestPermission()) !== "granted") throw new Error("notification permission denied");
+        const { key } = await (await fetch("/api/push/key")).json(); if (!key) throw new Error("push is not configured on the server yet");
+        PS.sub = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(key) }); PS.on = true; await pushSync();
+      }
+    } catch (e) { PS.msg = e.message; }
+    pushUi();
+  }
+  async function pushUi() {
+    const b = $("pushbox"); if (!b) return; await pushState();
+    b.innerHTML = `<div style="margin-top:12px"><div class="st" style="margin-bottom:6px">PUSH · alerts even when the browser is closed</div><span class="chip${PS.on ? " on" : ""}" data-rl="push">${PS.on ? "Push ON · click to turn off" : "Turn on push alerts"}</span> ${PS.msg ? `<span class="dn">${esc(PS.msg)}</span>` : ""}<div class="mlegend">Your armed rules above are sent to the server, which checks them every ~5 min against Hyperliquid prices/funding and sends a push to this device. Needs a browser with notification permission.</div></div>`;
+  }
+
   // ---------- lazy loaders for the extra tabs ----------
   const LAZY = {
+    bas: () => { lazy("bas", getBasis, 6e4); lazy("ls", getLS, 3e5); },
+    sm: () => lazy("sm", getSM, 6e4),
+    multi: () => lazy("mu", getMulti, 3e4),
+    brief: () => { lazy("gas", getGas, 15e3); lazy("sm", getSM, 6e4); },
     flow: () => getFlow(),
     cmp: () => { getCmp(); lazy("corr", getCorr, 6e5); },
     gas: () => lazy("gas", getGas, 15e3),

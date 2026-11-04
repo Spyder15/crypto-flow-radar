@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head>
+<head><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon.svg"><link rel="apple-touch-icon" href="/icon.svg"><meta name="theme-color" content="#1f2430"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SPYDER TRENCH · live memecoin flow terminal</title>
@@ -121,6 +121,11 @@ html[data-theme=dark] #mcoins tr:nth-child(even) td{background:#0b0b0b}html[data
 html[data-theme=dark] input,html[data-theme=dark] select{background:#0b0b0b;color:#e8e8e8}
 html,body{max-width:100vw;overflow-x:hidden}
 @media(max-width:700px){.tmap{aspect-ratio:1/1.1}.subtabs,#subtabs{-webkit-overflow-scrolling:touch}.tab{padding:9px 10px}.kpis{grid-template-columns:repeat(2,1fr)}.bar{gap:5px}.chip{padding:4px 8px}#s-lmap .tw,#s-cmp .tw{max-width:100%}.lmc{min-width:24px}.mk7{gap:6px}svg{max-width:100%}}
+#s-fmap,#s-bas,#s-sm,#s-bt,#s-rules,#s-multi,#s-views,#s-brief{display:block}#s-bas .tw,#s-sm .tw,#s-bt .tw,#s-rules .tw,#s-views .tw{overflow:auto}#s-bas th:first-child,#s-sm th:first-child,#s-bt th:first-child,#s-rules th:first-child,#s-views th:first-child{text-align:left}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:4px;margin-top:8px}.fc{padding:8px 6px;border-radius:6px;cursor:pointer;text-align:center;line-height:1.3;border:1px solid transparent}.fc:hover{border-color:var(--txt)}.fc b{display:block;font-size:12px}.fc span{display:block;font-size:13px;font-weight:700}.fc i{display:block;font-style:normal;font-size:10px;color:var(--mut)}
+.mgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}@media(max-width:900px){.mgrid{grid-template-columns:1fr}}
+.brief{padding:6px 2px;line-height:1.7;font-size:13.5px}.brief h3{margin:0 0 8px;font-size:15px}.brief p{margin:6px 0;padding-left:10px;border-left:3px solid var(--acc)}
+@media print{header,.tape,#subtabs,.nav,.bar,footer{display:none!important}}
 body{font-size:13px;letter-spacing:0}
 .panel,.kpis,.tile,.stile,.buy,.mbox,.toast,.tw,.tmap,.nav,.bell,.btn,.chip,.tag,#q,.verdict{border-radius:10px}
 .tag,.btn,.chip,.bell{border-radius:999px}
@@ -142,7 +147,7 @@ header{box-shadow:0 1px 0 var(--line)}
   <div class="live" id="live">LIVE</div>
 </header>
 <div id="v-mkt" class="wrap">
-  <div class="tabs sub" id="subtabs"><span class="tab on" data-u="over">Overview</span><span class="tab" data-u="scr">Screener</span><span class="tab" data-u="deriv">Derivatives</span><span class="tab" data-u="mov">Movers</span><span class="tab" data-u="chain">Chains &amp; ETF</span><span class="tab" data-u="hlw">HL Whales</span><span class="tab" data-u="liq">Liq Map</span><span class="tab" data-u="hype">HYPE &amp; HyperEVM</span><span class="tab" data-u="opt">Options</span><span class="tab" data-u="onc">On-Chain</span><span class="tab" data-u="cyc">Cycles</span><span class="tab" data-u="mac">Macro</span><span class="tab" data-u="jrn">Journal</span><span class="tab" data-u="map">Treemap</span><span class="tab" data-u="soc">Social</span><span class="tab" data-u="flow">Orderflow</span><span class="tab" data-u="lmap">Liq Heatmap</span><span class="tab" data-u="cmp">Compare</span><span class="tab" data-u="gas">Network</span><span class="tab" data-u="pf">Portfolio</span><span class="tab" data-u="ask">Ask</span><span class="tab" data-u="watch">Watchlist ★</span></div>
+  <div class="tabs sub" id="subtabs"><span class="tab on" data-u="over">Overview</span><span class="tab" data-u="scr">Screener</span><span class="tab" data-u="deriv">Derivatives</span><span class="tab" data-u="mov">Movers</span><span class="tab" data-u="chain">Chains &amp; ETF</span><span class="tab" data-u="hlw">HL Whales</span><span class="tab" data-u="liq">Liq Map</span><span class="tab" data-u="hype">HYPE &amp; HyperEVM</span><span class="tab" data-u="opt">Options</span><span class="tab" data-u="onc">On-Chain</span><span class="tab" data-u="cyc">Cycles</span><span class="tab" data-u="mac">Macro</span><span class="tab" data-u="jrn">Journal</span><span class="tab" data-u="map">Treemap</span><span class="tab" data-u="soc">Social</span><span class="tab" data-u="flow">Orderflow</span><span class="tab" data-u="lmap">Liq Heatmap</span><span class="tab" data-u="cmp">Compare</span><span class="tab" data-u="gas">Network</span><span class="tab" data-u="pf">Portfolio</span><span class="tab" data-u="fmap">Funding Map</span><span class="tab" data-u="bas">Basis &amp; L/S</span><span class="tab" data-u="sm">Smart Money</span><span class="tab" data-u="bt">Backtest</span><span class="tab" data-u="rules">Alert Rules</span><span class="tab" data-u="multi">Multi-chart</span><span class="tab" data-u="brief">Daily Brief</span><span class="tab" data-u="views">Views</span><span class="tab" data-u="ask">Ask</span><span class="tab" data-u="watch">Watchlist ★</span></div>
 <div id="s-over">
   <div class="verdict" id="mverdict"></div>
   <div class="mk7" id="mkpis"></div>

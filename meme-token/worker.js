@@ -1,3 +1,4 @@
+import { pushApi, checkRules } from "./push.js";
 // Serves the static site and proxies the BTC ETF holdings JSON (the source has no CORS headers).
 const ETF_URL = "https://btcetfdata.com/etfs.v1.current.json";
 
@@ -7,6 +8,11 @@ export default {
     if (u.pathname === "/api/macro") return macro(u.origin);
     if (u.pathname === "/api/options") return options(u.origin, u.searchParams.get("c") === "ETH" ? "ETH" : "BTC");
     if (u.pathname === "/api/sol-whales") return solWhales(env, u.origin);
+    if (u.pathname === "/api/push/run") {
+      if (!env.PUSH_RUN_KEY || req.headers.get("x-run-key") !== env.PUSH_RUN_KEY) return new Response("{}", { status: 403 });
+      await checkRules(env); return new Response('{"ok":1}');
+    }
+    if (u.pathname.startsWith("/api/push/")) return pushApi(req, env, u.pathname);
     if (u.pathname !== "/api/etf") return env.ASSETS.fetch(req);
     const cache = caches.default, key = new Request(u.origin + "/api/etf");
     const hit = await cache.match(key);
@@ -20,6 +26,7 @@ export default {
       return new Response('{"error":"upstream"}', { status: 502, headers: { "content-type": "application/json" } });
     }
   },
+  async scheduled(_e, env, ctx) { ctx.waitUntil(checkRules(env)); },
 };
 
 // Large Jupiter swaps (SOL <-> token) via Helius; the key stays server-side as the HELIUS_KEY secret.

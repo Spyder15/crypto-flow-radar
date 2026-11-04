@@ -268,6 +268,11 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 - Mobile layout (`@media max-width:700px`). Helius real-time Solana whales API key chahiye, abhi nahi.
 - `wrangler.jsonc`: `main: worker.js`, assets binding `ASSETS`, `/api/*` pehle worker.
 
+### 19.4d More tabs (Funding Map, Basis & L/S, Smart Money, Backtest, Alert Rules, Multi-chart, Daily Brief, Views) + PWA + Push
+- Funding Map, Basis/L-S/spot-vs-perp (Binance), Smart Money (HL whale fills), Backtest (daily, long-only, overfit-prone), Multi-chart, Daily Brief, Views (shareable `#v=` links).
+- Alert Rules run in the page; with **Push ON** they are also checked server-side (price/24h/funding on Hyperliquid) every ~5 min by `.github/workflows/push-check.yml` -> `POST /api/push/run` (secret `PUSH_RUN_KEY`). Cloudflare free plan has no cron slot left. Keys: `VAPID_PRIVATE` secret, `VAPID_PUBLIC` var, KV `PUSH`.
+- PWA: `manifest.webmanifest`, `icon.svg`; on iPhone add to Home Screen first.
+
 ### 19.4c Buildix-style tabs (Screener, HL Whales, Options, Cycles, Macro)
 - **Screener**: 179+ Hyperliquid perps + HIP-3 markets (stocks, commodities, FX; `dex:coin` names) via `api.hyperliquid.xyz/info` (CORS ok), 5s refresh. Signal = rule score (24h momentum, funding, session OI/price) - heuristic, not advice.
 - **HL Whales**: `meme-token/hl-snapshot.js` (run in the GitHub workflow every 30 min, writes `site/hl-snap.json`, git-ignored) trims the 40 MB leaderboard and 14 MB vaults files (no CORS). Browser then polls live `clearinghouseState` for the top 40 whales (net long/short per coin), top traders by 30d PnL, top 100 vaults, and a wallet explorer (any 0x address: positions, leverage, liq distance).

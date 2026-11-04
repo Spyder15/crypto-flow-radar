@@ -1,0 +1,10 @@
+name: push-check
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST -H "x-run-key: ${{ secrets.PUSH_RUN_KEY }}" https://meme-trench.spyder-radar.workers.dev/api/push/run
