@@ -210,12 +210,13 @@ Bybit ke liye fake-money ($100) trading bot, upar ke Cloudflare bots se bilkul a
 TrenchWatch jaisi live website: kaun se meme tokens me bade buys aa rahe hain aur **paisa kahan aa/ja raha hai**. Ye tracker hai, kuch khareedta nahi. **Live URL: https://meme-trench.spyder-radar.workers.dev**
 
 ### 19.1 Site me kya dikhta hai
-- **KPI strip** (upar 4 box): Net flow 1h, Top inflow chain, Top outflow chain, Big buys tracked.
-- **Chain chips**: All, SOL, ETH, Base, BSC, Robinhood, SUI, Arbitrum, Polygon, Avalanche, TON, Abstract, HyperEVM, Sonic, Tron, Aptos, Monad, MegaETH (sirf wahi chips jinka data hai).
-- **Money flow panel**: chain-wise bar (green = paisa aa raha hai, red = ja raha hai) = last 1 ghante ke buys minus sells, plus Top inflow / Top outflow tokens. Ye sirf un hot pools ka hai jo hum watch karte hain, poore market ka nahi.
-- **Just bought**: latest bade buys (>= $500) upar. Card me token, chain, DEX, age, wallet (naam ya short address), amount, MC / V / L / 24h%, 5M buys/sells, TOP10 %, HOLDERS, SAFE badge, Chart aur Swap buttons.
-- **Heating up**: sabse zyada alag buyers wale tokens (1h / 6h / 24h window).
-- **Filters**: Min buy ($500 se $15k+), Safety (Hide risky).
+- **Ticker tape** (sabse upar): chains ka net flow scroll hota rehta hai.
+- **Search box** (header): symbol / address se token dhundo.
+- **KPI strip** (5 box): Net flow 1h, Top inflow chain, Top outflow chain, Big buys 1h, Whale buys 24h (>= $10k).
+- **Chain heatmap**: har chain ek tile (green = inflow, red = outflow); click karo to us chain ka filter lag jata hai. Chain chips bhi hain.
+- **Left panel (tabs)**: *Tokens* sortable table (MC, Liq, Vol24, 24h%, Flow 1h + 5m B/S, Buys 1h, Bought, Safe, Chart/Swap), *Heating up* (1h/6h/24h), *Inflow/Outflow* tables. Header click = sort.
+- **Right: Live buys tape**: naye buys green flash ke saath, WHALE badge (>= $10k). Filters: Min buy, Safety (Hide risky).
+- **Refresh**: DexScreener loop ~1s (MC/liq/vol/5m B-S), GeckoTerminal trades ~2-10s late, har 1s tick se redraw, static data har 60s.
 - **Theme**: radar site jaisi (kala bg, orange accent, monospace, sharp corners).
 
 ### 19.2 Data ka flow (A to Z)
