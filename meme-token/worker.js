@@ -4,7 +4,6 @@ const ETF_URL = "https://btcetfdata.com/etfs.v1.current.json";
 export default {
   async fetch(req, env) {
     const u = new URL(req.url);
-    if (u.pathname === "/api/tv") return tvHook(req, env, u);
     if (u.pathname === "/api/macro") return macro(u.origin);
     if (u.pathname === "/api/options") return options(u.origin, u.searchParams.get("c") === "ETH" ? "ETH" : "BTC");
     if (u.pathname === "/api/sol-whales") return solWhales(env, u.origin);
@@ -112,14 +111,3 @@ async function macro(origin) {
   }
 }
 
-// TradingView alert webhook -> Telegram. Needs secrets TV_KEY, TG_TOKEN, TG_CHAT; URL: /api/tv?key=<TV_KEY>
-async function tvHook(req, env, u) {
-  if (req.method !== "POST") return new Response("POST only", { status: 405 });
-  if (!env.TV_KEY || u.searchParams.get("key") !== env.TV_KEY) return new Response("forbidden", { status: 403 });
-  if (!env.TG_TOKEN || !env.TG_CHAT) return new Response("telegram not configured", { status: 500 });
-  const raw = (await req.text()).slice(0, 3500);
-  let text = raw;
-  try { const j = JSON.parse(raw); text = Object.entries(j).map(([k, v]) => k + ": " + v).join("\n"); } catch (e) { /* plain text */ }
-  const r = await fetch("https://api.telegram.org/bot" + env.TG_TOKEN + "/sendMessage", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: env.TG_CHAT, text: "📈 TradingView alert\n" + text }) });
-  return new Response(r.ok ? "ok" : "telegram error", { status: r.ok ? 200 : 502 });
-}
