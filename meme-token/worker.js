@@ -28,7 +28,7 @@ export default {
       const cache = caches.default, key = new Request(u.origin + "/api/etf-eth"), hit = await cache.match(key);
       if (hit) return hit;
       try {
-        const up = await fetch("https://xoomar.com/api/markets/etf-flows?asset=eth&days=14", { headers: { "user-agent": "spyder-trench" } });
+        const up = await fetch("https://xoomar.com/api/markets/etf-flows?asset=eth&days=14", { headers: { "user-agent": "spyder-trench", ...(env.XOOMAR_KEY ? { "x-api-key": env.XOOMAR_KEY } : {}) } });
         const res = new Response(await up.text(), { status: up.status, headers: { ...J, "cache-control": "public, max-age=900" } });
         if (up.ok) await cache.put(key, res.clone());
         return res;
