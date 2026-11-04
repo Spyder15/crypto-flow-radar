@@ -10,6 +10,7 @@ const read = (u, d) => (fs.existsSync(u) ? JSON.parse(fs.readFileSync(u)) : d);
 const state = read(STATE, { feed: [], tokens: {} }), labels = read(new URL("./wallets.json", import.meta.url), {});
 const lbl = Object.fromEntries(Object.entries(labels).filter(([k]) => k !== "ADDRESS_HERE").map(([k, v]) => [k.toLowerCase(), v]));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const GP = { eth: "ethereum", polygon_pos: "polygon", avax: "avalanche" };
 const now = Date.now(), KEEP = 24 * 36e5;
 
 // One call at a time: the free plan allows about 30 requests/minute. Waits longer after a 429.
@@ -38,6 +39,12 @@ for (const p of pools) {
   const a = p.attributes, net = p.id.split("_")[0], tokenAddr = p.relationships.base_token.data.id.split(/_(.+)/)[1], tkey = `${net}:${tokenAddr}`.toLowerCase();
   state.tokens[tkey] = { ...state.tokens[tkey], net, addr: tokenAddr, sym: a.name.split(" / ")[0], pool: a.address, dex: p.relationships.dex?.data?.id || "", mc: n(a.market_cap_usd) || n(a.fdv_usd), vol24: n(a.volume_usd?.h24), liq: n(a.reserve_in_usd), chg24: n(a.price_change_percentage?.h24), created: Date.parse(a.pool_created_at) || null, upd: now };
   let trades; try { trades = (await g(`/networks/${net}/pools/${a.address}/trades`)).data; } catch (e) { console.log("trades failed", e.message); continue; }
+  const flow = { buy: 0, sell: 0, from: now };
+  for (const { attributes: t } of trades) {
+    const ts = Date.parse(t.block_timestamp);
+    if (!t.is_anomalous && now - ts <= 36e5) { const v = n(t.volume_in_usd); if (t.kind === "buy") flow.buy += v; else flow.sell += v; flow.from = Math.min(flow.from, ts); }
+  }
+  state.tokens[tkey].flow = { ...flow, at: now };
   for (const { attributes: t } of trades) {
     const usd = n(t.volume_in_usd), id = `${net}:${t.tx_hash}`;
     if (t.kind !== "buy" || t.is_anomalous || usd < cfg.minBuyUsd || seen.has(id) || now - Date.parse(t.block_timestamp) > KEEP) continue;
@@ -47,10 +54,21 @@ for (const p of pools) {
 state.feed = state.feed.filter((x) => now - x.ts <= KEEP).sort((x, y) => y.ts - x.ts).slice(0, 1500);
 
 // Safety check for tokens that appear in the feed (cached 6h, capped per run).
-const need = [...new Set(state.feed.map((x) => x.tkey))].filter((k) => !state.tokens[k]?.sec || now - state.tokens[k].sec.at > 6 * 36e5).slice(0, 15);
+// Money flow: buys minus sells in each watched pool over the last hour, summed per chain.
+const chains = {}, flows = [];
+for (const [k, t] of Object.entries(state.tokens)) {
+  if (!t.flow || now - t.flow.at > 36e5) continue;
+  const c = (chains[t.net] ||= { buy: 0, sell: 0, vol1h: 0, vol24h: 0, pools: 0 });
+  c.buy += t.flow.buy; c.sell += t.flow.sell; c.vol24h += t.vol24 || 0; c.pools++;
+  flows.push({ token: k, buy: Math.round(t.flow.buy), sell: Math.round(t.flow.sell), net: Math.round(t.flow.buy - t.flow.sell) });
+}
+for (const c of Object.values(chains)) { c.buy = Math.round(c.buy); c.sell = Math.round(c.sell); c.net = c.buy - c.sell; c.vol24h = Math.round(c.vol24h); }
+const inflow = flows.filter((x) => x.net > 0).sort((a, b) => b.net - a.net).slice(0, 25), outflow = flows.filter((x) => x.net < 0).sort((a, b) => a.net - b.net).slice(0, 25);
+
+const need = [...new Set([...state.feed.map((x) => x.tkey), ...inflow.map((x) => x.token), ...outflow.map((x) => x.token)])].filter((k) => !state.tokens[k]?.sec || now - state.tokens[k].sec.at > 6 * 36e5).slice(0, 15);
 for (const k of need) {
   const t = state.tokens[k]; if (!t) continue;
-  const rc = await rugCheck(t.net === "eth" ? "ethereum" : t.net, t.addr, cfg).catch(() => null);
+  const rc = await rugCheck(GP[t.net] || t.net, t.addr, cfg).catch(() => null);
   t.sec = rc ? { at: now, level: rc.level, flags: rc.flags, top10: rc.top10, holders: rc.holders } : { at: now, level: "unknown", flags: [] };
 }
 for (const k of Object.keys(state.tokens)) if (now - state.tokens[k].upd > 3 * 864e5) delete state.tokens[k];
@@ -60,8 +78,8 @@ const feed = state.feed.slice(0, 400).map((x) => ({ ...W(x), token: x.tkey }));
 const heat = {};
 for (const x of state.feed) { const h = (heat[x.tkey] ||= { token: x.tkey, buys: [] }); h.buys.push(W(x)); }
 const heating = Object.values(heat).map((h) => ({ token: h.token, buys: h.buys.slice(0, 40), buyers: new Set(h.buys.map((b) => b.w)).size })).sort((a, b) => b.buyers - a.buyers || b.buys.reduce((s, x) => s + x.usd, 0) - a.buys.reduce((s, x) => s + x.usd, 0)).slice(0, 40);
-const used = new Set([...feed.map((f) => f.token), ...heating.map((h) => h.token)]);
+const used = new Set([...feed.map((f) => f.token), ...heating.map((h) => h.token), ...inflow.map((x) => x.token), ...outflow.map((x) => x.token)]);
 const tokens = Object.fromEntries([...used].map((k) => [k, state.tokens[k]]));
-fs.writeFileSync(OUT, JSON.stringify({ updated: now, minBuyUsd: cfg.minBuyUsd, feed, heating, tokens }));
+fs.writeFileSync(OUT, JSON.stringify({ updated: now, minBuyUsd: cfg.minBuyUsd, chains, inflow, outflow, feed, heating, tokens }));
 fs.writeFileSync(STATE, JSON.stringify(state));
 console.log(`done: feed ${feed.length}, heating ${heating.length}, tokens ${used.size}`);

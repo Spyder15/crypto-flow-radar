@@ -1,8 +1,32 @@
 {
   "minBuyUsd": 500,
-  "networks": ["solana", "base", "eth", "bsc", "robinhood"],
+  "networks": [
+    "solana",
+    "eth",
+    "base",
+    "bsc",
+    "robinhood",
+    "sui-network",
+    "arbitrum",
+    "polygon_pos",
+    "avax",
+    "ton",
+    "abstract",
+    "hyperevm",
+    "sonic",
+    "tron",
+    "aptos",
+    "monad",
+    "megaeth"
+  ],
   "minPoolLiquidityUsd": 10000,
-  "poolsPerNetwork": { "solana": 7, "default": 3 },
+  "poolsPerNetwork": {
+    "solana": 6,
+    "eth": 3,
+    "base": 3,
+    "bsc": 3,
+    "default": 2
+  },
   "maxTop10HolderPct": 60,
   "maxSellTaxPct": 10,
   "maxBuyTaxPct": 10

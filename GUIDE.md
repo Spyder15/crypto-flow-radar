@@ -207,9 +207,10 @@ Bybit ke liye fake-money ($100) trading bot, upar ke Cloudflare bots se bilkul a
 
 ## 19. Meme token website (`meme-token/`), alag project
 
-TrenchWatch jaisi live website ("SPYDER TRENCH"): kaun se meme tokens me bade buys aa rahe hain (SOL, Robinhood, Base, BSC, ETH), "Just bought" feed, "Heating up" (zyada buyers wale tokens, 1h/6h/24h), MC / Volume / Liquidity / 24h%, TOP10 holders aur SAFE badge (GoPlus rug check).
+TrenchWatch jaisi live website ("SPYDER TRENCH"): kaun se meme tokens me bade buys aa rahe hain (SOL, ETH, Base, BSC, Robinhood, SUI, Arbitrum, Polygon, Avalanche, TON, Abstract, HyperEVM, Sonic, Tron, Aptos, Monad, MegaETH), "Just bought" feed, "Heating up" (zyada buyers wale tokens, 1h/6h/24h), MC / Volume / Liquidity / 24h%, TOP10 holders aur SAFE badge (GoPlus rug check).
 
-- **Data**: `meme-token/whale-buys.js` GeckoTerminal ke hot pools se $500+ buys leta hai, `site/data.json` banata hai. Workflow `.github/workflows/meme-token.yml` har 10 min chalta hai, site ko Cloudflare worker `meme-trench` par deploy karta hai (secret `CLOUDFLARE_API_TOKEN`).
+- **Data**: `meme-token/whale-buys.js` GeckoTerminal ke hot pools se $500+ buys leta hai, `site/data.json` banata hai. Workflow `.github/workflows/meme-token.yml` har 15 min chalta hai, site ko Cloudflare worker `meme-trench` par deploy karta hai (secret `CLOUDFLARE_API_TOKEN`).
 - **Wallet naam**: `meme-token/wallets.json` me `"address": "@handle"` daalo, warna short address dikhta hai.
 - **Telegram scanner** (alag, manual): `node meme-token/scan.js --dry` naye tokens + rug check dikhata hai.
-- **Dhyan**: data har ~10 min me update hota hai (real-time nahi), free API limits ki wajah se. Ye sirf info hai, financial advice nahi.
+- **Dhyan**: data har ~15 min me update hota hai (real-time nahi), free API limits ki wajah se. Ye sirf info hai, financial advice nahi.
+- **Money flow**: site ke upar panel dikhata hai ki last 1 ghante me kis chain/token me paisa aa raha hai (buys - sells) aur kahan se ja raha hai. Ye sirf un hot pools ka hai jo hum watch karte hain, poore market ka nahi.

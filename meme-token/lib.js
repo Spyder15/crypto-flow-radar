@@ -2,7 +2,7 @@
 export const n = (x) => (Number.isFinite(+x) ? +x : 0);
 const H = { "user-agent": "Mozilla/5.0", accept: "application/json" };
 export const getJson = async (url) => { const r = await fetch(url, { headers: H, signal: AbortSignal.timeout(20000) }); if (!r.ok) throw new Error(`${r.status} ${url}`); return r.json(); };
-export const GOPLUS_EVM = { ethereum: 1, eth: 1, bsc: 56, base: 8453, arbitrum: 42161, polygon: 137, avalanche: 43114, optimism: 10, linea: 59144, blast: 81457, zksync: 324, scroll: 534352, mantle: 5000 };
+export const GOPLUS_EVM = { ethereum: 1, eth: 1, bsc: 56, base: 8453, arbitrum: 42161, polygon: 137, avalanche: 43114, optimism: 10, linea: 59144, blast: 81457, zksync: 324, scroll: 534352, mantle: 5000, abstract: 2741, sonic: 146 };
 
 // Returns { ok, flags[], notes[] }. A token with any critical flag is never alerted.
 export async function rugCheck(chain, addr, cfg) {
@@ -43,6 +43,6 @@ export async function rugCheck(chain, addr, cfg) {
     } else return { ok: false, flags: ["chain not covered by rug check"], notes };
   } catch (e) { return { ok: false, flags: ["rug check failed: " + e.message], notes }; }
   if (top10v > 100) top10v = null; // bad holder data (e.g. pool contracts counted)
-  return { ok: !flags.length, flags, notes, top10: top10v, holders: holdersv, level: !flags.length ? "good" : flags.some((f) => /HONEYPOT|mint|freeze|cannot sell|tax|non-transferable|closable|balances|hidden/i.test(f)) ? "risk" : "warn" };
+  return { ok: !flags.length, flags, notes, top10: top10v, holders: holdersv, level: flags.length && flags.every((f) => /no security data|chain not covered|rug check failed/.test(f)) ? "unknown" : !flags.length ? "good" : flags.some((f) => /HONEYPOT|mint|freeze|cannot sell|tax|non-transferable|closable|balances|hidden/i.test(f)) ? "risk" : "warn" };
 }
 
