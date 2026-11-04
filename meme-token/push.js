@@ -44,17 +44,25 @@ export async function sendPush(sub, payload, env) {
 
 const sid = async (endpoint) => b64u(await crypto.subtle.digest("SHA-256", enc.encode(endpoint)));
 const J = { "content-type": "application/json" };
+// Keep an index of subscriber ids so the checker only needs KV reads (the free tier allows few list/write ops per day).
+async function idxSet(env, id, add) {
+  const cur = JSON.parse((await env.PUSH.get("idx")) || "[]"), has = cur.includes(id);
+  if (add === has) return;
+  await env.PUSH.put("idx", JSON.stringify(add ? [...cur, id] : cur.filter((x) => x !== id)));
+}
 
 export async function pushApi(req, env, path) {
   if (!env.PUSH || !env.VAPID_PUBLIC || !env.VAPID_PRIVATE) return new Response('{"key":null}', { headers: J });
   if (path === "/api/push/key") return new Response(JSON.stringify({ key: env.VAPID_PUBLIC }), { headers: J });
   if (req.method !== "POST") return new Response("{}", { status: 405, headers: J });
   let b; try { b = await req.json(); } catch (e) { return new Response("{}", { status: 400, headers: J }); }
-  if (path === "/api/push/unsub") { if (b.endpoint) await env.PUSH.delete(await sid(b.endpoint)); return new Response('{"ok":1}', { headers: J }); }
+  if (path === "/api/push/unsub") { if (b.endpoint) { const id = await sid(b.endpoint); await env.PUSH.delete(id); await idxSet(env, id, false); } return new Response('{"ok":1}', { headers: J }); }
   const s = b.sub;
   if (!s?.endpoint?.startsWith("https://") || !s.keys?.p256dh || !s.keys?.auth) return new Response("{}", { status: 400, headers: J });
   const rules = (Array.isArray(b.rules) ? b.rules : []).slice(0, 20).filter((r) => r && typeof r.s === "string" && ["price", "chg24", "fund"].includes(r.m) && [">", "<"].includes(r.op) && isFinite(r.v)).map((r) => ({ id: r.id, s: r.s.slice(0, 12), m: r.m, op: r.op, v: +r.v, once: !!r.once }));
-  await env.PUSH.put(await sid(s.endpoint), JSON.stringify({ sub: { endpoint: s.endpoint, keys: s.keys }, rules, fired: {} }));
+  const id = await sid(s.endpoint), old = JSON.parse((await env.PUSH.get(id)) || "{}");
+  await env.PUSH.put(id, JSON.stringify({ sub: { endpoint: s.endpoint, keys: s.keys }, rules, fired: old.fired || {} }));
+  await idxSet(env, id, true);
   return new Response('{"ok":1}', { headers: J });
 }
 
@@ -63,13 +71,15 @@ const NAMES = { price: "Price", chg24: "24h change", fund: "Funding (ann.)" };
 
 export async function checkRules(env) {
   if (!env.PUSH || !env.VAPID_PRIVATE) return;
-  const list = await env.PUSH.list();
-  if (!list.keys.length) return;
+  const ids = JSON.parse((await env.PUSH.get("idx")) || "[]");
+  if (!ids.length || !ids.some(Boolean)) return;
+  if (!(await Promise.all(ids.map((i) => env.PUSH.get(i)))).some((x) => x && JSON.parse(x).rules.length)) return;
   const r = await fetch("https://api.hyperliquid.xyz/info", { method: "POST", headers: J, body: JSON.stringify({ type: "metaAndAssetCtxs" }) });
   if (!r.ok) return;
   const [meta, ctx] = await r.json(), M = {};
   meta.universe.forEach((u, i) => { const c = ctx[i], p = +c.markPx, pd = +c.prevDayPx; M[u.name] = { price: p, chg24: pd ? (p / pd - 1) * 100 : null, fund: +c.funding * 24 * 365 * 100 }; });
-  for (const k of list.keys) {
+  for (const id of ids) {
+    const k = { name: id };
     const raw = await env.PUSH.get(k.name); if (!raw) continue;
     const rec = JSON.parse(raw); let dirty = false;
     for (const rule of [...rec.rules]) {
@@ -78,7 +88,7 @@ export async function checkRules(env) {
       const now = Date.now();
       if (!rule.once && now - (rec.fired[rule.id] || 0) < 18e5) continue;
       const st = await sendPush(rec.sub, { title: `${rule.s} ${NAMES[rule.m]} ${rule.op} ${fmt(rule.v)}`, body: `Now ${fmt(v)}${rule.m === "price" ? "" : "%"} (Hyperliquid)` }, env).catch(() => 0);
-      if (st === 404 || st === 410) { await env.PUSH.delete(k.name); dirty = false; break; }
+      if (st === 404 || st === 410) { await env.PUSH.delete(k.name); await idxSet(env, k.name, false); dirty = false; break; }
       rec.fired[rule.id] = now; dirty = true;
       if (rule.once) rec.rules = rec.rules.filter((x) => x.id !== rule.id);
     }
