@@ -60,14 +60,39 @@ tr:hover td{background:#101010}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:800px){.two{grid-template-columns:1fr}}
 footer{color:var(--mut);font-size:10px;padding:10px 16px 30px;max-width:1000px;line-height:1.6}
 ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#222}
+.nav{display:flex;gap:0;border:1px solid var(--line)}.nv{padding:6px 14px;color:var(--mut);cursor:pointer;font-weight:700;font-size:11px;letter-spacing:.1em;user-select:none}.nv:hover{color:var(--txt)}.nv.on{background:var(--acc);color:#000}
+.verdict{margin-top:12px;border:1px solid var(--line);background:var(--panel);padding:12px 14px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.verdict .vd{font-weight:800;font-size:15px;letter-spacing:.08em;padding:4px 10px;border:1px solid currentColor}
+.verdict .tx{flex:1;min-width:260px;line-height:1.7}.verdict .tx b{color:#fff}
+.mk7{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));border:1px solid var(--line);background:var(--panel);margin-top:12px}
+.mk7 .kpi{border-bottom:1px solid var(--line)}
+.stiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;margin-top:8px}
+.stile{border:1px solid var(--line);padding:9px 11px;cursor:pointer;background:var(--panel2)}.stile:hover{border-color:#555}.stile.on{outline:2px solid var(--acc)}
+.stile .n{font-weight:700;font-size:12px;display:flex;justify-content:space-between;gap:6px}.stile .a{font-size:18px;font-weight:800;margin:3px 0}.stile .d{font-size:10.5px;color:var(--mut);line-height:1.5}
+.cimg{width:16px;height:16px;border-radius:50%;vertical-align:-3px;margin-right:6px;background:#222}
+.mlegend{font-size:10.5px;color:var(--mut);margin-top:8px;line-height:1.6}
+.tw td b.fu,.tw td b.fd{transition:none}
 </style>
 </head>
-<body>
+<body data-v="mkt">
 <header>
-  <div class="logo"><b>SPYDER</b>TRENCH</div><div class="tagline">LIVE MEMECOIN FLOW TERMINAL</div>
-  <input id="q" placeholder="Search symbol or address..." autocomplete="off" spellcheck="false">
+  <div class="logo"><b>SPYDER</b>TRENCH</div>
+  <div class="nav"><span class="nv on" data-v="mkt">MARKET FLOW</span><span class="nv" data-v="meme">MEME TRENCH</span></div>
+  <input id="q" style="display:none" placeholder="Search symbol or address..." autocomplete="off" spellcheck="false">
   <div class="live" id="live">LIVE</div>
 </header>
+<div id="v-mkt" class="wrap">
+  <div class="verdict" id="mverdict"></div>
+  <div class="mk7" id="mkpis"></div>
+  <section class="panel" style="margin-top:12px"><h2>Where is the money going? <em id="msecnote">sector market-cap change, last 24h · click a sector to see its coins</em></h2><div class="stiles" id="mtiles"></div>
+    <div class="mlegend">Flow = change in sector market cap over 24h (price-driven money moving in / out). Sectors overlap (e.g. Memecoins can sit inside Layer 1 ecosystems). Stablecoin supply rising = fresh cash entering crypto.</div></section>
+  <section class="panel" style="margin-top:12px">
+    <h2><span id="mctitle">Top 100 coins</span><em id="mlive">loading…</em></h2>
+    <div class="bar" id="mbar"></div>
+    <div class="tw" id="mcoins"></div>
+  </section>
+</div>
+<div id="v-meme" hidden>
 <div class="tape"><div class="in" id="tape"></div></div>
 <div class="wrap">
   <div class="kpis" id="kpis"></div>
@@ -87,6 +112,7 @@ footer{color:var(--mut);font-size:10px;padding:10px 16px 30px;max-width:1000px;l
       <div class="feedbox" id="feed"></div>
     </section>
   </div>
+</div>
 </div>
 <footer>Public on-chain / market data from GeckoTerminal, DexScreener and GoPlus, scanned live from your browser every second or few, and can be delayed, incomplete or wrong. SAFE badges are automatic checks, not guarantees. Nothing here is financial advice. Memecoins carry a very high risk of total loss. Always check a token yourself.<br><b style="color:var(--org,#ffa11a)">Made by PRIYANSHU</b></footer>
 <script>
@@ -205,6 +231,7 @@ async function load() {
 }
 // Live scan 1: the browser polls GeckoTerminal trades pool by pool (open CORS, ~27 calls/min). Pools with recent buys get priority.
 async function scan() {
+  if (document.body.dataset.v !== "meme") { setTimeout(scan, 1500); return; }
   let wait = 2200;
   try {
     const ks = D ? Object.keys(D.tokens).filter((k) => D.tokens[k].pool) : [];
@@ -232,6 +259,7 @@ async function scan() {
 }
 // Live scan 2: DexScreener refreshes price/MC/volume/5m txns for every watched pool, one chain batch per second.
 async function dexLoop() {
+  if (document.body.dataset.v !== "meme") { setTimeout(dexLoop, 1500); return; }
   let wait = 1000;
   try {
     const nets = D ? [...new Set(Object.values(D.tokens).map((t) => t.net))] : [];
@@ -260,6 +288,87 @@ function tick() {
   $("live").textContent = LV.last ? "LIVE · scanning · tick " + ago(LV.last) + " ago" : "LIVE · snapshot " + ago(D.updated) + " old";
 }
 load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
+</script>
+<script>
+// MARKET FLOW view: whole crypto market (majors, sectors, memes, NFT, stablecoins) from CoinGecko, DefiLlama, alternative.me; live prices from the Binance public WebSocket.
+(() => {
+  const SEC = [["layer-1", "Layer 1"], ["layer-2", "Layer 2"], ["decentralized-finance-defi", "DeFi"], ["artificial-intelligence", "AI"], ["meme-token", "Memecoins"], ["non-fungible-tokens-nft", "NFT"], ["gaming", "Gaming"], ["real-world-assets-rwa", "RWA"], ["depin", "DePIN"], ["privacy-coins", "Privacy"], ["stablecoins", "Stablecoins"], ["solana-ecosystem", "Solana eco"], ["base-ecosystem", "Base eco"], ["bnb-chain-ecosystem", "BNB eco"], ["exchange-based-tokens", "Exchange tokens"], ["metaverse", "Metaverse"], ["oracle", "Oracle"], ["zero-knowledge-zk", "ZK"], ["liquid-staking-tokens", "Liquid staking"], ["decentralized-exchange", "DEX"], ["lending-borrowing", "Lending"]];
+  const CG = "https://api.coingecko.com/api/v3";
+  const M = { g: null, fng: null, cats: [], coins: [], stable: null, sel: null, sk: "mc", sd: -1, at: {}, ws: 0, px: {} };
+  const big = (x) => { const a = Math.abs(x); return (x < 0 ? "-" : "") + "$" + (a >= 1e12 ? (a / 1e12).toFixed(2) + "T" : a >= 1e9 ? (a / 1e9).toFixed(2) + "B" : a >= 1e6 ? (a / 1e6).toFixed(1) + "M" : Math.round(a).toLocaleString()); };
+  const sgb = (x) => (x >= 0 ? "+" : "") + big(x);
+  const pc = (x) => x == null ? '<span class="st">-</span>' : `<span class="${x >= 0 ? "up" : "dn"}">${x >= 0 ? "+" : ""}${x.toFixed(2)}%</span>`;
+  const px = (x) => x == null ? "-" : x >= 1000 ? "$" + x.toLocaleString("en-US", { maximumFractionDigits: 2 }) : x >= 1 ? "$" + x.toFixed(2) : x >= 0.01 ? "$" + x.toFixed(4) : "$" + x.toPrecision(3);
+  const jget = async (u) => { const r = await fetch(u, { headers: { accept: "application/json" } }); if (!r.ok) throw new Error(r.status); return r.json(); };
+  const ld = async (key, fn) => { try { await fn(); M.at[key] = Date.now(); } catch (e) { /* keep stale data */ } draw(); };
+  const getG = () => ld("g", async () => { M.g = (await jget(CG + "/global")).data; });
+  const getF = () => ld("f", async () => { M.fng = (await jget("https://api.alternative.me/fng/?limit=2")).data; });
+  const getC = () => ld("c", async () => {
+    const m = new Map((await jget(CG + "/coins/categories")).map((c) => [c.id, c]));
+    M.cats = SEC.map(([id, n]) => { const c = m.get(id); if (!c || !c.market_cap) return null; const ch = nn(c.market_cap_change_24h); return { id, n, mc: c.market_cap, ch, flow: c.market_cap - c.market_cap / (1 + ch / 100), vol: nn(c.volume_24h) }; }).filter(Boolean);
+  });
+  const getK = () => ld("k", async () => {
+    const sel = M.sel, a = await jget(`${CG}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&price_change_percentage=1h,24h,7d${sel ? "&category=" + sel : ""}`);
+    if (sel !== M.sel) return;
+    M.coins = a.map((c) => ({ id: c.id, sym: String(c.symbol).toUpperCase(), name: c.name, img: c.image, p: c.current_price, mc: nn(c.market_cap), vol: nn(c.total_volume), c1: c.price_change_percentage_1h_in_currency, c24: c.price_change_percentage_24h_in_currency, c7: c.price_change_percentage_7d_in_currency, rank: c.market_cap_rank }));
+  });
+  const getS = () => ld("s", async () => {
+    let c = 0, d = 0, w = 0;
+    for (const a of (await jget("https://stablecoins.llama.fi/stablecoins")).peggedAssets) { if (a.pegType !== "peggedUSD") continue; const x = nn(a.circulating?.peggedUSD); c += x; d += x - (a.circulatingPrevDay?.peggedUSD ?? x); w += x - (a.circulatingPrevWeek?.peggedUSD ?? x); }
+    M.stable = { c, d, w };
+  });
+
+  function verdict() {
+    const g = M.g, f = M.fng?.[0], ch = g ? nn(g.market_cap_change_percentage_24h_usd) : 0;
+    const v = ch > 1 ? ["RISK-ON", "up"] : ch < -1 ? ["RISK-OFF", "dn"] : ["NEUTRAL", "st"];
+    const cs = M.cats.filter((c) => c.id !== "stablecoins").sort((a, b) => b.flow - a.flow), inn = cs.filter((c) => c.flow > 0).slice(0, 3), out = cs.slice().reverse().filter((c) => c.flow < 0).slice(0, 3);
+    const l = (a) => a.length ? a.map((c) => `<b>${esc(c.n)}</b> <span class="${c.flow >= 0 ? "up" : "dn"}">${sgb(c.flow)}</span>`).join(" · ") : "-";
+    $("mverdict").innerHTML = `<div class="vd ${v[1]}">${v[0]}</div><div class="tx">${g ? `Total market <b>${big(g.total_market_cap.usd)}</b> ${pc(ch)} in 24h` : "Loading market…"}${f ? ` · Fear &amp; Greed <b>${f.value}</b> (${esc(f.value_classification)})` : ""}<br>Money flowing <span class="up">IN</span>: ${l(inn)}<br>Money flowing <span class="dn">OUT</span>: ${l(out)}</div>`;
+  }
+  function kpis() {
+    const g = M.g, f = M.fng?.[0], f2 = M.fng?.[1], s = M.stable, cell = (k, v, sub, c = "") => `<div class="kpi"><div class="k">${k}</div><div class="v ${c}">${v}</div><div class="s">${sub}</div></div>`;
+    const tot = g?.total_market_cap?.usd, bt = g?.market_cap_percentage?.btc, et = g?.market_cap_percentage?.eth, ch = nn(g?.market_cap_change_percentage_24h_usd);
+    $("mkpis").innerHTML = cell("Total market cap", tot ? big(tot) : "-", pc(g ? ch : null), ch >= 0 ? "up" : "dn") + cell("24h volume", g ? big(g.total_volume.usd) : "-", g ? "vol / mcap " + (g.total_volume.usd / tot * 100).toFixed(1) + "%" : "") +
+      cell("BTC dominance", bt != null ? bt.toFixed(1) + "%" : "-", "ETH " + (et != null ? et.toFixed(1) + "%" : "-")) + cell("Altcoins (ex BTC/ETH)", tot ? big(tot * (1 - (bt + et) / 100)) : "-", bt != null ? (100 - bt - et).toFixed(1) + "% of market" : "") +
+      cell("Fear & Greed", f ? f.value : "-", f ? esc(f.value_classification) + (f2 ? " · yday " + f2.value : "") : "", f ? (f.value >= 55 ? "up" : f.value <= 45 ? "dn" : "") : "") +
+      cell("Stablecoin supply", s ? big(s.c) : "-", s ? `<span class="${s.d >= 0 ? "up" : "dn"}">${sgb(s.d)} 24h</span> · <span class="${s.w >= 0 ? "up" : "dn"}">${sgb(s.w)} 7d</span>` : "");
+  }
+  function tiles() {
+    const cs = M.cats.slice().sort((a, b) => b.ch - a.ch);
+    $("mtiles").innerHTML = cs.map((c) => { const a = Math.min(.3, Math.abs(c.ch) / 8 * .3), col = c.ch >= 0 ? "47,210,122" : "255,77,77"; return `<div class="stile${M.sel === c.id ? " on" : ""}" data-id="${c.id}" style="background:rgba(${col},${a.toFixed(2)})"><div class="n"><span>${esc(c.n)}</span><span class="${c.flow >= 0 ? "up" : "dn"}">${c.flow >= 0 ? "▲ IN" : "▼ OUT"}</span></div><div class="a ${c.ch >= 0 ? "up" : "dn"}">${c.ch >= 0 ? "+" : ""}${c.ch.toFixed(2)}%</div><div class="d">flow <b class="${c.flow >= 0 ? "up" : "dn"}">${sgb(c.flow)}</b><br>mcap ${big(c.mc)} · vol ${big(c.vol)}</div></div>`; }).join("") || '<span class="st">loading sectors…</span>';
+  }
+  const PRE = [["mc", "Market cap", "mc", -1], ["g", "Top gainers 24h", "c24", -1], ["l", "Top losers 24h", "c24", 1], ["v", "Most volume", "vol", -1]];
+  const COLS = [["rank", "#"], ["sym", "Coin"], ["p", "Price"], ["c1", "1h"], ["c24", "24h"], ["c7", "7d"], ["mc", "Mcap"], ["vol", "Vol 24h"], ["vm", "Vol/Mcap"]];
+  function coins() {
+    const sel = M.cats.find((c) => c.id === M.sel);
+    $("mctitle").textContent = sel ? sel.n + " · top coins" : "Top 100 coins";
+    $("mbar").innerHTML = PRE.map(([k, l, sk, sd]) => `<span class="chip${M.sk === sk && M.sd === sd ? " on" : ""}" data-p="${k}">${l}</span>`).join("") + (sel ? '<span class="chip" data-p="x">✕ clear sector</span>' : "");
+    const v = (c, k) => k === "vm" ? (c.mc ? c.vol / c.mc : 0) : k === "sym" ? c.sym : c[k] ?? -1e9;
+    const rows = M.coins.slice().sort((a, b) => M.sk === "sym" ? M.sd * a.sym.localeCompare(b.sym) : M.sd * (v(a, M.sk) - v(b, M.sk)));
+    $("mcoins").innerHTML = rows.length ? `<table><thead><tr>${COLS.map(([k, l]) => `<th class="${k === M.sk ? "on" : ""}" data-s="${k}">${l}${k === M.sk ? (M.sd < 0 ? " ▼" : " ▲") : ""}</th>`).join("")}</tr></thead><tbody>${rows.map((c) => `<tr><td class="st">${c.rank ?? ""}</td><td><img class="cimg" loading="lazy" src="${esc(c.img)}" alt=""><b>${esc(c.sym)}</b> <span class="st">${esc(c.name)}</span></td><td><b data-px="${c.sym}">${px(c.p)}</b></td><td>${pc(c.c1)}</td><td data-c24="${c.sym}">${pc(c.c24)}</td><td>${pc(c.c7)}</td><td>${big(c.mc)}</td><td>${big(c.vol)}</td><td class="st">${c.mc ? (c.vol / c.mc * 100).toFixed(1) + "%" : "-"}</td></tr>`).join("")}</tbody></table>` : '<div class="st" style="padding:14px">Loading coins…</div>';
+    live();
+  }
+  function status() {
+    const a = Math.max(0, ...Object.values(M.at)), ws = M.ws && Date.now() - M.ws < 5000;
+    $("mlive").textContent = ws ? "prices live every ~1s (Binance) · data refresh 45-90s" : a ? "snapshot " + Math.round((Date.now() - a) / 1000) + "s old (live prices connecting…)" : "loading…";
+  }
+  function draw() { verdict(); kpis(); tiles(); coins(); status(); }
+  // Binance miniTicker stream: prices/24h% of listed coins, once a second, patched into the table without a re-render.
+  function live() {
+    for (const c of M.coins) { const t = M.px[c.sym]; if (!t) continue; const e = document.querySelector(`[data-px="${c.sym}"]`); if (!e) continue; if (c.p !== t.p) { e.className = t.p > c.p ? "fu" : "fd"; setTimeout(() => (e.className = ""), 700); } c.p = t.p; e.textContent = px(t.p); const d = document.querySelector(`[data-c24="${c.sym}"]`); if (d) d.innerHTML = pc(t.ch); c.c24 = t.ch; }
+  }
+  function connect() {
+    let ws; try { ws = new WebSocket("wss://stream.binance.com:9443/ws/!miniTicker@arr"); } catch (e) { return; }
+    ws.onmessage = (m) => { try { for (const t of JSON.parse(m.data)) if (t.s.endsWith("USDT")) { const o = +t.o, c = +t.c; if (o > 0) M.px[t.s.slice(0, -4)] = { p: c, ch: (c / o - 1) * 100 }; } M.ws = Date.now(); if (document.body.dataset.v === "mkt") { live(); status(); } } catch (e) { /* ignore bad frame */ } };
+    ws.onclose = () => setTimeout(connect, 4000); ws.onerror = () => ws.close();
+  }
+  document.querySelector(".nav").onclick = (e) => { const v = e.target.dataset?.v; if (!v) return; document.body.dataset.v = v; document.querySelectorAll(".nv").forEach((n) => n.classList.toggle("on", n.dataset.v === v)); $("v-mkt").hidden = v !== "mkt"; $("v-meme").hidden = v !== "meme"; $("q").style.display = v === "meme" ? "" : "none"; };
+  $("mtiles").onclick = (e) => { const t = e.target.closest(".stile"); if (!t) return; M.sel = M.sel === t.dataset.id ? null : t.dataset.id; M.coins = []; coins(); getK(); };
+  $("mbar").onclick = (e) => { const p = e.target.dataset?.p; if (!p) return; if (p === "x") { M.sel = null; M.coins = []; coins(); getK(); return; } const [, , sk, sd] = PRE.find((x) => x[0] === p); M.sk = sk; M.sd = sd; coins(); };
+  $("mcoins").onclick = (e) => { const k = e.target.dataset?.s; if (!k) return; if (M.sk === k) M.sd = -M.sd; else { M.sk = k; M.sd = k === "rank" || k === "sym" ? 1 : -1; } coins(); };
+  getG(); getF(); getC(); getK(); getS(); connect();
+  setInterval(getG, 60000); setInterval(getC, 90000); setInterval(getK, 45000); setInterval(getF, 600000); setInterval(getS, 600000); setInterval(status, 1000);
+})();
 </script>
 </body>
 </html>

@@ -210,6 +210,9 @@ Bybit ke liye fake-money ($100) trading bot, upar ke Cloudflare bots se bilkul a
 TrenchWatch jaisi live website: kaun se meme tokens me bade buys aa rahe hain aur **paisa kahan aa/ja raha hai**. Ye tracker hai, kuch khareedta nahi. **Live URL: https://meme-trench.spyder-radar.workers.dev**
 
 ### 19.1 Site me kya dikhta hai
+**Do views (header me toggle):** **MARKET FLOW** (default, poora crypto market) aur **MEME TRENCH** (neeche wala, on-chain memecoins).
+- **MARKET FLOW**: verdict (RISK-ON/OFF), Total mcap, 24h vol, BTC dominance, Altcoins mcap, Fear & Greed, Stablecoin supply (24h/7d). **Sector heatmap**: Layer 1/2, DeFi, AI, Memecoins, NFT, Gaming, RWA, DePIN, Privacy, Stablecoins, ecosystems... har sector ka 24h mcap change = paisa IN/OUT. Tile click = us sector ke top coins. Niche top-100 coins table (1h/24h/7d, mcap, volume; gainers/losers/volume sort) aur Binance WebSocket se price ~1s me live. Data: CoinGecko, DefiLlama, alternative.me (sab open CORS, key nahi chahiye).
+- **MEME TRENCH** details:
 - **Ticker tape** (sabse upar): chains ka net flow scroll hota rehta hai.
 - **Search box** (header): symbol / address se token dhundo.
 - **KPI strip** (5 box): Net flow 1h, Top inflow chain, Top outflow chain, Big buys 1h, Whale buys 24h (>= $10k).
