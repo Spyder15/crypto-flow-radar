@@ -21,16 +21,17 @@
 
   // ---------- sub tabs ----------
   const wrap = $("v-mkt");
-  for (const id of ["scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "watch"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
+  for (const id of ["scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "flow", "lmap", "cmp", "gas", "pf", "watch"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
   function show(u) {
     sub = u;
     document.querySelectorAll("#subtabs .tab").forEach((t) => t.classList.toggle("on", t.dataset.u === u));
-    for (const id of ["over", "scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "watch"]) $("s-" + id).hidden = id !== u;
+    for (const id of ["over", "scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "flow", "lmap", "cmp", "gas", "pf", "watch"]) $("s-" + id).hidden = id !== u;
     LAZY[u]?.();
     renderSub();
+    setHash();
   }
   $("subtabs").onclick = (e) => { const u = e.target.dataset?.u; if (u) show(u); };
-  function renderSub() { if ((sub === "jrn" || sub === "ask") && $("s-" + sub).innerHTML) return; ({ scr: rScr, hlw: rHlw, liq: rLiq, hype: rHype, onc: rOn, jrn: rJrn, ask: rAsk, map: rMap, soc: rSoc, opt: rOpt, cyc: rCyc, mac: rMac, deriv: rDeriv, mov: rMov, chain: rChain, watch: rWatch })[sub]?.(); }
+  function renderSub() { if ((sub === "jrn" || sub === "ask") && $("s-" + sub).innerHTML) return; ({ scr: rScr, hlw: rHlw, liq: rLiq, hype: rHype, onc: rOn, jrn: rJrn, ask: rAsk, map: rMap, soc: rSoc, flow: rFlow, lmap: rLmap, cmp: rCmp, gas: rGas, pf: rPf, opt: rOpt, cyc: rCyc, mac: rMac, deriv: rDeriv, mov: rMov, chain: rChain, watch: rWatch })[sub]?.(); }
 
   // ---------- data: derivatives ----------
   const lg = (fn) => async () => { try { await fn(); } catch (e) { /* keep stale data */ } if (document.body.dataset.v === "mkt") renderSub(); };
@@ -281,7 +282,7 @@
     logs.unshift({ ts: now, msg }); if (logs.length > 100) logs.length = 100; if (!AM.hidden) renderLog();
     const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; t.onclick = () => t.remove(); $("toasts").appendChild(t); setTimeout(() => t.remove(), 9000);
     if (AL.sound) beep();
-    if (AL.notify && window.Notification && Notification.permission === "granted") { try { new Notification("SPYDER", { body: msg }); } catch (e) { /* ignore */ } }
+    if (AL.notify && window.Notification && Notification.permission === "granted") { try { navigator.serviceWorker?.ready.then((r) => r.showNotification("SPYDER", { body: msg, tag: "spyder" })).catch(() => new Notification("SPYDER", { body: msg })); if (!navigator.serviceWorker) new Notification("SPYDER", { body: msg }); } catch (e) { /* ignore */ } }
     if (AL.tgToken && AL.tgChat) fetch(`https://api.telegram.org/bot${AL.tgToken}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: AL.tgChat, text: "SPYDER: " + msg }) }).catch(() => {});
   }
   const tw = document.createElement("div"); tw.id = "toasts"; document.body.appendChild(tw);
@@ -651,8 +652,185 @@
     const cats = SO.cats?.length ? `<div class="tw"><table><thead><tr><th>Trending category</th><th>Mcap 1h</th><th>Coins</th></tr></thead><tbody>${SO.cats.map((c) => `<tr><td style="text-align:left"><b>${esc(c.name)}</b></td><td>${ps(c.market_cap_1h_change)}</td><td>${c.coins_count}</td></tr>`).join("")}</tbody></table></div>` : "";
     $("s-soc").innerHTML = panel("Sentiment", "alternative.me Fear & Greed · last 30 days", fng) + panel("Hot trends, 24h", "what people search most on CoinGecko (our free proxy for social buzz)", cloud + '<div class="mlegend">Word size = trend rank, colour = 24h price move. No Twitter/Reddit/AI summary: those need paid APIs.</div>', "margin-top:12px") + panel("Trending coins", "CoinGecko search trending", tr, "margin-top:12px") + (cats ? panel("Trending categories", "narratives getting attention", cats, "margin-top:12px") : "");
   }
+  // ---------- shared helpers for the pro tabs ----------
+  const pxOf = (s) => M.px[s]?.p ?? priceOf(s) ?? null;
+  const fnum = (v, d = 2) => (v == null || !isFinite(v) ? "-" : Math.abs(v) >= 1 ? v.toLocaleString(undefined, { maximumFractionDigits: d }) : v.toPrecision(3));
+  const rpc = async (url, method, params = []) => { const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) }); const j = await r.json(); if (j.error) throw new Error(j.error.message); return j.result; };
+  const ETH_RPC = "https://ethereum-rpc.publicnode.com", SOL_RPC = "https://solana-rpc.publicnode.com";
+  const kl = (s, iv, n) => jget(`${BA}/api/v3/klines?symbol=${encodeURIComponent(s)}USDT&interval=${iv}&limit=${n}`);
+  const COLS6 = ["#4aa3ff", "#f59a23", "#b36cff", "#14a76c", "#e5484d", "#00b8d9"];
+  const inpS = "background:var(--panel);border:1px solid var(--line);color:var(--txt);padding:6px 10px;font:inherit;border-radius:8px;outline:none";
+
+  // ---------- Orderflow: order book imbalance + CVD ----------
+  const FL = { sym: "BTC", book: null, k: null, at: 0 };
+  const getFlow = lg(async () => {
+    const s = FL.sym;
+    const [b, k] = await Promise.all([jget(`${BA}/api/v3/depth?symbol=${encodeURIComponent(s)}USDT&limit=500`), kl(s, "5m", 288)]);
+    if (s !== FL.sym) return;
+    FL.book = { bids: b.bids.map((x) => [+x[0], +x[1]]), asks: b.asks.map((x) => [+x[0], +x[1]]) };
+    FL.k = k.map((x) => ({ t: x[0], o: +x[1], c: +x[4], v: +x[5], tb: +x[9] })); FL.at = Date.now();
+  });
+  function lineSvg(vals, col, h = 120, zero = false) {
+    const W_ = 900, lo = Math.min(...vals), hi = Math.max(...vals), n = vals.length, Y = (v) => h - 8 - (v - lo) / (hi - lo || 1) * (h - 16), X = (i) => i / (n - 1) * W_;
+    const d = vals.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1)).join("");
+    return `<svg viewBox="0 0 ${W_} ${h}" style="width:100%;height:${h}px"><path d="${d}" fill="none" stroke="${col}" stroke-width="1.6"/>${zero && lo < 0 && hi > 0 ? `<line x1="0" x2="${W_}" y1="${Y(0)}" y2="${Y(0)}" stroke="#9aa3b5" stroke-dasharray="3 3" stroke-width="1"/>` : ""}</svg>`;
+  }
+  function rFlow() {
+    if (document.activeElement?.id === "flq") return;
+    const chips = topByVol(12).map((s) => `<span class="chip${FL.sym === s ? " on" : ""}" data-fl="${esc(s)}">${esc(s)}</span>`).join("");
+    const bar = `<div class="bar">${chips}<input id="flq" placeholder="any Binance coin + Enter" autocomplete="off" spellcheck="false" style="${inpS};width:190px"></div>`;
+    let body = '<div class="st" style="padding:14px">loading order book…</div>';
+    if (FL.book && FL.k) {
+      const { bids, asks } = FL.book, mid = (bids[0][0] + asks[0][0]) / 2;
+      const within = (arr, p) => arr.filter((x) => Math.abs(x[0] / mid - 1) <= p).reduce((a, x) => a + x[0] * x[1], 0);
+      const lv = [0.005, 0.01, 0.02].map((p) => { const b = within(bids, p), a = within(asks, p); return { p, b, a, i: b + a ? (b - a) / (b + a) * 100 : 0 }; });
+      const main = lv[1], cum = []; let c = 0; for (const x of FL.k) { c += (2 * x.tb - x.v) * x.c; cum.push(c); }
+      const last = FL.k.length - 1, n4 = Math.min(48, last), dP = (FL.k[last].c / FL.k[last - n4].c - 1) * 100, dC = cum[last] - cum[last - n4];
+      const sig = dP < -0.2 && dC > 0 ? ["Bullish divergence", "price down but buyers absorbing (CVD up)", "up"] : dP > 0.2 && dC < 0 ? ["Bearish divergence", "price up but sellers dominate (CVD down)", "dn"] : dC > 0 ? ["Buyers in control", "CVD rising with price", "up"] : ["Sellers in control", "CVD falling", "dn"];
+      const walls = (arr, col) => arr.slice().sort((a, b) => b[0] * b[1] - a[0] * a[1]).slice(0, 4).map((x) => `<div class="wr"><b style="color:${col}">${fnum(x[0])}</b><span class="st">${((x[0] / mid - 1) * 100).toFixed(2)}%</span><span class="sp">${big(x[0] * x[1])}</span></div>`).join("");
+      body = `<div class="mk7">${kc("Mid price", "$" + fnum(mid), "Binance spot")}${kc("Book imbalance ±1%", (main.i >= 0 ? "+" : "") + main.i.toFixed(1) + "%", main.i >= 0 ? "bid-heavy (buy pressure)" : "ask-heavy (sell pressure)", cls(main.i))}${kc("CVD 4h", (dC >= 0 ? "+" : "-") + big(Math.abs(dC)), "taker buy − sell volume", cls(dC))}${kc("Signal", sig[0], sig[1], sig[2])}</div>
+      <div class="tw" style="margin-top:8px"><table><thead><tr><th style="text-align:left">Depth</th><th>Bids</th><th>Asks</th><th>Imbalance</th></tr></thead><tbody>${lv.map((x) => `<tr><td style="text-align:left">±${x.p * 100}%</td><td class="up">${big(x.b)}</td><td class="dn">${big(x.a)}</td><td>${ps(x.i, 1)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="two" style="margin-top:10px"><div><div class="st">Largest bid walls</div>${walls(bids, "#14a76c")}</div><div><div class="st">Largest ask walls</div>${walls(asks, "#e5484d")}</div></div>
+      <div class="st" style="margin-top:12px">Price · last 24h (5m)</div>${lineSvg(FL.k.map((x) => x.c), "#4aa3ff")}<div class="st">Cumulative volume delta · last 24h</div>${lineSvg(cum, dC >= 0 ? "#14a76c" : "#e5484d", 120, true)}`;
+    }
+    $("s-flow").innerHTML = panel("Orderflow · " + esc(FL.sym), "order-book imbalance + CVD · Binance spot · refreshes every 5s", bar + body + '<div class="mlegend">Imbalance = (bid $ − ask $) / total within the band. CVD = cumulative (taker-buy − taker-sell) volume from 5m candles. A heuristic read, not advice.</div>');
+  }
+  const setFl = (s) => { FL.sym = s.toUpperCase().replace(/USDT$/, ""); FL.book = FL.k = null; rFlow(); getFlow(); setHash(); };
+  $("s-flow").onclick = (e) => { const t = e.target.closest("[data-fl]"); if (t) setFl(t.dataset.fl); };
+  $("s-flow").onkeydown = (e) => { if (e.target.id === "flq" && e.key === "Enter" && e.target.value.trim()) setFl(e.target.value.trim()); };
+
+  // ---------- Liquidation heatmap (live Binance futures liquidations) ----------
+  const LH = { win: 36e5 };
+  function rLmap() {
+    const now = Date.now(), L = LQ.filter((x) => now - x.ts < LH.win), N = 12, bw = LH.win / N;
+    const tot = {}; for (const x of L) tot[x.s] = (tot[x.s] || 0) + x.u;
+    const rows = Object.entries(tot).sort((a, b) => b[1] - a[1]).slice(0, 14).map((e) => e[0]);
+    const cell = {}; let mx = 1;
+    for (const x of L) { const i = Math.min(N - 1, Math.floor((now - x.ts) / bw)), k = x.s + "|" + i, c = cell[k] || (cell[k] = { l: 0, s: 0 }); x.long ? (c.l += x.u) : (c.s += x.u); mx = Math.max(mx, c.l + c.s); }
+    const lab = (i) => { const m = Math.round((i + 1) * bw / 6e4); return m >= 60 ? (m / 60).toFixed(m % 60 ? 1 : 0) + "h" : m + "m"; };
+    const head = `<tr><th style="text-align:left">Coin</th>${Array.from({ length: N }, (_, j) => `<th>${lab(N - 1 - j)}</th>`).join("")}<th>Total</th></tr>`;
+    const body = rows.map((s) => `<tr><td style="text-align:left"><b>${esc(s)}</b></td>${Array.from({ length: N }, (_, j) => { const c = cell[s + "|" + (N - 1 - j)]; if (!c) return '<td class="lmc"></td>'; const t = c.l + c.s, a = (0.15 + 0.8 * Math.sqrt(t / mx)).toFixed(2); return `<td class="lmc" title="${big(c.l)} long · ${big(c.s)} short liquidated" style="background:${c.l >= c.s ? `rgba(229,72,77,${a})` : `rgba(20,167,108,${a})`}"></td>`; }).join("")}<td>${big(tot[s])}</td></tr>`).join("");
+    const lg_ = L.filter((x) => x.long).reduce((a, x) => a + x.u, 0), sh = L.filter((x) => !x.long).reduce((a, x) => a + x.u, 0);
+    const wb = `<div class="bar">${[[9e5, "15m"], [36e5, "1h"], [144e5, "4h"]].map(([v, l]) => `<span class="chip${LH.win === v ? " on" : ""}" data-lw="${v}">${l}</span>`).join("")}</div>`;
+    $("s-lmap").innerHTML = panel("Liquidation heatmap", "live Binance futures liquidations · columns = minutes ago (right = now)", wb + `<div class="mk7">${kc("Long liquidations", big(lg_), "longs wiped (red)", "dn")}${kc("Short liquidations", big(sh), "shorts wiped (green)", "up")}${kc("Events", L.length, "in window")}</div>` + (rows.length ? `<div class="tw" style="margin-top:8px"><table class="lmt"><thead>${head}</thead><tbody>${body}</tbody></table></div>` : '<div class="st" style="padding:14px">waiting for liquidations…</div>') + '<div class="mlegend">Red cell = mostly longs liquidated, green = mostly shorts. Brighter = bigger. Data starts when you open the page (the exchange stream has no history), so the heatmap fills up over time.</div>');
+  }
+  $("s-lmap").onclick = (e) => { const t = e.target.closest("[data-lw]"); if (t) { LH.win = +t.dataset.lw; rLmap(); } };
+
+  // ---------- Compare coins + correlation ----------
+  const CP = { syms: LS.get("cmp", ["BTC", "ETH", "SOL"]), rng: 90, k: {}, corr: null };
+  const getCmp = lg(async () => {
+    for (const s of CP.syms) { const key = s + CP.rng; if (!CP.k[key]) { try { CP.k[key] = (await kl(s, "1d", CP.rng)).map((x) => +x[4]); } catch (e) { CP.k[key] = []; } } }
+  });
+  const getCorr = lg(async () => {
+    const syms = topByVol(16), ret = {};
+    if (syms.length < 8) { lazyAt.corr = 0; return; }
+    await Promise.all(syms.map(async (s) => { try { const c = (await kl(s, "1d", 91)).map((x) => +x[4]); ret[s] = c.slice(1).map((v, i) => Math.log(v / c[i])); } catch (e) { /* skip */ } }));
+    const ss = syms.filter((s) => ret[s]?.length > 30), m = {};
+    const cor = (a, b) => { const n = Math.min(a.length, b.length), x = a.slice(-n), y = b.slice(-n), mx = x.reduce((p, q) => p + q, 0) / n, my = y.reduce((p, q) => p + q, 0) / n; let sxy = 0, sxx = 0, syy = 0; for (let i = 0; i < n; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) ** 2; syy += (y[i] - my) ** 2; } return sxy / Math.sqrt(sxx * syy || 1); };
+    for (const a of ss) for (const b of ss) m[a + b] = cor(ret[a], ret[b]);
+    CP.corr = { ss, m };
+  });
+  function rCmp() {
+    if (document.activeElement?.id === "cmq") return;
+    const chips = CP.syms.map((s, i) => `<span class="chip on" data-cx="${esc(s)}" style="background:${COLS6[i % 6]};border-color:${COLS6[i % 6]}">${esc(s)} ✕</span>`).join("");
+    const bar = `<div class="bar">${chips}<input id="cmq" placeholder="add coin + Enter (max 6)" autocomplete="off" spellcheck="false" style="${inpS};width:190px">${[[30, "30d"], [90, "90d"], [180, "180d"], [365, "1y"]].map(([d, l]) => `<span class="chip${CP.rng === d ? " on" : ""}" data-cr="${d}">${l}</span>`).join("")}</div>`;
+    const ser = CP.syms.map((s, i) => ({ s, c: CP.k[s + CP.rng], col: COLS6[i % 6] })).filter((x) => x.c?.length > 1);
+    let chart = '<div class="st" style="padding:14px">loading…</div>';
+    if (ser.length) {
+      const W_ = 900, H_ = 300, pr = ser.map((x) => x.c.map((v) => (v / x.c[0] - 1) * 100)), lo = Math.min(0, ...pr.flat()), hi = Math.max(0, ...pr.flat()), Y = (v) => H_ - 18 - (v - lo) / (hi - lo || 1) * (H_ - 36) + 6;
+      chart = `<svg viewBox="0 0 ${W_} ${H_}" style="width:100%;height:auto;max-height:340px"><line x1="0" x2="${W_}" y1="${Y(0)}" y2="${Y(0)}" stroke="#9aa3b5" stroke-dasharray="3 3"/>${pr.map((p, k) => `<path d="${p.map((v, i) => (i ? "L" : "M") + (i / (p.length - 1) * W_).toFixed(1) + " " + Y(v).toFixed(1)).join("")}" fill="none" stroke="${ser[k].col}" stroke-width="1.8"/>`).join("")}<text x="4" y="12" fill="#7b8497" font-size="11">+${hi.toFixed(0)}%</text><text x="4" y="${H_ - 4}" fill="#7b8497" font-size="11">${lo.toFixed(0)}%</text></svg><div class="mk7">${ser.map((x, k) => kc(esc(x.s), ps(pr[k].at(-1)), "since " + CP.rng + "d start")).join("")}</div>`;
+    }
+    let hm = '<div class="st" style="padding:14px">loading correlations…</div>';
+    if (CP.corr) { const { ss, m } = CP.corr; hm = `<div class="tw"><table class="lmt"><thead><tr><th></th>${ss.map((s) => `<th>${esc(s)}</th>`).join("")}</tr></thead><tbody>${ss.map((a) => `<tr><td style="text-align:left"><b>${esc(a)}</b></td>${ss.map((b) => { const v = m[a + b]; return `<td class="lmc" style="text-align:center;font-size:10.5px;background:${v >= 0 ? `rgba(20,167,108,${(Math.abs(v) * 0.75).toFixed(2)})` : `rgba(229,72,77,${(Math.abs(v) * 0.75).toFixed(2)})`}">${v.toFixed(2)}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>`; }
+    $("s-cmp").innerHTML = panel("Compare coins", "% change from the start of the period · Binance daily closes", bar + chart) + panel("Correlation heatmap", "daily log-returns, last 90 days, top 16 coins by volume · 1 = move together, −1 = opposite", hm + '<div class="mlegend">Low correlation with BTC = a coin trading on its own story; near 1 = just follows the market.</div>', "margin-top:12px");
+  }
+  $("s-cmp").onclick = (e) => {
+    const t = e.target.closest("[data-cx],[data-cr]"); if (!t) return;
+    if (t.dataset.cx) { CP.syms = CP.syms.filter((s) => s !== t.dataset.cx); LS.set("cmp", CP.syms); } else CP.rng = +t.dataset.cr;
+    rCmp(); getCmp();
+  };
+  $("s-cmp").onkeydown = (e) => { if (e.target.id !== "cmq" || e.key !== "Enter") return; const s = e.target.value.trim().toUpperCase().replace(/USDT$/, ""); if (s && !CP.syms.includes(s) && CP.syms.length < 6) { CP.syms.push(s); LS.set("cmp", CP.syms); e.target.value = ""; rCmp(); getCmp(); } };
+
+  // ---------- Network: gas + fees ----------
+  const GS = { eth: null, hist: [], btc: null, mp: null, sol: null, h: null, at: 0 };
+  const getGas = lg(async () => {
+    const [e, b, m, s] = await Promise.allSettled([rpc(ETH_RPC, "eth_gasPrice"), jget("https://mempool.space/api/v1/fees/recommended"), jget("https://mempool.space/api/mempool"), rpc(SOL_RPC, "getRecentPrioritizationFees")]);
+    if (e.status === "fulfilled") { GS.eth = parseInt(e.value, 16) / 1e9; GS.hist.push(GS.eth); if (GS.hist.length > 120) GS.hist.shift(); }
+    if (b.status === "fulfilled") GS.btc = b.value;
+    if (m.status === "fulfilled") GS.mp = m.value;
+    if (s.status === "fulfilled") { const f = s.value.map((x) => x.prioritizationFee).sort((a, c) => a - c); GS.sol = { med: f[Math.floor(f.length / 2)] || 0, max: f.at(-1) || 0 }; }
+    GS.at = Date.now();
+  });
+  function rGas() {
+    const ep = pxOf("ETH") || 0, sp = pxOf("SOL") || 0, g = GS.eth;
+    const eth = g == null ? '<div class="st" style="padding:10px">loading…</div>' : `<div class="mk7">${kc("ETH gas", (g < 1 ? g.toFixed(3) : g.toFixed(2)) + " gwei", g < 5 ? "very cheap" : g < 20 ? "normal" : "busy")}${ep ? kc("ETH transfer", "$" + (21000 * g * 1e-9 * ep).toFixed(3), "21k gas") : ""}${ep ? kc("Uniswap swap", "$" + (150000 * g * 1e-9 * ep).toFixed(2), "~150k gas") : ""}${kc("ETH price", "$" + fnum(ep), "")}</div>${GS.hist.length > 2 ? `<div class="st" style="margin-top:8px">gas this session</div>${lineSvg(GS.hist, "#4aa3ff", 70)}` : ""}`;
+    const bt = GS.btc ? `<div class="mk7">${kc("Fastest", GS.btc.fastestFee + " sat/vB", "next block")}${kc("30 min", GS.btc.halfHourFee + " sat/vB", "")}${kc("1 hour", GS.btc.hourFee + " sat/vB", "")}${kc("Economy", GS.btc.economyFee + " sat/vB", "")}${GS.mp ? kc("Mempool", GS.mp.count.toLocaleString() + " tx", (GS.mp.vsize / 1e6).toFixed(1) + " MvB waiting") : ""}</div>` : '<div class="st" style="padding:10px">loading…</div>';
+    const so = GS.sol ? `<div class="mk7">${kc("Priority fee (median)", GS.sol.med + " µlamports/CU", "recent slots")}${kc("Priority fee (max)", GS.sol.max.toLocaleString() + " µlamports/CU", "")}${sp ? kc("SOL price", "$" + fnum(sp), "") : ""}</div>` : '<div class="st" style="padding:10px">loading…</div>';
+    $("s-gas").innerHTML = panel("Ethereum gas", "public RPC · refreshes every 15s", eth) + panel("Bitcoin fees", "mempool.space", bt, "margin-top:12px") + panel("Solana fees", "public RPC · priority fee over the last slots", so, "margin-top:12px");
+  }
+
+  // ---------- Portfolio tracker ----------
+  const PF = { h: LS.get("pf", []), w: null, err: "" };
+  const pfSave = () => LS.set("pf", PF.h);
+  async function pfWallet(a) {
+    PF.w = null; PF.err = "";
+    try {
+      if (/^0x[0-9a-fA-F]{40}$/.test(a)) {
+        const [eb, cs, sp] = await Promise.all([rpc(ETH_RPC, "eth_getBalance", [a, "latest"]), hlPost({ type: "clearinghouseState", user: a }).catch(() => null), hlPost({ type: "spotClearinghouseState", user: a }).catch(() => null)]);
+        PF.w = { a, kind: "EVM", bal: [{ s: "ETH", n: parseInt(eb, 16) / 1e18 }, ...((sp?.balances || []).map((b) => ({ s: b.coin, n: +b.total })).filter((b) => b.n > 0))], hl: cs ? { av: +cs.marginSummary.accountValue, pos: parsePos(cs).list } : null };
+      } else if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a)) {
+        const r = await rpc(SOL_RPC, "getBalance", [a]); PF.w = { a, kind: "Solana", bal: [{ s: "SOL", n: r.value / 1e9 }] };
+      } else PF.err = "paste an EVM (0x…) or Solana address";
+    } catch (e) { PF.err = "lookup failed: " + e.message; }
+    rPf();
+  }
+  function rPf() {
+    if (["pfa", "pfn", "pfc", "pfs", "pfw"].includes(document.activeElement?.id)) return;
+    const rows = PF.h.map((h, i) => { const p = pxOf(h.s), v = p != null ? p * h.n : null, pnl = v != null && h.cost > 0 ? v - h.cost * h.n : null; return { ...h, i, p, v, pnl }; });
+    const tot = rows.reduce((a, r) => a + (r.v || 0), 0), cost = rows.reduce((a, r) => a + (r.cost > 0 && r.v != null ? r.cost * r.n : 0), 0), pnl = rows.reduce((a, r) => a + (r.pnl || 0), 0);
+    const form = `<div class="bar"><input id="pfs" placeholder="coin (BTC)" style="${inpS};width:110px"><input id="pfn" placeholder="amount" style="${inpS};width:110px"><input id="pfc" placeholder="avg buy price (optional)" style="${inpS};width:180px"><span class="chip on" data-pf="add">Add holding</span></div>`;
+    const tbl = rows.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Coin</th><th>Amount</th><th>Price</th><th>Value</th><th>Alloc</th><th>PnL</th><th></th></tr></thead><tbody>${rows.sort((a, b) => (b.v || 0) - (a.v || 0)).map((r) => `<tr><td style="text-align:left"><b>${esc(r.s)}</b></td><td>${fnum(r.n, 4)}</td><td>${r.p != null ? "$" + fnum(r.p) : '<span class="st">n/a</span>'}</td><td>${r.v != null ? big(r.v) : "-"}</td><td><div style="display:inline-block;width:60px;height:6px;background:#e8ecf1;border-radius:3px;vertical-align:middle;margin-right:6px"><i style="display:block;height:100%;width:${tot ? (r.v || 0) / tot * 100 : 0}%;background:var(--acc);border-radius:3px"></i></div>${tot ? ((r.v || 0) / tot * 100).toFixed(1) : 0}%</td><td>${r.pnl != null ? `<span class="${cls(r.pnl)}">${r.pnl >= 0 ? "+" : "-"}${big(Math.abs(r.pnl))} (${(r.pnl / (r.cost * r.n) * 100).toFixed(1)}%)</span>` : '<span class="st">-</span>'}</td><td><span class="st" data-pf="del" data-i="${r.i}" style="cursor:pointer">✕</span></td></tr>`).join("")}</tbody></table></div>` : '<div class="st" style="padding:12px">No holdings yet: add one above or import from a wallet below.</div>';
+    const kp = `<div class="mk7">${kc("Portfolio value", big(tot), rows.length + " holdings")}${kc("Unrealised PnL", cost ? (pnl >= 0 ? "+" : "-") + big(Math.abs(pnl)) : "-", cost ? "on holdings with a buy price" : "add buy prices", cost ? cls(pnl) : "")}${kc("Biggest holding", rows.length ? esc(rows.slice().sort((a, b) => (b.v || 0) - (a.v || 0))[0].s) : "-", "")}</div>`;
+    let w = "";
+    if (PF.w) { const x = PF.w; w = `<div class="st" style="margin:8px 0">${x.kind} wallet ${esc(x.a.slice(0, 6))}…${esc(x.a.slice(-4))}</div><div class="tw"><table><thead><tr><th style="text-align:left">Token</th><th>Balance</th><th>Value</th></tr></thead><tbody>${x.bal.map((b) => `<tr><td style="text-align:left"><b>${esc(b.s)}</b></td><td>${fnum(b.n, 4)}</td><td>${pxOf(b.s) != null ? big(pxOf(b.s) * b.n) : "-"}</td></tr>`).join("")}</tbody></table></div>${x.hl ? `<div class="mlegend">Hyperliquid perp account: ${big(x.hl.av)} · ${x.hl.pos.length} open positions</div>` : ""}<div class="bar"><span class="chip on" data-pf="imp">Import balances to portfolio</span></div>`; }
+    $("s-pf").innerHTML = panel("Portfolio", "saved only in this browser · live prices from Binance", kp + form + tbl) + panel("Wallet lookup", "read-only: paste a public address (EVM incl. Hyperliquid, or Solana). Never enter a seed phrase.", `<div class="bar"><input id="pfw" placeholder="0x… or Solana address" autocomplete="off" spellcheck="false" style="${inpS};width:min(460px,100%)"><span class="chip on" data-pf="look">Look up</span></div>${PF.err ? `<div class="dn">${esc(PF.err)}</div>` : ""}${w}`, "margin-top:12px");
+  }
+  $("s-pf").onclick = (e) => {
+    const t = e.target.closest("[data-pf]"); if (!t) return; const a = t.dataset.pf;
+    if (a === "add") { const s = $("pfs").value.trim().toUpperCase(), n = parseFloat($("pfn").value), c = parseFloat($("pfc").value) || 0; if (s && n > 0) { PF.h.push({ s, n, cost: c }); pfSave(); rPf(); } }
+    else if (a === "del") { PF.h.splice(+t.dataset.i, 1); pfSave(); rPf(); }
+    else if (a === "look") { const v = $("pfw").value.trim(); if (v) pfWallet(v); }
+    else if (a === "imp" && PF.w) { for (const b of PF.w.bal) { if (STB.test(b.s) || !(b.n > 0)) continue; const h = PF.h.find((x) => x.s === b.s); h ? (h.n = b.n) : PF.h.push({ s: b.s, n: b.n, cost: 0 }); } pfSave(); rPf(); }
+  };
+
+  // ---------- theme, shareable links, notifications ----------
+  const setTheme = (t) => { document.documentElement.dataset.theme = t; LS.set("theme", t); const b = $("thm"); if (b) b.textContent = t === "dark" ? "☀ Light" : "☾ Dark"; };
+  setTheme(LS.get("theme", "light"));
+  $("thm").onclick = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+  function setHash() { const x = sub === "map" ? TM.sym : sub === "flow" ? FL.sym : ""; try { history.replaceState(null, "", "#" + sub + (x ? "/" + x : "")); } catch (e) { /* file:// etc */ } }
+  function fromHash() {
+    const [u, s] = decodeURIComponent(location.hash.slice(1)).split("/");
+    if (!u || !$("s-" + u) || !document.querySelector(`#subtabs [data-u="${u}"]`)) return;
+    if (s) { const S_ = s.toUpperCase(); if (u === "map") { TM.sym = S_; TM.kSym = null; } if (u === "flow") { FL.sym = S_; FL.book = FL.k = null; } }
+    document.body.dataset.v = "mkt"; document.querySelectorAll(".nv").forEach((n) => n.classList.toggle("on", n.dataset.v === "mkt"));
+    show(u);
+  }
+  window.addEventListener("hashchange", fromHash);
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("/sw.js").catch(() => { /* optional */ });
+  setInterval(() => {
+    if (document.body.dataset.v !== "mkt" || document.hidden) return;
+    if (sub === "flow") { lazy("flow", getFlow, 5e3); }
+    else if (sub === "lmap") rLmap();
+    else if (sub === "gas") lazy("gas", getGas, 15e3);
+    else if (sub === "cmp" && !CP.corr) lazy("corr", getCorr, 3e3);
+    else if (sub === "pf") rPf();
+  }, 2000);
+
   // ---------- lazy loaders for the extra tabs ----------
   const LAZY = {
+    flow: () => getFlow(),
+    cmp: () => { getCmp(); lazy("corr", getCorr, 6e5); },
+    gas: () => lazy("gas", getGas, 15e3),
     map: () => { if (TM.kSym !== TM.sym + TM.rng) getTmK(); },
     soc: () => lazy("soc", getSoc, 3e5),
     hlw: () => { lazy("snap", () => getSnap().then(getWhalePos), 6e5); lazy("wpos", getWhalePos, 6e4); },
@@ -673,4 +851,5 @@
   getChains(); setInterval(getChains, 900000); getEtf(); setInterval(getEtf, 900000); getSol(); setInterval(getSol, 10000);
   setInterval(() => { checkAlerts(); if (document.body.dataset.v === "mkt" && (sub === "deriv" || sub === "watch")) renderSub(); }, 1000);
   setInterval(checkSectors, 30000);
+  fromHash();
 })();
