@@ -91,7 +91,7 @@ footer{color:var(--mut);font-size:10px;padding:10px 16px 30px;max-width:1000px;l
     <div class="mlegend">Flow = change in sector market cap over 24h (price-driven money moving in / out). Sectors overlap (e.g. Memecoins can sit inside Layer 1 ecosystems). Stablecoin supply rising = fresh cash entering crypto.</div></section>
   <div class="cols" style="margin-top:12px">
     <section class="panel"><h2><span id="mfttl">Token money flow</span><em>biggest market-cap gain / loss in $, 24h</em></h2><div class="two" style="margin-top:8px"><div id="mfin"></div><div id="mfout"></div></div></section>
-    <section class="panel"><h2>Whale radar <em>who is buying / selling</em></h2><div class="mlegend" id="mwsum" style="margin:6px 0"></div><div class="tw" id="mwhale" style="max-height:420px"></div></section>
+    <section class="panel"><h2>Whale radar <em>who is buying / selling</em></h2><div class="bar" id="mwf" style="padding:6px 0 0"></div><div class="mlegend" id="mwsum" style="margin:4px 0 6px"></div><div class="tw" id="mwhale" style="max-height:420px"></div></section>
   </div>
   <section class="panel" style="margin-top:12px">
     <h2><span id="mctitle">Top 100 coins</span><em id="mlive">loading…</em></h2>
@@ -302,7 +302,7 @@ load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
   const SEC = [["layer-1", "Layer 1"], ["layer-2", "Layer 2"], ["decentralized-finance-defi", "DeFi"], ["artificial-intelligence", "AI"], ["meme-token", "Memecoins"], ["non-fungible-tokens-nft", "NFT"], ["gaming", "Gaming"], ["real-world-assets-rwa", "RWA"], ["depin", "DePIN"], ["privacy-coins", "Privacy"], ["stablecoins", "Stablecoins"], ["solana-ecosystem", "Solana eco"], ["base-ecosystem", "Base eco"], ["bnb-chain-ecosystem", "BNB eco"], ["exchange-based-tokens", "Exchange tokens"], ["metaverse", "Metaverse"], ["oracle", "Oracle"], ["zero-knowledge-zk", "ZK"], ["liquid-staking-tokens", "Liquid staking"], ["decentralized-exchange", "DEX"], ["lending-borrowing", "Lending"]];
   const CG = "https://api.coingecko.com/api/v3";
   const M = { g: null, fng: null, cats: [], coins: [], stable: null, sel: null, sk: "mc", sd: -1, at: {}, ws: 0, px: {} };
-  const F = {}, W = [], WL = ["btc", "eth", "bnb", "sol", "xrp", "doge", "ada", "trx", "avax", "link", "sui", "shib", "ltc", "dot", "pepe", "near"], TH = { BTC: 5e5, ETH: 3e5 };
+  const F = {}, W = [];
   const big = (x) => { const a = Math.abs(x); return (x < 0 ? "-" : "") + "$" + (a >= 1e12 ? (a / 1e12).toFixed(2) + "T" : a >= 1e9 ? (a / 1e9).toFixed(2) + "B" : a >= 1e6 ? (a / 1e6).toFixed(1) + "M" : Math.round(a).toLocaleString()); };
   const sgb = (x) => (x >= 0 ? "+" : "") + big(x);
   const pc = (x) => x == null ? '<span class="st">-</span>' : `<span class="${x >= 0 ? "up" : "dn"}">${x >= 0 ? "+" : ""}${x.toFixed(2)}%</span>`;
@@ -372,21 +372,35 @@ load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
   function live() {
     for (const c of M.coins) { const t = M.px[c.sym]; if (!t) continue; const e = document.querySelector(`[data-px="${c.sym}"]`); if (!e) continue; if (c.p !== t.p) { e.className = t.p > c.p ? "fu" : "fd"; setTimeout(() => (e.className = ""), 700); } c.p = t.p; e.textContent = px(t.p); const d = document.querySelector(`[data-c24="${c.sym}"]`); if (d) d.innerHTML = pc(t.ch); c.c24 = t.ch; }
   }
-  // Binance aggTrade stream: every trade of the top coins; trades above the threshold are "whale" prints, taker side shows who is aggressive.
+  // Universe = top-100 coins + top-100 memecoins that have a Binance USDT pair. Whale threshold scales with the coin's volume.
+  const U = new Map(), GR = [["all", "All"], ["Major", "Majors"], ["Alt", "Altcoins"], ["Meme", "Memes"]];
+  let grp = "all", subN = 0;
+  const grpOf = (s) => { const u = U.get(s); return u?.meme ? "Meme" : s === "BTC" || s === "ETH" || (u && u.rank <= 10) ? "Major" : "Alt"; };
+  const thOf = (s) => { const v = U.get(s)?.vol || 0; return s === "BTC" || s === "ETH" ? 5e5 : v > 1e9 ? 2e5 : v > 1e8 ? 1e5 : 5e4; };
+  const getU = () => ld("u", async () => {
+    const q = "/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1", [a, m] = await Promise.all([jget(CG + q), jget(CG + q + "&category=meme-token")]);
+    for (const c of a) U.set(String(c.symbol).toUpperCase(), { rank: c.market_cap_rank, vol: nn(c.total_volume), meme: false });
+    for (const c of m) U.set(String(c.symbol).toUpperCase(), { rank: c.market_cap_rank ?? 999, vol: nn(c.total_volume), meme: true });
+  });
   function connectW() {
-    let ws; try { ws = new WebSocket("wss://stream.binance.com:9443/stream?streams=" + WL.map((s) => s + "usdt@aggTrade").join("/")); } catch (e) { return; }
-    ws.onmessage = (m) => { try { const d = JSON.parse(m.data).data, s = d.s.slice(0, -4), u = +d.p * +d.q, f = F[s] || (F[s] = { b: 0, s: 0 }); if (d.m) f.s += u; else f.b += u; if (u >= (TH[s] || 1e5)) { W.unshift({ s, u, buy: !d.m, ts: d.T, p: +d.p }); if (W.length > 400) W.length = 400; } } catch (e) { /* ignore bad frame */ } };
+    const syms = [...U.keys()].filter((s) => M.px[s] && !STB.test(s));
+    if (!syms.length) { setTimeout(connectW, 1500); return; }
+    let ws; try { ws = new WebSocket("wss://stream.binance.com:9443/stream"); } catch (e) { return; }
+    subN = syms.length;
+    ws.onopen = () => { for (let i = 0; i < syms.length; i += 100) ws.send(JSON.stringify({ method: "SUBSCRIBE", params: syms.slice(i, i + 100).map((s) => s.toLowerCase() + "usdt@aggTrade"), id: i + 1 })); };
+    ws.onmessage = (m) => { try { const d = JSON.parse(m.data).data; if (!d) return; const s = d.s.slice(0, -4), u = +d.p * +d.q, f = F[s] || (F[s] = { b: 0, s: 0 }); if (d.m) f.s += u; else f.b += u; if (u >= thOf(s)) { W.unshift({ s, u, buy: !d.m, ts: d.T, p: +d.p, g: grpOf(s) }); if (W.length > 800) W.length = 800; } } catch (e) { /* ignore bad frame */ } };
     ws.onclose = () => setTimeout(connectW, 4000); ws.onerror = () => ws.close();
   }
   function whales() {
-    const now = Date.now(), net = {};
-    for (const w of W) if (now - w.ts < 18e5) net[w.s] = (net[w.s] || 0) + (w.buy ? w.u : -w.u);
+    const now = Date.now(), net = {}, WF = W.filter((w) => grp === "all" || w.g === grp);
+    for (const w of WF) if (now - w.ts < 18e5) net[w.s] = (net[w.s] || 0) + (w.buy ? w.u : -w.u);
     const ent = Object.entries(net).sort((a, b) => b[1] - a[1]), l = (a) => a.length ? a.map(([s, v]) => `<b>${s}</b> <span class="${v >= 0 ? "up" : "dn"}">${sgb(v)}</span>`).join(" · ") : "-";
-    $("mwsum").innerHTML = `Big trades on Binance (BTC/ETH $${TH.BTC / 1e3}k+, others $100k+), last 30 min:<br>Whales <span class="up">BUYING</span>: ${l(ent.filter((e) => e[1] > 0).slice(0, 5))}<br>Whales <span class="dn">SELLING</span>: ${l(ent.filter((e) => e[1] < 0).reverse().slice(0, 5))}`;
-    const cex = W.slice(0, 15).map((w) => `<div class="wr"><span class="bd ${w.buy ? "up" : "dn"}">${w.buy ? "BUY" : "SELL"}</span><b>${w.s}</b><span class="${w.buy ? "up" : "dn"}">${big(w.u)}</span><span class="st">@ ${px(w.p)}</span><span class="st sp">${ago(w.ts)} ago</span></div>`).join("");
-    const on = typeof D !== "undefined" && D ? D.feed.filter((f) => f.usd >= 5000 && now - f.ts < 864e5 && D.tokens[f.token]).sort((a, b) => b.usd - a.usd).slice(0, 12) : [];
+    $("mwf").innerHTML = GR.map(([k, n]) => `<span class="chip${grp === k ? " on" : ""}" data-g="${k}">${n}</span>`).join("");
+    $("mwsum").innerHTML = `Watching <b>${subN}</b> coins on Binance (BTC/ETH $500k+, others $50k-$200k+ by liquidity) · last 30 min:<br>Whales <span class="up">BUYING</span>: ${l(ent.filter((e) => e[1] > 0).slice(0, 6))}<br>Whales <span class="dn">SELLING</span>: ${l(ent.filter((e) => e[1] < 0).reverse().slice(0, 6))}`;
+    const cex = WF.slice(0, 20).map((w) => `<div class="wr"><span class="bd ${w.buy ? "up" : "dn"}">${w.buy ? "BUY" : "SELL"}</span><b>${w.s}</b><span class="st">${w.g}</span><span class="${w.buy ? "up" : "dn"}">${big(w.u)}</span><span class="st">@ ${px(w.p)}</span><span class="st sp">${ago(w.ts)} ago</span></div>`).join("");
+    const on = grp !== "all" && grp !== "Meme" ? [] : typeof D !== "undefined" && D ? D.feed.filter((f) => f.usd >= 5000 && now - f.ts < 864e5 && D.tokens[f.token] && !STB.test(String(D.tokens[f.token].sym).toUpperCase())).sort((a, b) => b.usd - a.usd).slice(0, 12) : [];
     const chn = on.map((f) => { const t = D.tokens[f.token]; return `<div class="wr"><span class="bd up">BUY</span><b>$${esc(t.sym)}</b><span class="up">${usd(f.usd)}</span><span class="st">${esc(CH[t.net] || t.net)} · ${esc(f.name || short(f.w))}</span><span class="st sp">${ago(f.ts)} ago</span></div>`; }).join("");
-    $("mwhale").innerHTML = '<div class="wh2" style="margin-top:0">Exchange whale trades (live)</div>' + (cex || '<div class="st">waiting for big trades…</div>') + '<div class="wh2">On-chain whale buys · memecoins (24h, more in MEME TRENCH)</div>' + (chn || '<div class="st">loading wallet data…</div>');
+    $("mwhale").innerHTML = '<div class="wh2" style="margin-top:0">Exchange whale trades (live)</div>' + (cex || '<div class="st">waiting for big trades…</div>') + (grp === "all" || grp === "Meme" ? '<div class="wh2">On-chain whale buys · DEX memecoins, 17 chains (24h, wallets shown)</div>' + (chn || '<div class="st">loading wallet data…</div>') : "");
     document.querySelectorAll("[data-tf]").forEach((e) => { e.innerHTML = tfh(e.dataset.tf); });
   }
   function connect() {
@@ -398,7 +412,8 @@ load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
   $("mtiles").onclick = (e) => { const t = e.target.closest(".stile"); if (!t) return; M.sel = M.sel === t.dataset.id ? null : t.dataset.id; M.coins = []; coins(); getK(); };
   $("mbar").onclick = (e) => { const p = e.target.dataset?.p; if (!p) return; if (p === "x") { M.sel = null; M.coins = []; coins(); getK(); return; } const [, , sk, sd] = PRE.find((x) => x[0] === p); M.sk = sk; M.sd = sd; coins(); };
   $("mcoins").onclick = (e) => { const k = e.target.dataset?.s; if (!k) return; if (M.sk === k) M.sd = -M.sd; else { M.sk = k; M.sd = k === "rank" || k === "sym" ? 1 : -1; } coins(); };
-  getG(); getF(); getC(); getK(); getS(); connect(); connectW();
+  getG(); getF(); getC(); getK(); getS(); getU(); connect(); connectW(); setInterval(getU, 600000);
+  $("mwf").onclick = (e) => { const g = e.target.dataset?.g; if (g) { grp = g; whales(); } };
   setInterval(() => { if (document.body.dataset.v === "mkt") whales(); }, 1000);
   setInterval(getG, 60000); setInterval(getC, 90000); setInterval(getK, 45000); setInterval(getF, 600000); setInterval(getS, 600000); setInterval(status, 1000);
 })();
