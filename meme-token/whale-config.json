@@ -1,0 +1,9 @@
+{
+  "minBuyUsd": 500,
+  "networks": ["solana", "base", "eth", "bsc", "robinhood"],
+  "minPoolLiquidityUsd": 10000,
+  "poolsPerNetwork": { "solana": 7, "default": 3 },
+  "maxTop10HolderPct": 60,
+  "maxSellTaxPct": 10,
+  "maxBuyTaxPct": 10
+}

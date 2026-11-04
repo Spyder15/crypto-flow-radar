@@ -1,0 +1,1 @@
+{ "name": "meme-token-scanner", "version": "1.0.0", "type": "module", "private": true, "scripts": { "start": "node scan.js", "dry": "node scan.js --dry" } }

@@ -1,0 +1,13 @@
+{
+  "minLiquidityUsd": 15000,
+  "minVolume1hUsd": 10000,
+  "minAgeMinutes": 20,
+  "maxAgeHours": 72,
+  "minBuySellRatio5m": 0.9,
+  "maxLiqToFdvMin": 0.02,
+  "maxAlertsPerRun": 5,
+  "alertCooldownHours": 24,
+  "maxSellTaxPct": 10,
+  "maxBuyTaxPct": 10,
+  "maxTop10HolderPct": 60
+}

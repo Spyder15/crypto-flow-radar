@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPYDER TRENCH · live memecoin buys</title>
+<style>
+:root{--bg:#070b14;--card:#0e1524;--line:#1b2640;--txt:#e2e8f0;--mut:#8493ad;--grn:#22c55e;--red:#ef4444;--amb:#f59e0b;--acc:#7c5cff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.4 -apple-system,Segoe UI,Roboto,sans-serif}
+a{color:inherit;text-decoration:none}
+header{display:flex;align-items:center;gap:18px;padding:12px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(7,11,20,.92);backdrop-filter:blur(8px);z-index:5;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:8px;font-weight:800;letter-spacing:.08em}
+.logo svg{width:26px;height:26px}
+.live{margin-left:auto;color:var(--grn);font-size:12px;font-weight:700}.live:before{content:"● ";animation:b 1.4s infinite}@keyframes b{50%{opacity:.3}}
+.bar{display:flex;gap:8px;padding:14px 20px;flex-wrap:wrap;align-items:center}
+.chip{padding:6px 14px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--mut);cursor:pointer;font-weight:600;font-size:13px}
+.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+select{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+main{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;padding:0 20px 30px}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+h2{margin:6px 0 2px;font-size:16px}.sub{color:var(--mut);font-size:12px;margin-bottom:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.sp{margin-left:auto}
+.sym{font-weight:800;font-size:15px}
+.tag{font-size:11px;padding:2px 7px;border-radius:6px;background:#17213a;color:#a9b8d6;font-weight:700}
+.tag.c{background:#2a1f55;color:#c7b9ff}
+.st{color:var(--mut);font-size:12px}.st b{color:var(--txt);font-weight:600}
+.up{color:var(--grn)}.dn{color:var(--red)}
+.who{font-weight:700}.buy{color:var(--grn);font-weight:800}
+.badge{font-size:11px;font-weight:800;padding:2px 7px;border-radius:6px}
+.good{background:#0f2e1c;color:var(--grn)}.warn{background:#33260a;color:var(--amb)}.risk{background:#33100f;color:var(--red)}.unknown{background:#1b2236;color:var(--mut)}
+.btn{font-size:12px;font-weight:700;padding:5px 10px;border-radius:8px;border:1px solid var(--line);color:var(--txt);background:#131c31}.btn.p{background:var(--acc);border-color:var(--acc);color:#fff}
+.empty{color:var(--mut);padding:30px;text-align:center}
+footer{color:var(--mut);font-size:11px;padding:10px 20px 30px;max-width:900px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="#7c5cff"/><path d="M8 20l4-8 4 5 4-9 4 12" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>SPYDER&nbsp;TRENCH</div>
+  <div class="live" id="live">LIVE</div>
+</header>
+<div class="bar" id="chains"></div>
+<div class="bar" style="padding-top:0">
+  <span class="st">Min buy</span>
+  <select id="min"><option value="0">All</option><option value="500">$500+</option><option value="1000">$1k+</option><option value="2500">$2.5k+</option><option value="5000">$5k+</option><option value="15000">$15k+</option></select>
+  <span class="st" style="margin-left:10px">Safety</span>
+  <select id="safe"><option value="all">All</option><option value="hide">Hide risky</option></select>
+</div>
+<main>
+  <section><h2>Just bought</h2><div class="sub">latest big buys on top · wallets without a published name show as short addresses</div><div id="feed"></div></section>
+  <section><h2>Heating up</h2><div class="sub">most buyers per token</div>
+    <div class="bar" style="padding:0 0 10px" id="wins"></div><div id="heat"></div></section>
+</main>
+<footer>Data is public on-chain / market data from GeckoTerminal and GoPlus, refreshed every few minutes, and can be delayed, incomplete or wrong. SAFE badges are automatic checks, not guarantees. Nothing here is financial advice. Memecoins carry a very high risk of total loss. Always check a token yourself.</footer>
+<script>
+const CH = { all: "All", solana: "SOL", robinhood: "RH", base: "Base", bsc: "BSC", eth: "ETH" };
+let D = null, chain = "all", win = 1;
+const $ = (id) => document.getElementById(id);
+const usd = (x) => x >= 1e6 ? "$" + (x / 1e6).toFixed(2) + "M" : x >= 1e3 ? "$" + (x >= 1e4 ? Math.round(x / 1e3) : (x / 1e3).toFixed(1)) + "k" : "$" + Math.round(x);
+const ago = (ts) => { const s = Math.max(1, (Date.now() - ts) / 1000 | 0); return s < 60 ? s + "s" : s < 3600 ? (s / 60 | 0) + "m" : s < 86400 ? (s / 3600 | 0) + "h" : (s / 86400 | 0) + "d"; };
+const age = (ts) => ts ? ago(ts) : "";
+const short = (a) => a.slice(0, 4) + ".." + a.slice(-4);
+const esc = (s) => String(s ?? "").replace(/[<>&"]/g, "");
+function links(t) {
+  const dx = `https://dexscreener.com/${t.net === "eth" ? "ethereum" : t.net}/${t.pool}`;
+  const swap = t.net === "solana" ? `https://jup.ag/swap/SOL-${t.addr}` : dx;
+  return `<a class="btn" target="_blank" rel="noopener" href="${dx}">Chart</a><a class="btn p" target="_blank" rel="noopener" href="${swap}">Swap</a>`;
+}
+function info(t) {
+  const s = t.sec || {}, lv = s.level || "unknown", txt = { good: "✓ good", warn: "⚠ warn", risk: "✕ risk", unknown: "? n/a" }[lv];
+  return `<div class="row st" style="margin-top:6px"><span>MC <b>${t.mc ? usd(t.mc) : "-"}</b></span><span>V <b>${usd(t.vol24 || 0)}</b></span><span>L <b>${usd(t.liq || 0)}</b></span><span class="${t.chg24 >= 0 ? "up" : "dn"}"><b>${t.chg24 >= 0 ? "+" : ""}${(t.chg24 || 0).toFixed(1)}%</b> 24h</span>${s.top10 ? `<span>TOP10 <b>${s.top10.toFixed(0)}%</b></span>` : ""}${s.holders ? `<span>HOLDERS <b>${s.holders.toLocaleString()}</b></span>` : ""}<span class="badge ${lv}" title="${esc((s.flags || []).join(", "))}">SAFE ${txt}</span></div>`;
+}
+function head(t) { return `<div class="row"><span class="sym">$${esc(t.sym)}</span><span class="tag c">${CH[t.net] || t.net}</span>${t.dex ? `<span class="tag">${esc(t.dex)}</span>` : ""}<span class="st">${age(t.created)}</span><span class="sp row">${links(t)}</span></div>`; }
+function pass(tk, usdv) {
+  const t = D.tokens[tk]; if (!t) return false;
+  if (chain !== "all" && t.net !== chain) return false;
+  if (usdv < +$("min").value) return false;
+  if ($("safe").value === "hide" && t.sec?.level === "risk") return false;
+  return true;
+}
+function render() {
+  if (!D) return;
+  const feed = D.feed.filter((f) => pass(f.token, f.usd)).slice(0, 60);
+  $("feed").innerHTML = feed.length ? feed.map((f) => { const t = D.tokens[f.token]; return `<div class="card">${head(t)}<div class="row" style="margin-top:6px"><span class="who">${esc(f.name || short(f.w))}</span><span class="st">bought</span><span class="buy">${usd(f.usd)}</span><span class="st sp">${ago(f.ts)} ago</span></div>${info(t)}</div>`; }).join("") : '<div class="empty">No buys match this filter yet.</div>';
+  const cut = Date.now() - win * 36e5;
+  const heat = D.heating.map((h) => { const b = h.buys.filter((x) => x.ts >= cut && x.usd >= +$("min").value); return { token: h.token, b, buyers: new Set(b.map((x) => x.w)).size }; }).filter((h) => h.buyers && pass(h.token, 0)).sort((a, b) => b.buyers - a.buyers || b.b.reduce((s, x) => s + x.usd, 0) - a.b.reduce((s, x) => s + x.usd, 0)).slice(0, 25);
+  $("heat").innerHTML = heat.length ? heat.map((h) => { const t = D.tokens[h.token]; return `<div class="card">${head(t)}<div class="row" style="margin-top:6px"><span><b>${h.buyers}</b> <span class="st">buyer${h.buyers > 1 ? "s" : ""}</span></span><span class="buy">${usd(h.b.reduce((s, x) => s + x.usd, 0))}</span><span class="st">total bought</span></div>${info(t)}</div>`; }).join("") : '<div class="empty">Nothing heating up in this window.</div>';
+  $("live").textContent = "LIVE · updated " + ago(D.updated) + " ago";
+}
+$("chains").innerHTML = Object.entries(CH).map(([k, v]) => `<span class="chip${k === chain ? " on" : ""}" data-c="${k}">${v}</span>`).join("");
+$("wins").innerHTML = [[1, "1h"], [6, "6h"], [24, "24h"]].map(([h, l]) => `<span class="chip${h === win ? " on" : ""}" data-w="${h}">${l}</span>`).join("");
+document.addEventListener("click", (e) => {
+  const c = e.target.closest("[data-c]"), w = e.target.closest("[data-w]");
+  if (c) { chain = c.dataset.c; document.querySelectorAll("[data-c]").forEach((x) => x.classList.toggle("on", x === c)); render(); }
+  if (w) { win = +w.dataset.w; document.querySelectorAll("[data-w]").forEach((x) => x.classList.toggle("on", x === w)); render(); }
+});
+$("min").onchange = $("safe").onchange = render;
+async function load() { try { D = await (await fetch("data.json?t=" + Date.now())).json(); render(); } catch (e) { $("live").textContent = "waiting for data..."; } }
+load(); setInterval(load, 30000); setInterval(render, 10000);
+</script>
+</body>
+</html>

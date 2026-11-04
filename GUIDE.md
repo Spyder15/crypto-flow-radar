@@ -204,3 +204,12 @@ Ek alag experimental strategy `bot/spyder-strategy.js` mein hai aur `bot/spyder.
 ## 18. Paper bot (`paper-bot/`), alag bot
 
 Bybit ke liye fake-money ($100) trading bot, upar ke Cloudflare bots se bilkul alag (GitHub Actions pe har 15 min chalta hai). Risk 1% per trade, max drawdown 3% par auto HALT. Details `paper-bot/README.md` me, settings `paper-bot/config.json` me, state `paper-bot/state.json` me.
+
+## 19. Meme token website (`meme-token/`), alag project
+
+TrenchWatch jaisi live website ("SPYDER TRENCH"): kaun se meme tokens me bade buys aa rahe hain (SOL, Robinhood, Base, BSC, ETH), "Just bought" feed, "Heating up" (zyada buyers wale tokens, 1h/6h/24h), MC / Volume / Liquidity / 24h%, TOP10 holders aur SAFE badge (GoPlus rug check).
+
+- **Data**: `meme-token/whale-buys.js` GeckoTerminal ke hot pools se $500+ buys leta hai, `site/data.json` banata hai. Workflow `.github/workflows/meme-token.yml` har 10 min chalta hai, site ko Cloudflare worker `meme-trench` par deploy karta hai (secret `CLOUDFLARE_API_TOKEN`).
+- **Wallet naam**: `meme-token/wallets.json` me `"address": "@handle"` daalo, warna short address dikhta hai.
+- **Telegram scanner** (alag, manual): `node meme-token/scan.js --dry` naye tokens + rug check dikhata hai.
+- **Dhyan**: data har ~10 min me update hota hai (real-time nahi), free API limits ki wajah se. Ye sirf info hai, financial advice nahi.
