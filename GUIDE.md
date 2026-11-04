@@ -205,12 +205,76 @@ Ek alag experimental strategy `bot/spyder-strategy.js` mein hai aur `bot/spyder.
 
 Bybit ke liye fake-money ($100) trading bot, upar ke Cloudflare bots se bilkul alag (GitHub Actions pe har 15 min chalta hai). Risk 1% per trade, max drawdown 3% par auto HALT. Details `paper-bot/README.md` me, settings `paper-bot/config.json` me, state `paper-bot/state.json` me.
 
-## 19. Meme token website (`meme-token/`), alag project
+## 19. Meme token website "SPYDER TRENCH" (`meme-token/`), alag project
 
-TrenchWatch jaisi live website ("SPYDER TRENCH"): kaun se meme tokens me bade buys aa rahe hain (SOL, ETH, Base, BSC, Robinhood, SUI, Arbitrum, Polygon, Avalanche, TON, Abstract, HyperEVM, Sonic, Tron, Aptos, Monad, MegaETH), "Just bought" feed, "Heating up" (zyada buyers wale tokens, 1h/6h/24h), MC / Volume / Liquidity / 24h%, TOP10 holders aur SAFE badge (GoPlus rug check).
+TrenchWatch jaisi live website: kaun se meme tokens me bade buys aa rahe hain aur **paisa kahan aa/ja raha hai**. Ye tracker hai, kuch khareedta nahi. **Live URL: https://meme-trench.spyder-radar.workers.dev**
 
-- **Data**: `meme-token/whale-buys.js` GeckoTerminal ke hot pools se $500+ buys leta hai, `site/data.json` banata hai. Workflow `.github/workflows/meme-token.yml` har 15 min chalta hai, site ko Cloudflare worker `meme-trench` par deploy karta hai (secret `CLOUDFLARE_API_TOKEN`).
-- **Wallet naam**: `meme-token/wallets.json` me `"address": "@handle"` daalo, warna short address dikhta hai.
-- **Telegram scanner** (alag, manual): `node meme-token/scan.js --dry` naye tokens + rug check dikhata hai.
-- **Dhyan**: data har ~15 min me update hota hai (real-time nahi), free API limits ki wajah se. Ye sirf info hai, financial advice nahi.
-- **Money flow**: site ke upar panel dikhata hai ki last 1 ghante me kis chain/token me paisa aa raha hai (buys - sells) aur kahan se ja raha hai. Ye sirf un hot pools ka hai jo hum watch karte hain, poore market ka nahi.
+### 19.1 Site me kya dikhta hai
+- **KPI strip** (upar 4 box): Net flow 1h, Top inflow chain, Top outflow chain, Big buys tracked.
+- **Chain chips**: All, SOL, ETH, Base, BSC, Robinhood, SUI, Arbitrum, Polygon, Avalanche, TON, Abstract, HyperEVM, Sonic, Tron, Aptos, Monad, MegaETH (sirf wahi chips jinka data hai).
+- **Money flow panel**: chain-wise bar (green = paisa aa raha hai, red = ja raha hai) = last 1 ghante ke buys minus sells, plus Top inflow / Top outflow tokens. Ye sirf un hot pools ka hai jo hum watch karte hain, poore market ka nahi.
+- **Just bought**: latest bade buys (>= $500) upar. Card me token, chain, DEX, age, wallet (naam ya short address), amount, MC / V / L / 24h%, 5M buys/sells, TOP10 %, HOLDERS, SAFE badge, Chart aur Swap buttons.
+- **Heating up**: sabse zyada alag buyers wale tokens (1h / 6h / 24h window).
+- **Filters**: Min buy ($500 se $15k+), Safety (Hide risky).
+- **Theme**: radar site jaisi (kala bg, orange accent, monospace, sharp corners).
+
+### 19.2 Data ka flow (A to Z)
+Do layer hain: **(1) server-side snapshot** aur **(2) browser live scan**.
+
+**Layer 1: snapshot (GitHub Actions)**
+1. `.github/workflows/meme-token.yml` har 30 min (aur manual "Run workflow") chalta hai. Ek run ~11 min leta hai (free API ki rate limit ki wajah se).
+2. `meme-token/whale-buys.js`:
+   - GeckoTerminal `trending_pools` se har chain ke hot pools leta hai (`whale-config.json`: networks, `poolsPerNetwork`, `minPoolLiquidityUsd` 10k). Lagbhag 39 pools.
+   - Har pool ke `/trades` se: 1h buy/sell volume (flow), aur $500+ buys (`minBuyUsd`) feed me.
+   - Chain totals (`chains`), `inflow`/`outflow` top 25 tokens banata hai.
+   - GoPlus se rug check (`lib.js` `rugCheck`): honeypot, tax, top10 holders, mintable etc. -> level good / warn / risk / unknown (unsupported chain = unknown). 6 ghante cache.
+   - Output: `site/data.json` (deploy hota hai, git me ignore) aur `whale-state.json` (state, commit hota hai).
+3. Workflow `npx wrangler deploy` se site ko Cloudflare worker `meme-trench` par deploy karta hai (assets-only worker, `meme-token/wrangler.jsonc`, `account_id` pinned: naya account syndicatecrypto1). Phir `whale-state.json` commit/push karta hai.
+4. Free API limits: GeckoTerminal ~30 req/min (429 par 20s wait + retry), isliye run slow hai.
+
+**Layer 2: browser live scan (`site/index.html`)**
+Browser khud, apne IP se (dono APIs me open CORS hai), ye loops chalata hai:
+- `scan()`: har ~2.2 sec ek pool ka GeckoTerminal `/trades` lata hai. Nayi buys feed me upar daal deta hai, 1h flow aur chain totals delta se update karta hai. Jin tokens me pichle 15 min me buys aayi hain unhe har 3rd check me priority milti hai. 429 par 20 sec ruk jata hai.
+- `dexLoop()`: har ~1 sec ek chain ka DexScreener batch (`/latest/dex/pairs/{chain}/{pool,pool,...}`, 30 pools) lata hai: live MC, liquidity, 24h volume, 24h%, 5-min buy/sell counts. MC badalne par 4 sec flash (green/red).
+- `tick()` har 1 sec: screen redraw (agar data badla), "12s ago" timers, header "LIVE · tick Xs ago".
+- `load()` har 60 sec naya `data.json` (snapshot) lata hai, live buys merge rehti hain.
+- **Limit**: ye tab tak chalta hai jab page khula ho. Naye buys 2-10 sec delay se aate hain (free API), price/MC ~1 sec se. Asli real-time ke liye Helius/Alchemy WebSocket + server chahiye (paid key).
+
+### 19.3 Files
+- `meme-token/whale-buys.js`: snapshot generator. `whale-config.json`: chains, thresholds. `lib.js`: `rugCheck`, `getJson`. `wallets.json`: `"address": "@handle"` se naam dikhao (placeholder `ADDRESS_HERE` ignore hota hai). `whale-state.json`: state.
+- `meme-token/site/index.html`: poora frontend (HTML+CSS+JS ek file).
+- `meme-token/scan.js`: alag manual Telegram scanner (`node meme-token/scan.js --dry`): DexScreener profiles/boosts + rug check.
+- `meme-token/wrangler.jsonc`: worker `meme-trench`, assets dir `./site`.
+
+### 19.4 Chalane / deploy ke tarike
+- Local test: `cd meme-token && node whale-buys.js` (~10 min), phir `cd site && python3 -m http.server`.
+- Manual deploy: `cd meme-token && npx wrangler deploy` (local wrangler naye account syndicatecrypto1 me logged in hai).
+- Auto: GitHub Actions (upar). Secret: `CLOUDFLARE_API_TOKEN` (repo secret, naye account ka token, "Edit Cloudflare Workers" / Workers Scripts Edit). Secret ka naam exact hona chahiye, naam ke aage space nahi.
+- Chain add karna: `whale-config.json` `networks` me GeckoTerminal network id daalo; chip label ke liye `index.html` me `CH` map aur DexScreener slug alag ho to `DX` map update karo; GoPlus naam alag ho to `whale-buys.js` `GP` map.
+
+### 19.5 Dhyan
+- Free plan limits: Cloudflare account me 5 crons, 50 subrequests per invocation. Dono accounts ke crons bhare hain, isliye site me cron worker nahi, GitHub Actions snapshot hai.
+- GitHub Actions free minutes limited hain (private repo ~2000/month). Har run ~11 min, isliye 30 min schedule. Bill/minutes khatam hone par schedule ruk sakta hai, tab bhi browser live scan snapshot ke bina bhi chalta hai (purane snapshot se).
+- Data public on-chain / market data hai, late ya galat ho sakta hai. SAFE badge guarantee nahi. Financial advice nahi, memecoins me poora paisa doobne ka risk hai.
+
+## 20. Poora system ek nazar me (kaun kahan chalta hai)
+
+| Part | Kya karta hai | Kahan chalta hai | Deploy |
+|---|---|---|---|
+| Bot 1 (`wrangler.jsonc`) | Main strategy (CHoCH/BOS) + Spyder, crypto, Telegram signals, live.html | Cloudflare PURANA account, `crypto-flow-radar.live-scanner.workers.dev` | `npx wrangler deploy` (purane account login) |
+| Bot 2 (`wrangler.markets.jsonc`) | Sirf Spyder, 24 markets symbols (gold, forex, stocks), RR 1:2, charts | Cloudflare NAYA account (syndicatecrypto1), `spyder-radar.workers.dev` | `npx wrangler deploy -c wrangler.markets.jsonc` |
+| `paper-bot/` | Bybit paper trading ($100, 1% risk, 3% DD halt) | GitHub Actions har 15 min (`paper-bot.yml`), state `paper-bot/state.json` | auto |
+| `meme-token/` | SPYDER TRENCH website | GitHub Actions snapshot + Cloudflare worker `meme-trench` (naya account) + browser live scan | auto / `npx wrangler deploy` |
+
+- Bot 1 aur Bot 2 dono ek hi Telegram channel me post karte hain (duplicate signals ka risk).
+- Telegram bot ke tokens/secrets (`TG_TOKEN`, `RUN_KEY`) kabhi chat ya code me mat daalo. Cloudflare secrets (`wrangler secret put`) ya GitHub secrets me hi rakho. Agar chat me paste ho jaye to turant revoke/roll karo (BotFather `/revoke`, Cloudflare token Roll).
+
+## 21. Seekhi hui baatein (deploy/secrets/CI)
+
+- GitHub Actions me secret ka naam exact match hona chahiye (`CLOUDFLARE_API_TOKEN`). Khali secret ka error: "In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN". Secret list check: `gh secret list -R Spyder15/crypto-flow-radar`.
+- Workflow file push karne ke liye gh login me `workflow` scope chahiye (`gh auth refresh -h github.com -s workflow`).
+- Cloudflare token ke liye: My Profile -> API Tokens -> template "Edit Cloudflare Workers" (ya custom: Account / Workers Scripts / Edit). "Access:" wali permissions nahi.
+- `wrangler deploy` ka URL account ke workers.dev subdomain par banta hai (naya account = `*.spyder-radar.workers.dev`).
+- Workflow `concurrency: meme-trench` hai: ek time par ek run, doosra wait karta hai.
+- Local `git pull --rebase` zaroori hai push se pehle, kyunki workflows `state.json` files commit karte rehte hain.
+- Free-tier me real-time ki limits: GeckoTerminal ~30/min, DexScreener ~300/min (pairs), GoPlus rate-limited. Zyada speed ke liye paid RPC/WebSocket chahiye.
