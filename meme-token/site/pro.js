@@ -56,14 +56,18 @@
     ws.onclose = () => setTimeout(connectL, 5000); ws.onerror = () => ws.close();
   }
 
-  const OKX = { ct: null };
-  async function connectO() {
-    try {
-      if (!OKX.ct) { OKX.ct = {}; for (const i of (await jget("https://www.okx.com/api/v5/public/instruments?instType=SWAP")).data) OKX.ct[i.instId] = { v: +i.ctVal, usd: i.ctValCcy === "USD" }; }
-    } catch (e) { OKX.ct = null; return setTimeout(connectO, 15000); }
+  const OKX = { ct: {} };
+  function connectO() {
     let ws; try { ws = new WebSocket("wss://ws.okx.com:8443/ws/v5/public"); } catch (e) { return; }
+    jget("/api/okx-inst").then((o) => { for (const k in o) OKX.ct[k] = { v: o[k][0], usd: !!o[k][1] }; }).catch(() => {});
     ws.onopen = () => ws.send(JSON.stringify({ op: "subscribe", args: [{ channel: "liquidation-orders", instType: "SWAP" }] }));
-    ws.onmessage = (m) => { try { const d = JSON.parse(m.data); for (const r of d.data || []) { const c = OKX.ct[r.instId]; if (!c) continue; for (const x of r.details) LQ.unshift({ s: r.instFamily.split("-")[0], long: x.posSide === "long", u: c.usd ? +x.sz * c.v : +x.sz * c.v * +x.bkPx, ts: +x.ts }); } if (LQ.length > 1500) LQ.length = 1500; } catch (e) { /* ignore frame */ } };
+    ws.onmessage = (m) => {
+      try {
+        const d = JSON.parse(m.data); if (!d.data) return;
+        for (const r of d.data) { const c = OKX.ct[r.instId]; if (!c) continue; for (const x of r.details) LQ.unshift({ s: r.instFamily.split("-")[0], long: x.posSide === "long", u: c.usd ? +x.sz * c.v : +x.sz * c.v * +x.bkPx, ts: +x.ts }); }
+        if (LQ.length > 1500) LQ.length = 1500;
+      } catch (e) { /* ignore frame */ }
+    };
     ws.onclose = () => setTimeout(connectO, 5000); ws.onerror = () => ws.close();
   }
 

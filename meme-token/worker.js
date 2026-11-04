@@ -8,6 +8,16 @@ export default {
     if (u.pathname === "/api/macro") return macro(u.origin);
     if (u.pathname === "/api/options") return options(u.origin, u.searchParams.get("c") === "ETH" ? "ETH" : "BTC");
     if (u.pathname === "/api/sol-whales") return solWhales(env, u.origin);
+    if (u.pathname === "/api/okx-inst") {
+      const cache = caches.default, key = new Request(u.origin + "/api/okx-inst"), hit = await cache.match(key);
+      if (hit) return hit;
+      try {
+        const j = await (await fetch("https://www.okx.com/api/v5/public/instruments?instType=SWAP", { headers: { "user-agent": "spyder-trench" } })).json(), o = {};
+        for (const i of j.data) o[i.instId] = [+i.ctVal, i.ctValCcy === "USD" ? 1 : 0];
+        const res = new Response(JSON.stringify(o), { headers: { "content-type": "application/json", "cache-control": "public, max-age=86400" } });
+        await cache.put(key, res.clone()); return res;
+      } catch (e) { return new Response("{}", { status: 502, headers: { "content-type": "application/json" } }); }
+    }
     if (u.pathname === "/api/push/run") {
       if (!env.PUSH_RUN_KEY || req.headers.get("x-run-key") !== env.PUSH_RUN_KEY) return new Response("{}", { status: 403 });
       await checkRules(env); return new Response('{"ok":1}');
