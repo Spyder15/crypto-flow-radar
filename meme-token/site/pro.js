@@ -21,15 +21,15 @@
 
   // ---------- sub tabs ----------
   const wrap = $("v-mkt");
-  for (const id of ["deriv", "mov", "chain", "watch"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
+  for (const id of ["scr", "deriv", "mov", "chain", "watch"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
   function show(u) {
     sub = u;
     document.querySelectorAll("#subtabs .tab").forEach((t) => t.classList.toggle("on", t.dataset.u === u));
-    for (const id of ["over", "deriv", "mov", "chain", "watch"]) $("s-" + id).hidden = id !== u;
+    for (const id of ["over", "scr", "deriv", "mov", "chain", "watch"]) $("s-" + id).hidden = id !== u;
     renderSub();
   }
   $("subtabs").onclick = (e) => { const u = e.target.dataset?.u; if (u) show(u); };
-  function renderSub() { ({ deriv: rDeriv, mov: rMov, chain: rChain, watch: rWatch })[sub]?.(); }
+  function renderSub() { ({ scr: rScr, deriv: rDeriv, mov: rMov, chain: rChain, watch: rWatch })[sub]?.(); }
 
   // ---------- data: derivatives ----------
   const lg = (fn) => async () => { try { await fn(); } catch (e) { /* keep stale data */ } if (document.body.dataset.v === "mkt") renderSub(); };
@@ -140,6 +140,51 @@
     const chains = `<div class="tw" style="margin-top:8px"><table><thead><tr><th>Chain</th><th>TVL</th><th>TVL 1d</th><th>TVL 7d</th><th>DEX vol 24h</th><th>DEX 1d</th><th>DEX 7d</th></tr></thead><tbody>${CHN.rows.map((r) => `<tr><td><b>${esc(r.n)}</b></td><td>${big(r.tvl)}</td><td style="background:rgba(${(r.d1 || 0) >= 0 ? "47,210,122" : "255,77,77"},${(Math.abs(r.d1 || 0) / mx * 0.25).toFixed(2)})">${ps(r.d1)}</td><td>${ps(r.d7)}</td><td>${r.dv ? big(r.dv) : "-"}</td><td>${ps(r.dv1)}</td><td>${ps(r.dv7)}</td></tr>`).join("") || '<tr><td colspan="7" class="st">loading…</td></tr>'}</tbody></table></div>`;
     $("s-chain").innerHTML = panel("Spot Bitcoin ETF flows", "issuer holdings change · as-of dates differ per issuer · est. flow = BTC change × price", etf) + panel("Chain money flow", "TVL = capital parked on the chain · DEX volume = trading activity · DefiLlama", chains, "margin-top:12px") + solPanel();
   }
+
+  // ---------- screener (Hyperliquid perps) ----------
+  const HL = { rows: [], first: {}, cls: "all", sig: "all", q: "", sk: "vol", sd: -1, ts: 0 };
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const getHL = lg(async () => {
+    const r = await fetch("https://api.hyperliquid.xyz/info", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "metaAndAssetCtxs" }) });
+    if (!r.ok) throw new Error(r.status);
+    const [meta, ctx] = await r.json(), out = [];
+    meta.universe.forEach((u, i) => {
+      const c = ctx[i]; if (!c || u.isDelisted) return;
+      const p = +c.markPx, prev = +c.prevDayPx, oi = +c.openInterest * p, vol = +c.dayNtlVlm, fund = +c.funding;
+      if (!p || !prev) return;
+      const f0 = HL.first[u.name] || (HL.first[u.name] = { oi, p });
+      const chg = (p / prev - 1) * 100, fa = fund * 24 * 365 * 100, oid = f0.oi ? (oi / f0.oi - 1) * 100 : 0, pd = (p / f0.p - 1) * 100;
+      const tags = []; let s = clamp(chg / 4, -2, 2) - clamp(fa / 60, -2, 2) * 0.8;
+      if (Math.abs(oid) >= 1) { s += Math.sign(pd) * Math.sign(oid) * 0.5; tags.push(oid > 0 ? (pd >= 0 ? "LONG BUILD" : "SHORT BUILD") : (pd >= 0 ? "SQUEEZE" : "LONG FLUSH")); }
+      if (fa > 40) tags.push("CROWDED LONGS"); else if (fa < -20) tags.push("CROWDED SHORTS");
+      if (oi > 0 && vol / oi > 4) tags.push("VOL/OI HIGH");
+      out.push({ s: u.name, p, chg, vol, oi, fa, oid, vo: oi ? vol / oi : 0, tags, score: s, sig: s >= 2.5 ? "STRONG BUY" : s >= 1.2 ? "BUY" : s <= -2.5 ? "STRONG SELL" : s <= -1.2 ? "SELL" : "NEUTRAL", lev: u.maxLeverage });
+    });
+    HL.rows = out; HL.ts = Date.now();
+  });
+  const sigc = (g) => (g.includes("BUY") ? "up" : g.includes("SELL") ? "dn" : "st");
+  function rScr() {
+    const q = HL.q.toUpperCase(), liquid = HL.rows.slice().sort((a, b) => b.vol - a.vol).slice(0, 100);
+    const hot = liquid.filter((r) => r.sig !== "NEUTRAL").sort((a, b) => Math.abs(b.score) - Math.abs(a.score)).slice(0, 6);
+    const kpi = `<div class="mk7">${kc("Perp pairs", HL.rows.length, "Hyperliquid")}${kc("24h volume", big(HL.rows.reduce((a, r) => a + r.vol, 0)), "all pairs")}${kc("Open interest", big(HL.rows.reduce((a, r) => a + r.oi, 0)), "all pairs")}${kc("Active signals", liquid.filter((r) => r.sig !== "NEUTRAL").length, "top 100 by volume")}</div>`;
+    const cards = hot.map((r) => `<div class="stile" data-sym="${esc(r.s)}" style="background:rgba(${r.score >= 0 ? "47,210,122" : "255,77,77"},.1)"><div class="n"><span>${esc(r.s)}</span><span class="${sigc(r.sig)}">${r.sig}</span></div><div class="a">${px(r.p)}</div><div class="d">${ps(r.chg)} · funding ${r.fa.toFixed(0)}% ann.<br>${esc(r.tags.join(" · ") || "momentum")}</div></div>`).join("") || '<span class="st">no strong setups right now</span>';
+    const chip = (k, v, l) => `<span class="chip${HL[k] === v ? " on" : ""}" data-sf="${k}:${v}">${l}</span>`;
+    let rows = HL.rows.filter((r) => (!q || r.s.toUpperCase().includes(q)) && (HL.sig === "all" || (HL.sig === "buy" && r.sig.includes("BUY")) || (HL.sig === "sell" && r.sig.includes("SELL")) || (HL.sig === "strong" && r.sig.startsWith("STRONG"))));
+    const key = HL.sk, d = HL.sd; rows = rows.sort((a, b) => key === "s" ? d * a.s.localeCompare(b.s) : d * (a[key] - b[key]));
+    const cols = [["s", "Pair"], ["score", "Signal"], [null, "Flags"], ["p", "Price"], ["chg", "24h"], ["vol", "Vol 24h"], ["oi", "OI"], ["oid", "OI Δ (session)"], ["fa", "Funding ann."], ["vo", "Vol/OI"]];
+    const th = cols.map(([k, l]) => `<th ${k ? `data-ss="${k}"` : ""} class="${k === key ? "on" : ""}">${l}${k === key ? (d < 0 ? " ▼" : " ▲") : ""}</th>`).join("");
+    const tr = rows.slice(0, 200).map((r) => `<tr class="cr"${M.px[r.s] ? ` data-sym="${esc(r.s)}"` : ""}><td><span class="star" data-star="${esc(r.s)}">${star(r.s)}</span> <b>${esc(r.s)}</b><span class="st">-PERP</span></td><td class="${sigc(r.sig)}"><b>${r.sig}</b></td><td class="st" style="text-align:left">${esc(r.tags.join(" · "))}</td><td>${px(r.p)}</td><td>${ps(r.chg)}</td><td>${big(r.vol)}</td><td>${big(r.oi)}</td><td>${ps(r.oid)}</td><td class="${r.fa > 40 ? "dn" : r.fa < -10 ? "up" : ""}">${r.fa >= 0 ? "+" : ""}${r.fa.toFixed(1)}%</td><td>${r.vo.toFixed(2)}</td></tr>`).join("");
+    const keep = document.activeElement?.id === "scq", sc = $("s-scr").querySelector(".tw")?.scrollTop || 0;
+    $("s-scr").innerHTML = panel("Hyperliquid perp screener", "live from Hyperliquid · refreshes every 5s · click a row for its chart (Binance-listed coins)", `${kpi}<div class="wh2">Hot right now</div><div class="tiles" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px">${cards}</div><div class="bar" style="margin-top:12px">${chip("sig", "all", "All")}${chip("sig", "buy", "Buy")}${chip("sig", "sell", "Sell")}${chip("sig", "strong", "Strong only")}<input id="scq" value="${esc(HL.q)}" placeholder="Search pair…" autocomplete="off" spellcheck="false" style="background:#0b0b0b;border:1px solid var(--line);color:var(--fg);padding:6px 8px;font:inherit;width:160px"></div><div class="mlegend" style="margin:0 0 8px">Signal = rule-based score of 24h momentum, funding (crowded side fades), and session OI/price flow. It is a screening heuristic, not a prediction or advice. OI Δ counts only since you opened this page.</div><div class="tw" style="max-height:70vh"><table><thead><tr>${th}</tr></thead><tbody>${tr || '<tr><td colspan="10" class="st">'+(HL.rows.length ? "no pairs match this filter" : "loading Hyperliquid…")+'</td></tr>'}</tbody></table></div>`);
+    const tw = $("s-scr").querySelector(".tw"); if (tw) tw.scrollTop = sc;
+    if (keep) { const i = $("scq"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+  }
+  $("s-scr").onclick = (e) => {
+    const sf = e.target.dataset?.sf, ss = e.target.dataset?.ss;
+    if (sf) { const [k, v] = sf.split(":"); HL[k] = v; rScr(); } else if (ss) { HL.sd = HL.sk === ss ? -HL.sd : -1; HL.sk = ss; rScr(); }
+  };
+  $("s-scr").oninput = (e) => { if (e.target.id === "scq") { HL.q = e.target.value; rScr(); } };
+  getHL(); setInterval(getHL, 5000);
 
   // ---------- watchlist ----------
   function rWatch() {
