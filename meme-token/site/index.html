@@ -3,130 +3,187 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SPYDER TRENCH · live memecoin buys</title>
+<title>SPYDER TRENCH · live memecoin flow terminal</title>
 <style>
 :root{--bg:#050505;--panel:#0b0b0b;--panel2:#101010;--line:#1f1f1f;--txt:#e8e8e8;--mut:#7a7a7a;--grn:#2fd27a;--red:#ff4d4d;--amb:#ffa11a;--acc:#ffa11a;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:13px/1.45 var(--mono);font-variant-numeric:tabular-nums}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:12.5px/1.45 var(--mono);font-variant-numeric:tabular-nums}
 a{color:inherit;text-decoration:none}
-header{display:flex;align-items:center;gap:16px;padding:9px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(5,5,5,.94);backdrop-filter:blur(8px);z-index:5;flex-wrap:wrap}
-.logo{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.08em}
-.logo b{background:var(--acc);color:#000;padding:2px 8px}
+header{display:flex;align-items:center;gap:14px;padding:8px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(5,5,5,.95);backdrop-filter:blur(8px);z-index:6;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.08em}.logo b{background:var(--acc);color:#000;padding:2px 8px}
 .tagline{color:var(--mut);font-size:11px;letter-spacing:.04em}
+#q{background:var(--panel);color:var(--txt);border:1px solid var(--line);padding:6px 10px;font:inherit;width:220px;outline:none}#q:focus{border-color:var(--acc)}
 .live{margin-left:auto;color:var(--grn);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}.live:before{content:"● ";animation:b 1.4s infinite}@keyframes b{50%{opacity:.25}}
-.wrap{max-width:1500px;margin:auto}
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);background:var(--panel);margin:12px 16px 0}
+.tape{border-bottom:1px solid var(--line);background:#080808;overflow:hidden;white-space:nowrap;height:28px;line-height:28px;font-size:11.5px}
+.tape .in{display:inline-block;padding-left:100%;animation:mq 70s linear infinite}.tape:hover .in{animation-play-state:paused}@keyframes mq{to{transform:translateX(-100%)}}
+.tape span{margin-right:26px}.tape b{color:#fff}
+.wrap{max-width:1600px;margin:auto;padding:0 16px 30px}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--line);background:var(--panel);margin-top:12px}
 .kpi{padding:12px 14px;border-right:1px solid var(--line);min-width:0}.kpi:last-child{border-right:0}
 .kpi .k{font-size:10px;letter-spacing:.12em;color:var(--mut);text-transform:uppercase}.kpi .v{font-size:20px;font-weight:600;margin:4px 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kpi .s{font-size:11px;color:var(--mut)}
-@media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}.kpi{border-bottom:1px solid var(--line)}}
-.bar{display:flex;gap:6px;padding:12px 16px;flex-wrap:wrap;align-items:center;row-gap:6px}
-.chip{padding:5px 11px;border:1px solid var(--line);background:var(--panel);color:var(--mut);cursor:pointer;font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+@media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.kpi{border-bottom:1px solid var(--line)}}
+.bar{display:flex;gap:6px;padding:10px 0;flex-wrap:wrap;align-items:center;row-gap:6px}
+.chip{padding:4px 10px;border:1px solid var(--line);background:var(--panel);color:var(--mut);cursor:pointer;font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase;user-select:none}
 .chip:hover{color:var(--txt);border-color:#333}.chip.on{background:var(--acc);border-color:var(--acc);color:#000}
-select{background:var(--panel);color:var(--txt);border:1px solid var(--line);padding:5px 8px;font:inherit;font-size:12px}
-.flow,main{padding:0 16px}.flow{padding-bottom:12px}
-.panel{border:1px solid var(--line);background:var(--panel);padding:12px 14px}
-.fgrid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:14px}@media(max-width:900px){.fgrid{grid-template-columns:1fr}}
-.cr{display:grid;grid-template-columns:54px 1fr 80px;gap:10px;align-items:center;margin-bottom:7px;font-size:12px}.cr .bar2{height:8px;background:#161616;position:relative;overflow:hidden}.cr .bar2:after{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:#333}.cr .bar2 i{position:absolute;top:0;bottom:0}.cr>b:last-child{text-align:right}
-.tr{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #141414;font-size:12px}
-main{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;padding-bottom:30px}
-@media(max-width:900px){main{grid-template-columns:1fr}}
-h2{margin:0 0 2px;font-size:11px;letter-spacing:.14em;color:var(--acc);text-transform:uppercase}.sub{color:var(--mut);font-size:11px;margin-bottom:10px}
-.card{background:var(--panel2);border:1px solid var(--line);border-left:2px solid #2a2a2a;padding:10px 12px;margin-bottom:8px}.card:hover{border-left-color:var(--acc);background:#131313}
-.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.sp{margin-left:auto}
-.sym{font-weight:700;font-size:14px;color:#fff}
+select{background:var(--panel);color:var(--txt);border:1px solid var(--line);padding:4px 8px;font:inherit;font-size:12px}
+.panel{border:1px solid var(--line);background:var(--panel);padding:10px 12px;min-width:0}
+h2{margin:0 0 2px;font-size:11px;letter-spacing:.14em;color:var(--acc);text-transform:uppercase;display:flex;justify-content:space-between}h2 em{font-style:normal;color:var(--mut);letter-spacing:.04em;text-transform:none}
+.sub{color:var(--mut);font-size:11px;margin-bottom:8px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:6px}
+.tile{border:1px solid var(--line);padding:8px 10px;cursor:pointer;position:relative;background:var(--panel2)}.tile:hover{border-color:#444}.tile.on{outline:1px solid var(--acc)}
+.tile .n{font-weight:700;font-size:12px}.tile .a{font-size:15px;font-weight:700;margin:3px 0}.tile .d{font-size:10px;color:var(--mut)}
+.cols{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr);gap:12px;margin-top:12px;align-items:start}
+@media(max-width:1100px){.cols{grid-template-columns:1fr}}
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin:-10px -12px 10px;padding:0 6px}
+.tab{padding:10px 14px;color:var(--mut);cursor:pointer;font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;border-bottom:2px solid transparent;user-select:none}.tab.on{color:var(--acc);border-bottom-color:var(--acc)}.tab:hover{color:var(--txt)}
+.tw{overflow:auto;max-height:70vh}
+table{width:100%;border-collapse:collapse}
+th{color:var(--mut);font-weight:400;font-size:10px;letter-spacing:.1em;text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);cursor:pointer;white-space:nowrap;text-transform:uppercase;user-select:none}
+th:first-child,td:first-child{text-align:left}th.on{color:var(--acc)}th:hover{color:var(--txt)}
+td{padding:7px 8px;border-bottom:1px solid #141414;text-align:right;white-space:nowrap}
+tr:hover td{background:#101010}
+.sym{font-weight:700;font-size:13px;color:#fff}
 .tag{font-size:10px;padding:1px 6px;background:#181818;color:#a0a0a0;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border:1px solid #242424}
 .tag.c{background:#2a1c05;color:var(--acc);border-color:#3d2a0a}
 .st{color:var(--mut);font-size:11px}.st b{color:var(--txt);font-weight:600}
-.fu{color:var(--grn)!important}.fd{color:var(--red)!important}.st b{transition:color .6s}.up{color:var(--grn)}.dn{color:var(--red)}
-.who{font-weight:700}.buy{color:var(--grn);font-weight:700}
+.up{color:var(--grn)}.dn{color:var(--red)}.fu{color:var(--grn)!important}.fd{color:var(--red)!important}td b{transition:color .6s}
 .badge{font-size:10px;font-weight:700;padding:1px 6px;letter-spacing:.04em;text-transform:uppercase}
 .good{background:#0c2417;color:var(--grn)}.warn{background:#2c1f06;color:var(--amb)}.risk{background:#2c0e0e;color:var(--red)}.unknown{background:#1a1a1a;color:var(--mut)}
-.btn{font-size:10px;font-weight:700;padding:3px 9px;border:1px solid var(--line);color:var(--txt);background:#141414;letter-spacing:.06em;text-transform:uppercase}.btn:hover{border-color:#444}.btn.p{background:var(--acc);border-color:var(--acc);color:#000}
+.btn{font-size:10px;font-weight:700;padding:3px 8px;border:1px solid var(--line);color:var(--txt);background:#141414;letter-spacing:.06em;text-transform:uppercase;margin-left:4px;display:inline-block}.btn:hover{border-color:#444}.btn.p{background:var(--acc);border-color:var(--acc);color:#000}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.sp{margin-left:auto}
+.buy{border-left:2px solid #2a2a2a;background:var(--panel2);padding:8px 10px;margin-bottom:6px}.buy:hover{background:#141414}
+.buy.whale{border-left-color:var(--acc);background:#14100a}.buy.new{animation:fl 2.4s ease-out}@keyframes fl{0%{background:#0f3321}100%{background:var(--panel2)}}
+.amt{color:var(--grn);font-weight:700;font-size:14px}.who{font-weight:700}
+.wh{background:var(--acc);color:#000;font-size:9px;font-weight:800;padding:1px 5px;letter-spacing:.08em}
+.feedbox{max-height:70vh;overflow:auto}
+.cr{display:grid;grid-template-columns:54px 1fr 80px;gap:10px;align-items:center;margin-bottom:6px;font-size:12px}.cr .bar2{height:8px;background:#161616;position:relative;overflow:hidden}.cr .bar2 i{position:absolute;top:0;bottom:0}
 .empty{color:var(--mut);padding:26px;text-align:center}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:800px){.two{grid-template-columns:1fr}}
 footer{color:var(--mut);font-size:10px;padding:10px 16px 30px;max-width:1000px;line-height:1.6}
-::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:#222}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#222}
 </style>
 </head>
 <body>
 <header>
-  <div class="logo"><b>SPYDER</b>TRENCH</div><div class="tagline">LIVE MEMECOIN FLOW · 17 CHAINS</div>
+  <div class="logo"><b>SPYDER</b>TRENCH</div><div class="tagline">LIVE MEMECOIN FLOW TERMINAL</div>
+  <input id="q" placeholder="Search symbol or address..." autocomplete="off" spellcheck="false">
   <div class="live" id="live">LIVE</div>
 </header>
-<div class="wrap"><div class="kpis" id="kpis"></div>
-<div class="bar" id="chains"></div>
-<div class="bar" style="padding-top:0">
-  <span class="st">Min buy</span>
-  <select id="min"><option value="0">All</option><option value="500">$500+</option><option value="1000">$1k+</option><option value="2500">$2.5k+</option><option value="5000">$5k+</option><option value="15000">$15k+</option></select>
-  <span class="st" style="margin-left:10px">Safety</span>
-  <select id="safe"><option value="all">All</option><option value="hide">Hide risky</option></select>
+<div class="tape"><div class="in" id="tape"></div></div>
+<div class="wrap">
+  <div class="kpis" id="kpis"></div>
+  <div class="bar" id="chains"></div>
+  <section class="panel"><h2>Money flow by chain <em>net buys − sells, last 1h · click a chain to filter</em></h2><div class="tiles" id="tiles" style="margin-top:8px"></div></section>
+  <div class="cols">
+    <section class="panel">
+      <div class="tabs" id="tabs"><span class="tab on" data-t="tokens">Tokens</span><span class="tab" data-t="heat">Heating up</span><span class="tab" data-t="flow">Inflow / Outflow</span></div>
+      <div class="bar" style="padding-top:0" id="tabbar"></div>
+      <div class="tw" id="tab"></div>
+    </section>
+    <section class="panel">
+      <h2>Live buys <em>whale = $10k+</em></h2>
+      <div class="bar" style="padding:6px 0"><span class="st">Min buy</span>
+        <select id="min"><option value="0">All</option><option value="500">$500+</option><option value="1000">$1k+</option><option value="2500">$2.5k+</option><option value="5000">$5k+</option><option value="10000">$10k+</option><option value="25000">$25k+</option></select>
+        <span class="st">Safety</span><select id="safe"><option value="all">All</option><option value="hide">Hide risky</option></select></div>
+      <div class="feedbox" id="feed"></div>
+    </section>
+  </div>
 </div>
-<section class="flow"><div class="panel"><h2>Money flow</h2><div class="sub">net buying minus selling in the last hour across the hot pools we watch · green = money coming in, red = money going out</div>
-  <div class="fgrid"><div id="cflow"></div><div><div class="st" style="margin-bottom:6px"><b>Top inflow tokens</b></div><div id="inflow"></div></div><div><div class="st" style="margin-bottom:6px"><b>Top outflow tokens</b></div><div id="outflow"></div></div></div></div></section>
-<main>
-  <section class="panel"><h2>Just bought</h2><div class="sub">latest big buys on top · wallets without a published name show as short addresses</div><div id="feed"></div></section>
-  <section class="panel"><h2>Heating up</h2><div class="sub">most buyers per token</div>
-    <div class="bar" style="padding:0 0 10px" id="wins"></div><div id="heat"></div></section>
-</main></div>
-<footer>Data is public on-chain / market data from GeckoTerminal and GoPlus, scanned live from your browser every few seconds, and can be delayed, incomplete or wrong. SAFE badges are automatic checks, not guarantees. Nothing here is financial advice. Memecoins carry a very high risk of total loss. Always check a token yourself.</footer>
+<footer>Public on-chain / market data from GeckoTerminal, DexScreener and GoPlus, scanned live from your browser every second or few, and can be delayed, incomplete or wrong. SAFE badges are automatic checks, not guarantees. Nothing here is financial advice. Memecoins carry a very high risk of total loss. Always check a token yourself.</footer>
 <script>
 const CH = { all: "All", solana: "SOL", eth: "ETH", base: "Base", bsc: "BSC", robinhood: "RH", "sui-network": "SUI", arbitrum: "ARB", polygon_pos: "POLY", avax: "AVAX", ton: "TON", abstract: "ABS", hyperevm: "HYPE", sonic: "SONIC", tron: "TRX", aptos: "APT", monad: "MON", megaeth: "MEGA" };
 const DX = { eth: "ethereum", polygon_pos: "polygon", avax: "avalanche", "sui-network": "sui", hyperevm: "hyperliquid" };
-let D = null, chain = "all", win = 1;
+let D = null, chain = "all", win = 1, tab = "tokens", sortK = "net", sortD = -1, dirty = false, DXI = 0, seen = new Set(), first = true;
 const $ = (id) => document.getElementById(id);
+const nn = (x) => Number(x) || 0;
 const usd = (x) => x >= 1e6 ? "$" + (x / 1e6).toFixed(2) + "M" : x >= 1e3 ? "$" + (x >= 1e4 ? Math.round(x / 1e3) : (x / 1e3).toFixed(1)) + "k" : "$" + Math.round(x);
+const sg = (x) => (x >= 0 ? "+" : "-") + usd(Math.abs(x));
 const ago = (ts) => { const s = Math.max(1, (Date.now() - ts) / 1000 | 0); return s < 60 ? s + "s" : s < 3600 ? (s / 60 | 0) + "m" : s < 86400 ? (s / 3600 | 0) + "h" : (s / 86400 | 0) + "d"; };
-const age = (ts) => ts ? ago(ts) : "";
 const short = (a) => a.slice(0, 4) + ".." + a.slice(-4);
 const esc = (s) => String(s ?? "").replace(/[<>&"]/g, "");
+const pct = (x) => `<b class="${x >= 0 ? "up" : "dn"}">${x >= 0 ? "+" : ""}${nn(x).toFixed(1)}%</b>`;
 function links(t) {
-  const dx = `https://dexscreener.com/${DX[t.net] || t.net}/${t.pool}`;
-  const swap = t.net === "solana" ? `https://jup.ag/swap/SOL-${t.addr}` : dx;
+  const dx = `https://dexscreener.com/${DX[t.net] || t.net}/${t.pool}`, swap = t.net === "solana" ? `https://jup.ag/swap/SOL-${t.addr}` : dx;
   return `<a class="btn" target="_blank" rel="noopener" href="${dx}">Chart</a><a class="btn p" target="_blank" rel="noopener" href="${swap}">Swap</a>`;
 }
-function info(t) {
-  const s = t.sec || {}, lv = s.level || "unknown", txt = { good: "✓ good", warn: "⚠ warn", risk: "✕ risk", unknown: "? n/a" }[lv];
-  return `<div class="row st" style="margin-top:6px"><span>MC <b class="${t.fat && Date.now() - t.fat < 4000 ? t.flash : ""}">${t.mc ? usd(t.mc) : "-"}</b></span><span>V <b>${usd(t.vol24 || 0)}</b></span><span>L <b>${usd(t.liq || 0)}</b></span><span class="${t.chg24 >= 0 ? "up" : "dn"}"><b>${t.chg24 >= 0 ? "+" : ""}${(t.chg24 || 0).toFixed(1)}%</b> 24h</span>${s.top10 ? `<span>TOP10 <b>${s.top10.toFixed(0)}%</b></span>` : ""}${t.tx5 ? `<span>5M <b class="up">${t.tx5.buys}B</b>/<b class="dn">${t.tx5.sells}S</b></span>` : ""}${s.holders ? `<span>HOLDERS <b>${s.holders.toLocaleString()}</b></span>` : ""}<span class="badge ${lv}" title="${esc((s.flags || []).join(", "))}">SAFE ${txt}</span></div>`;
+function safety(t) {
+  const s = t.sec || {}, lv = s.level || "unknown", txt = { good: "good", warn: "warn", risk: "risk", unknown: "n/a" }[lv];
+  return `<span class="badge ${lv}" title="${esc((s.flags || []).join(", "))}${s.top10 ? " · top10 " + s.top10.toFixed(0) + "%" : ""}${s.holders ? " · holders " + s.holders.toLocaleString() : ""}">${txt}</span>`;
 }
-function head(t) { return `<div class="row"><span class="sym">$${esc(t.sym)}</span><span class="tag c">${CH[t.net] || t.net}</span>${t.dex ? `<span class="tag">${esc(t.dex)}</span>` : ""}<span class="st">${age(t.created)}</span><span class="sp row">${links(t)}</span></div>`; }
 function pass(tk, usdv) {
   const t = D.tokens[tk]; if (!t) return false;
   if (chain !== "all" && t.net !== chain) return false;
   if (usdv < +$("min").value) return false;
   if ($("safe").value === "hide" && t.sec?.level === "risk") return false;
+  const q = $("q").value.trim().toLowerCase();
+  if (q && !(String(t.sym).toLowerCase().includes(q) || String(t.addr).toLowerCase().includes(q))) return false;
   return true;
 }
-function flowPanel() {
-  const cs = Object.entries(D.chains || {}).filter(([k]) => CH[k]).sort((a, b) => Math.abs(b[1].net) - Math.abs(a[1].net)), mx = Math.max(1, ...cs.map(([, c]) => Math.abs(c.net)));
-  const sg = (x) => (x >= 0 ? "+" : "-") + usd(Math.abs(x));
-  $("cflow").innerHTML = cs.map(([k, c]) => `<div class="cr" title="buys ${usd(c.buy)} / sells ${usd(c.sell)}"><b>${CH[k]}</b><div class="bar2"><i style="${c.net >= 0 ? "left" : "right"}:50%;width:${Math.max(2, Math.abs(c.net) / mx * 50)}%;background:${c.net >= 0 ? "var(--grn)" : "var(--red)"}"></i></div><b class="${c.net >= 0 ? "up" : "dn"}">${sg(c.net)}</b></div>`).join("") || '<div class="empty">No flow data yet.</div>';
-  const list = (a, cls) => a.filter((x) => D.tokens[x.token] && (chain === "all" || D.tokens[x.token].net === chain)).slice(0, 8).map((x) => { const t = D.tokens[x.token]; return `<div class="tr"><b>$${esc(t.sym)}</b><span class="tag c">${CH[t.net] || t.net}</span><span class="st">${usd(x.buy)} in / ${usd(x.sell)} out</span><b class="sp ${cls}">${sg(x.net)}</b><span class="row">${links(t)}</span></div>`; }).join("") || '<div class="empty" style="padding:12px">-</div>';
-  $("inflow").innerHTML = list(D.inflow || [], "up"); $("outflow").innerHTML = list(D.outflow || [], "dn");
-}
+const tokCell = (t) => `<div class="row" style="gap:6px"><span class="sym">$${esc(t.sym)}</span><span class="tag c">${CH[t.net] || t.net}</span>${t.dex ? `<span class="tag">${esc(t.dex)}</span>` : ""}</div><div class="st">${t.created ? ago(t.created) + " old" : ""}</div>`;
+
 function kpis() {
-  const cs = Object.entries(D.chains || {}), net = cs.reduce((a, [, c]) => a + c.net, 0), top = cs.slice().sort((a, b) => b[1].net - a[1].net)[0], low = cs.slice().sort((a, b) => a[1].net - b[1].net)[0];
-  const sg = (x) => (x >= 0 ? "+" : "-") + usd(Math.abs(x)), cell = (k, v, s, c = "") => `<div class="kpi"><div class="k">${k}</div><div class="v ${c}">${v}</div><div class="s">${s}</div></div>`;
-  $("kpis").innerHTML = cell("Net flow 1h", sg(net), "all watched pools", net >= 0 ? "up" : "dn") + cell("Top inflow chain", top ? CH[top[0]] || top[0] : "-", top ? sg(top[1].net) : "") + cell("Top outflow chain", low ? CH[low[0]] || low[0] : "-", low ? sg(low[1].net) : "") + cell("Big buys tracked", D.feed.length.toLocaleString(), "min " + usd(D.minBuyUsd || 0) + " · " + Object.keys(D.tokens).length + " tokens");
+  const cs = Object.entries(D.chains || {}), net = cs.reduce((a, [, c]) => a + c.net, 0), buy = cs.reduce((a, [, c]) => a + c.buy, 0), sell = cs.reduce((a, [, c]) => a + c.sell, 0);
+  const top = cs.slice().sort((a, b) => b[1].net - a[1].net)[0], low = cs.slice().sort((a, b) => a[1].net - b[1].net)[0];
+  const hr = D.feed.filter((f) => Date.now() - f.ts < 36e5), whales = D.feed.filter((f) => f.usd >= 1e4 && Date.now() - f.ts < 864e5).length;
+  const cell = (k, v, s, c = "") => `<div class="kpi"><div class="k">${k}</div><div class="v ${c}">${v}</div><div class="s">${s}</div></div>`;
+  $("kpis").innerHTML = cell("Net flow 1h", sg(net), `${usd(buy)} in · ${usd(sell)} out`, net >= 0 ? "up" : "dn") + cell("Top inflow chain", top ? CH[top[0]] || top[0] : "-", top ? sg(top[1].net) : "", "up") + cell("Top outflow chain", low ? CH[low[0]] || low[0] : "-", low ? sg(low[1].net) : "", "dn") + cell("Big buys 1h", hr.length, usd(hr.reduce((s, x) => s + x.usd, 0)) + " total") + cell("Whale buys 24h", whales, "$10k+ single buys");
+}
+function tape() {
+  const items = Object.values(D.tokens).filter((t) => t.flow && t.chg24 != null).sort((a, b) => Math.abs(b.flow.buy - b.flow.sell) - Math.abs(a.flow.buy - a.flow.sell)).slice(0, 18);
+  const h = items.map((t) => `<span><b>$${esc(t.sym)}</b> <span class="st">${CH[t.net] || t.net}</span> ${t.mc ? usd(t.mc) : ""} ${pct(t.chg24)} <span class="${t.flow.buy >= t.flow.sell ? "up" : "dn"}">${sg(t.flow.buy - t.flow.sell)}</span></span>`).join("");
+  const el = $("tape"); if (el.dataset.n !== String(items.length)) { el.innerHTML = h; el.dataset.n = items.length; } else el.innerHTML = h;
+}
+function tiles() {
+  const cs = Object.entries(D.chains || {}).filter(([k]) => CH[k]).sort((a, b) => Math.abs(b[1].net) - Math.abs(a[1].net)), mx = Math.max(1, ...cs.map(([, c]) => Math.abs(c.net)));
+  $("tiles").innerHTML = cs.map(([k, c]) => { const a = Math.min(.28, Math.abs(c.net) / mx * .28), col = c.net >= 0 ? "47,210,122" : "255,77,77"; return `<div class="tile${chain === k ? " on" : ""}" data-c="${k}" style="background:rgba(${col},${a.toFixed(2)})"><div class="n">${CH[k]}</div><div class="a ${c.net >= 0 ? "up" : "dn"}">${sg(c.net)}</div><div class="d">${usd(c.buy)} in · ${usd(c.sell)} out</div></div>`; }).join("") || '<div class="empty">No flow data yet.</div>';
+}
+function rowsTokens() {
+  const by = {}, cut = Date.now() - 36e5;
+  for (const f of D.feed) if (f.ts >= cut) { const b = (by[f.token] ||= { n: 0, usd: 0 }); b.n++; b.usd += f.usd; }
+  return Object.entries(D.tokens).filter(([k]) => pass(k, 0)).map(([k, t]) => { const f = t.flow || { buy: 0, sell: 0 }; return { k, t, net: f.buy - f.sell, buys: by[k]?.n || 0, bought: by[k]?.usd || 0, mc: t.mc || 0, liq: t.liq || 0, vol: t.vol24 || 0, chg: t.chg24 || 0, sym: String(t.sym).toLowerCase() }; });
+}
+const COLS = [["sym", "Token"], ["mc", "MC"], ["liq", "Liq"], ["vol", "Vol 24h"], ["chg", "24h"], ["net", "Flow 1h"], ["buys", "Buys 1h"], ["bought", "Bought"], ["sec", "Safe"], ["", ""]];
+function tabTokens() {
+  const rows = rowsTokens().sort((a, b) => sortK === "sym" ? sortD * a.sym.localeCompare(b.sym) : sortD * ((a[sortK] ?? 0) - (b[sortK] ?? 0))).slice(0, 80);
+  $("tabbar").innerHTML = `<span class="st">${rows.length} tokens · click a column to sort</span>`;
+  $("tab").innerHTML = rows.length ? `<table><thead><tr>${COLS.map(([k, l]) => `<th class="${k === sortK ? "on" : ""}" ${k && k !== "sec" ? `data-s="${k}"` : ""}>${l}${k === sortK ? (sortD < 0 ? " ▼" : " ▲") : ""}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => { const t = r.t, tx = t.tx5; return `<tr><td>${tokCell(t)}</td><td><b class="${t.fat && Date.now() - t.fat < 4000 ? t.flash : ""}">${r.mc ? usd(r.mc) : "-"}</b></td><td>${usd(r.liq)}</td><td>${usd(r.vol)}</td><td>${pct(r.chg)}</td><td class="${r.net >= 0 ? "up" : "dn"}"><b>${sg(r.net)}</b>${tx ? `<div class="st"><span class="up">${tx.buys}B</span>/<span class="dn">${tx.sells}S</span> 5m</div>` : ""}</td><td>${r.buys}</td><td>${r.bought ? usd(r.bought) : "-"}</td><td>${safety(t)}</td><td>${links(t)}</td></tr>`; }).join("")}</tbody></table>` : '<div class="empty">No tokens match this filter.</div>';
+}
+function tabHeat() {
+  $("tabbar").innerHTML = [[1, "1h"], [6, "6h"], [24, "24h"]].map(([h, l]) => `<span class="chip${h === win ? " on" : ""}" data-w="${h}">${l}</span>`).join("") + '<span class="st" style="margin-left:8px">most distinct buyers</span>';
+  const cut = Date.now() - win * 36e5, m = +$("min").value;
+  const heat = D.heating.map((h) => { const b = h.buys.filter((x) => x.ts >= cut && x.usd >= m); return { token: h.token, b, buyers: new Set(b.map((x) => x.w)).size, tot: b.reduce((s, x) => s + x.usd, 0), last: b.reduce((s, x) => Math.max(s, x.ts), 0) }; }).filter((h) => h.buyers && pass(h.token, 0)).sort((a, b) => b.buyers - a.buyers || b.tot - a.tot).slice(0, 40);
+  $("tab").innerHTML = heat.length ? `<table><thead><tr><th>Token</th><th>Buyers</th><th>Total bought</th><th>Last buy</th><th>MC</th><th>24h</th><th>Safe</th><th></th></tr></thead><tbody>${heat.map((h) => { const t = D.tokens[h.token]; return `<tr><td>${tokCell(t)}</td><td><b>${h.buyers}</b></td><td class="up"><b>${usd(h.tot)}</b></td><td class="ag" data-ts="${h.last}">${ago(h.last)} ago</td><td>${t.mc ? usd(t.mc) : "-"}</td><td>${pct(t.chg24 || 0)}</td><td>${safety(t)}</td><td>${links(t)}</td></tr>`; }).join("")}</tbody></table>` : '<div class="empty">Nothing heating up in this window.</div>';
+}
+function tabFlow() {
+  $("tabbar").innerHTML = '<span class="st">net buying minus selling in the last hour across watched pools</span>';
+  const list = (a, cls) => a.filter((x) => D.tokens[x.token] && pass(x.token, 0)).slice(0, 15).map((x) => { const t = D.tokens[x.token]; return `<tr><td>${tokCell(t)}</td><td class="st">${usd(x.buy)} in / ${usd(x.sell)} out</td><td class="${cls}"><b>${sg(x.net)}</b></td><td>${links(t)}</td></tr>`; }).join("") || '<tr><td class="empty" colspan="4">-</td></tr>';
+  $("tab").innerHTML = `<div class="two"><div><div class="st up" style="margin-bottom:6px"><b>TOP INFLOW</b></div><table><tbody>${list(D.inflow || [], "up")}</tbody></table></div><div><div class="st dn" style="margin-bottom:6px"><b>TOP OUTFLOW</b></div><table><tbody>${list(D.outflow || [], "dn")}</tbody></table></div></div>`;
+}
+function feedList() {
+  const feed = D.feed.filter((f) => pass(f.token, f.usd)).slice(0, 60);
+  $("feed").innerHTML = feed.length ? feed.map((f) => {
+    const t = D.tokens[f.token], key = f.token + "|" + f.w + "|" + f.ts, isNew = !first && !seen.has(key) && Date.now() - f.ts < 120000; seen.add(key);
+    return `<div class="buy${f.usd >= 1e4 ? " whale" : ""}${isNew ? " new" : ""}"><div class="row"><span class="amt">${usd(f.usd)}</span>${f.usd >= 1e4 ? '<span class="wh">WHALE</span>' : ""}<span class="sym">$${esc(t.sym)}</span><span class="tag c">${CH[t.net] || t.net}</span><span class="st sp ag" data-ts="${f.ts}">${ago(f.ts)} ago</span></div><div class="row" style="margin-top:4px"><span class="who">${esc(f.name || short(f.w))}</span><span class="st">MC <b>${t.mc ? usd(t.mc) : "-"}</b> · L <b>${usd(t.liq || 0)}</b></span>${safety(t)}<span class="sp">${links(t)}</span></div></div>`;
+  }).join("") : '<div class="empty">No buys match this filter yet.</div>';
+  first = false;
 }
 function render() {
   if (!D) return;
-  kpis(); flowPanel();
-  const feed = D.feed.filter((f) => pass(f.token, f.usd)).slice(0, 60);
-  $("feed").innerHTML = feed.length ? feed.map((f) => { const t = D.tokens[f.token]; return `<div class="card">${head(t)}<div class="row" style="margin-top:6px"><span class="who">${esc(f.name || short(f.w))}</span><span class="st">bought</span><span class="buy">${usd(f.usd)}</span><span class="st sp ag" data-ts="${f.ts}">${ago(f.ts)} ago</span></div>${info(t)}</div>`; }).join("") : '<div class="empty">No buys match this filter yet.</div>';
-  const cut = Date.now() - win * 36e5;
-  const heat = D.heating.map((h) => { const b = h.buys.filter((x) => x.ts >= cut && x.usd >= +$("min").value); return { token: h.token, b, buyers: new Set(b.map((x) => x.w)).size }; }).filter((h) => h.buyers && pass(h.token, 0)).sort((a, b) => b.buyers - a.buyers || b.b.reduce((s, x) => s + x.usd, 0) - a.b.reduce((s, x) => s + x.usd, 0)).slice(0, 25);
-  $("heat").innerHTML = heat.length ? heat.map((h) => { const t = D.tokens[h.token]; return `<div class="card">${head(t)}<div class="row" style="margin-top:6px"><span><b>${h.buyers}</b> <span class="st">buyer${h.buyers > 1 ? "s" : ""}</span></span><span class="buy">${usd(h.b.reduce((s, x) => s + x.usd, 0))}</span><span class="st">total bought</span></div>${info(t)}</div>`; }).join("") : '<div class="empty">Nothing heating up in this window.</div>';
-  $("live").textContent = LV.last ? "LIVE · scanning · last tick " + ago(LV.last) + " ago" : "LIVE · snapshot " + ago(D.updated) + " old";
+  kpis(); tape(); tiles();
+  ({ tokens: tabTokens, heat: tabHeat, flow: tabFlow })[tab]();
+  feedList();
 }
 function chips() { $("chains").innerHTML = Object.entries(CH).filter(([k]) => k === "all" || !D || (D.chains || {})[k] || Object.values(D.tokens).some((t) => t.net === k)).map(([k, v]) => `<span class="chip${k === chain ? " on" : ""}" data-c="${k}">${v}</span>`).join(""); }
 chips();
-$("wins").innerHTML = [[1, "1h"], [6, "6h"], [24, "24h"]].map(([h, l]) => `<span class="chip${h === win ? " on" : ""}" data-w="${h}">${l}</span>`).join("");
 document.addEventListener("click", (e) => {
-  const c = e.target.closest("[data-c]"), w = e.target.closest("[data-w]");
-  if (c) { chain = c.dataset.c; document.querySelectorAll("[data-c]").forEach((x) => x.classList.toggle("on", x === c)); render(); }
-  if (w) { win = +w.dataset.w; document.querySelectorAll("[data-w]").forEach((x) => x.classList.toggle("on", x === w)); render(); }
+  const c = e.target.closest("[data-c]"), w = e.target.closest("[data-w]"), t = e.target.closest("[data-t]"), s = e.target.closest("[data-s]");
+  if (c) { chain = chain === c.dataset.c && chain !== "all" ? "all" : c.dataset.c; chips(); render(); }
+  if (w) { win = +w.dataset.w; render(); }
+  if (t) { tab = t.dataset.t; document.querySelectorAll("[data-t]").forEach((x) => x.classList.toggle("on", x === t)); render(); }
+  if (s) { sortD = sortK === s.dataset.s ? -sortD : -1; sortK = s.dataset.s; render(); }
 });
-$("min").onchange = $("safe").onchange = render;
-const LV = { feed: [], keys: new Set(), flow: {}, i: 0, last: 0 };
-const nn = (x) => Number(x) || 0, K = (tk, b) => tk + "|" + b.w + "|" + b.ts;
+$("min").onchange = $("safe").onchange = $("q").oninput = render;
+
+const LV = { feed: [], keys: new Set(), flow: {}, i: 0, last: 0 }, K = (tk, b) => tk + "|" + b.w + "|" + b.ts;
 function rebuildFlow() {
   const fl = Object.entries(D.tokens).filter(([, t]) => t.flow).map(([k, t]) => ({ token: k, buy: Math.round(t.flow.buy), sell: Math.round(t.flow.sell), net: Math.round(t.flow.buy - t.flow.sell) }));
   D.inflow = fl.filter((x) => x.net > 0).sort((a, b) => b.net - a.net).slice(0, 25); D.outflow = fl.filter((x) => x.net < 0).sort((a, b) => a.net - b.net).slice(0, 25);
@@ -137,16 +194,16 @@ function addBuy(tk, b) {
   if (!h) D.heating.push(h = { token: tk, buys: [], buyers: 0 });
   h.buys.unshift(b); return true;
 }
-function applyLive() { for (const x of LV.feed) addBuy(x.token, x); D.feed.sort((a, b) => b.ts - a.ts); }
 async function load() {
   try {
     const d = await (await fetch("data.json?t=" + Date.now())).json();
     if (D && d.updated === D.updated) return;
-    D = d; LV.keys = new Set(D.feed.map((f) => K(f.token, f))); LV.flow = {}; for (const x of LV.feed.splice(0)) if (Date.now() - x.ts < 864e5 && addBuy(x.token, x)) LV.feed.push(x);
+    D = d; LV.keys = new Set(D.feed.map((f) => K(f.token, f))); LV.flow = {};
+    for (const x of LV.feed.splice(0)) if (Date.now() - x.ts < 864e5 && addBuy(x.token, x)) LV.feed.push(x);
     D.feed.sort((a, b) => b.ts - a.ts); chips(); render();
   } catch (e) { if (!D) $("live").textContent = "waiting for data..."; }
 }
-// Live scan: the browser itself polls GeckoTerminal (open CORS, ~24 calls/min) pool by pool, so new buys and flow appear within seconds/minutes.
+// Live scan 1: the browser polls GeckoTerminal trades pool by pool (open CORS, ~27 calls/min). Pools with recent buys get priority.
 async function scan() {
   let wait = 2200;
   try {
@@ -173,8 +230,7 @@ async function scan() {
   } catch (e) { wait = 8000; }
   setTimeout(scan, wait);
 }
-let dirty = false, DXI = 0;
-// Second feed: DexScreener (open CORS, high rate limit) refreshes price/MC/volume/5m txns for every watched pool, one chain batch per second.
+// Live scan 2: DexScreener refreshes price/MC/volume/5m txns for every watched pool, one chain batch per second.
 async function dexLoop() {
   let wait = 1000;
   try {
