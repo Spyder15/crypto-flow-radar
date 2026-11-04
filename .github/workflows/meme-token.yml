@@ -19,6 +19,7 @@ jobs:
         with:
           node-version: 22
       - run: node whale-buys.js
+      - run: node hl-snapshot.js
       - name: Deploy website
         run: npx --yes wrangler@4 deploy
         env:

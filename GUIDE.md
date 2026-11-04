@@ -268,6 +268,16 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 - Mobile layout (`@media max-width:700px`). Helius real-time Solana whales API key chahiye, abhi nahi.
 - `wrangler.jsonc`: `main: worker.js`, assets binding `ASSETS`, `/api/*` pehle worker.
 
+### 19.4c Buildix-style tabs (Screener, HL Whales, Options, Cycles, Macro)
+- **Screener**: 179+ Hyperliquid perps + HIP-3 markets (stocks, commodities, FX; `dex:coin` names) via `api.hyperliquid.xyz/info` (CORS ok), 5s refresh. Signal = rule score (24h momentum, funding, session OI/price) - heuristic, not advice.
+- **HL Whales**: `meme-token/hl-snapshot.js` (run in the GitHub workflow every 30 min, writes `site/hl-snap.json`, git-ignored) trims the 40 MB leaderboard and 14 MB vaults files (no CORS). Browser then polls live `clearinghouseState` for the top 40 whales (net long/short per coin), top traders by 30d PnL, top 100 vaults, and a wallet explorer (any 0x address: positions, leverage, liq distance).
+- **Options**: worker `/api/options?c=BTC|ETH` aggregates Deribit (OI per expiry/strike, put/call, max pain); DVOL direct from Deribit.
+- **Cycles**: Binance 1d BTC history since 2017: our own rainbow log-regression bands, Mayer multiple, 200-week MA, S2F model (S2F is discredited since 2022).
+- **Macro**: worker `/api/macro` = Polymarket top events by 24h volume.
+- **Stablecoin supply**: DefiLlama stablecoincharts on the Chains & ETF tab.
+- Not built (no free data / out of scope): liquidation map and cascade, SOPR/NVT/NUPL, HYPE burns, bridge flows (DefiLlama paid), AI query, trade journal, TV webhook.
+- Local deploy needs `node hl-snapshot.js` first so `site/hl-snap.json` exists.
+
 ### 19.5 Dhyan
 - Free plan limits: Cloudflare account me 5 crons, 50 subrequests per invocation. Dono accounts ke crons bhare hain, isliye site me cron worker nahi, GitHub Actions snapshot hai.
 - GitHub Actions free minutes limited hain (private repo ~2000/month). Har run ~11 min, isliye 30 min schedule. Bill/minutes khatam hone par schedule ruk sakta hai, tab bhi browser live scan snapshot ke bina bhi chalta hai (purane snapshot se).

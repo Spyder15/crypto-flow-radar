@@ -21,15 +21,16 @@
 
   // ---------- sub tabs ----------
   const wrap = $("v-mkt");
-  for (const id of ["scr", "deriv", "mov", "chain", "watch"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
+  for (const id of ["scr", "deriv", "mov", "chain", "hlw", "opt", "cyc", "mac", "watch"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
   function show(u) {
     sub = u;
     document.querySelectorAll("#subtabs .tab").forEach((t) => t.classList.toggle("on", t.dataset.u === u));
-    for (const id of ["over", "scr", "deriv", "mov", "chain", "watch"]) $("s-" + id).hidden = id !== u;
+    for (const id of ["over", "scr", "deriv", "mov", "chain", "hlw", "opt", "cyc", "mac", "watch"]) $("s-" + id).hidden = id !== u;
+    LAZY[u]?.();
     renderSub();
   }
   $("subtabs").onclick = (e) => { const u = e.target.dataset?.u; if (u) show(u); };
-  function renderSub() { ({ scr: rScr, deriv: rDeriv, mov: rMov, chain: rChain, watch: rWatch })[sub]?.(); }
+  function renderSub() { ({ scr: rScr, hlw: rHlw, opt: rOpt, cyc: rCyc, mac: rMac, deriv: rDeriv, mov: rMov, chain: rChain, watch: rWatch })[sub]?.(); }
 
   // ---------- data: derivatives ----------
   const lg = (fn) => async () => { try { await fn(); } catch (e) { /* keep stale data */ } if (document.body.dataset.v === "mkt") renderSub(); };
@@ -138,16 +139,14 @@
     }
     const mx = Math.max(1, ...CHN.rows.map((r) => Math.abs(r.d1 || 0)));
     const chains = `<div class="tw" style="margin-top:8px"><table><thead><tr><th>Chain</th><th>TVL</th><th>TVL 1d</th><th>TVL 7d</th><th>DEX vol 24h</th><th>DEX 1d</th><th>DEX 7d</th></tr></thead><tbody>${CHN.rows.map((r) => `<tr><td><b>${esc(r.n)}</b></td><td>${big(r.tvl)}</td><td style="background:rgba(${(r.d1 || 0) >= 0 ? "47,210,122" : "255,77,77"},${(Math.abs(r.d1 || 0) / mx * 0.25).toFixed(2)})">${ps(r.d1)}</td><td>${ps(r.d7)}</td><td>${r.dv ? big(r.dv) : "-"}</td><td>${ps(r.dv1)}</td><td>${ps(r.dv7)}</td></tr>`).join("") || '<tr><td colspan="7" class="st">loading…</td></tr>'}</tbody></table></div>`;
-    $("s-chain").innerHTML = panel("Spot Bitcoin ETF flows", "issuer holdings change · as-of dates differ per issuer · est. flow = BTC change × price", etf) + panel("Chain money flow", "TVL = capital parked on the chain · DEX volume = trading activity · DefiLlama", chains, "margin-top:12px") + solPanel();
+    $("s-chain").innerHTML = panel("Spot Bitcoin ETF flows", "issuer holdings change · as-of dates differ per issuer · est. flow = BTC change × price", etf) + panel("Chain money flow", "TVL = capital parked on the chain · DEX volume = trading activity · DefiLlama", chains, "margin-top:12px") + stblPanel() + solPanel();
   }
 
   // ---------- screener (Hyperliquid perps) ----------
   const HL = { rows: [], first: {}, cls: "all", sig: "all", q: "", sk: "vol", sd: -1, ts: 0 };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const getHL = lg(async () => {
-    const r = await fetch("https://api.hyperliquid.xyz/info", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "metaAndAssetCtxs" }) });
-    if (!r.ok) throw new Error(r.status);
-    const [meta, ctx] = await r.json(), out = [];
+  const hlPost = async (body) => { const r = await fetch("https://api.hyperliquid.xyz/info", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); if (!r.ok) throw new Error(r.status); return r.json(); };
+  function hlAdd(meta, ctx, out, dex) {
     meta.universe.forEach((u, i) => {
       const c = ctx[i]; if (!c || u.isDelisted) return;
       const p = +c.markPx, prev = +c.prevDayPx, oi = +c.openInterest * p, vol = +c.dayNtlVlm, fund = +c.funding;
@@ -158,24 +157,30 @@
       if (Math.abs(oid) >= 1) { s += Math.sign(pd) * Math.sign(oid) * 0.5; tags.push(oid > 0 ? (pd >= 0 ? "LONG BUILD" : "SHORT BUILD") : (pd >= 0 ? "SQUEEZE" : "LONG FLUSH")); }
       if (fa > 40) tags.push("CROWDED LONGS"); else if (fa < -20) tags.push("CROWDED SHORTS");
       if (oi > 0 && vol / oi > 4) tags.push("VOL/OI HIGH");
-      out.push({ s: u.name, p, chg, vol, oi, fa, oid, vo: oi ? vol / oi : 0, tags, score: s, sig: s >= 2.5 ? "STRONG BUY" : s >= 1.2 ? "BUY" : s <= -2.5 ? "STRONG SELL" : s <= -1.2 ? "SELL" : "NEUTRAL", lev: u.maxLeverage });
+      out.push({ s: u.name, dex, p, chg, vol, oi, fa, oid, vo: oi ? vol / oi : 0, tags, score: s, sig: s >= 2.5 ? "STRONG BUY" : s >= 1.2 ? "BUY" : s <= -2.5 ? "STRONG SELL" : s <= -1.2 ? "SELL" : "NEUTRAL", lev: u.maxLeverage });
     });
+  }
+  const getHL = lg(async () => {
+    const [meta, ctx] = await hlPost({ type: "metaAndAssetCtxs" }), out = [];
+    hlAdd(meta, ctx, out, "");
+    if (!HL.dexes) { try { HL.dexes = (await hlPost({ type: "perpDexs" })).filter(Boolean).map((d) => d.name); } catch (e) { HL.dexes = []; } }
+    for (const dx of HL.dexes) { try { const [m2, c2] = await hlPost({ type: "metaAndAssetCtxs", dex: dx }); hlAdd(m2, c2, out, dx); } catch (e) { /* skip dex */ } }
     HL.rows = out; HL.ts = Date.now();
   });
   const sigc = (g) => (g.includes("BUY") ? "up" : g.includes("SELL") ? "dn" : "st");
   function rScr() {
     const q = HL.q.toUpperCase(), liquid = HL.rows.slice().sort((a, b) => b.vol - a.vol).slice(0, 100);
     const hot = liquid.filter((r) => r.sig !== "NEUTRAL").sort((a, b) => Math.abs(b.score) - Math.abs(a.score)).slice(0, 6);
-    const kpi = `<div class="mk7">${kc("Perp pairs", HL.rows.length, "Hyperliquid")}${kc("24h volume", big(HL.rows.reduce((a, r) => a + r.vol, 0)), "all pairs")}${kc("Open interest", big(HL.rows.reduce((a, r) => a + r.oi, 0)), "all pairs")}${kc("Active signals", liquid.filter((r) => r.sig !== "NEUTRAL").length, "top 100 by volume")}</div>`;
+    const kpi = `<div class="mk7">${kc("Markets", HL.rows.length, HL.rows.filter((r) => r.dex).length + " HIP-3 (stocks / commodities / FX)")}${kc("24h volume", big(HL.rows.reduce((a, r) => a + r.vol, 0)), "all pairs")}${kc("Open interest", big(HL.rows.reduce((a, r) => a + r.oi, 0)), "all pairs")}${kc("Active signals", liquid.filter((r) => r.sig !== "NEUTRAL").length, "top 100 by volume")}</div>`;
     const cards = hot.map((r) => `<div class="stile" data-sym="${esc(r.s)}" style="background:rgba(${r.score >= 0 ? "47,210,122" : "255,77,77"},.1)"><div class="n"><span>${esc(r.s)}</span><span class="${sigc(r.sig)}">${r.sig}</span></div><div class="a">${px(r.p)}</div><div class="d">${ps(r.chg)} · funding ${r.fa.toFixed(0)}% ann.<br>${esc(r.tags.join(" · ") || "momentum")}</div></div>`).join("") || '<span class="st">no strong setups right now</span>';
     const chip = (k, v, l) => `<span class="chip${HL[k] === v ? " on" : ""}" data-sf="${k}:${v}">${l}</span>`;
-    let rows = HL.rows.filter((r) => (!q || r.s.toUpperCase().includes(q)) && (HL.sig === "all" || (HL.sig === "buy" && r.sig.includes("BUY")) || (HL.sig === "sell" && r.sig.includes("SELL")) || (HL.sig === "strong" && r.sig.startsWith("STRONG"))));
+    let rows = HL.rows.filter((r) => (HL.cls === "all" || (HL.cls === "crypto" ? !r.dex : !!r.dex)) && (!q || r.s.toUpperCase().includes(q)) && (HL.sig === "all" || (HL.sig === "buy" && r.sig.includes("BUY")) || (HL.sig === "sell" && r.sig.includes("SELL")) || (HL.sig === "strong" && r.sig.startsWith("STRONG"))));
     const key = HL.sk, d = HL.sd; rows = rows.sort((a, b) => key === "s" ? d * a.s.localeCompare(b.s) : d * (a[key] - b[key]));
     const cols = [["s", "Pair"], ["score", "Signal"], [null, "Flags"], ["p", "Price"], ["chg", "24h"], ["vol", "Vol 24h"], ["oi", "OI"], ["oid", "OI Δ (session)"], ["fa", "Funding ann."], ["vo", "Vol/OI"]];
     const th = cols.map(([k, l]) => `<th ${k ? `data-ss="${k}"` : ""} class="${k === key ? "on" : ""}">${l}${k === key ? (d < 0 ? " ▼" : " ▲") : ""}</th>`).join("");
-    const tr = rows.slice(0, 200).map((r) => `<tr class="cr"${M.px[r.s] ? ` data-sym="${esc(r.s)}"` : ""}><td><span class="star" data-star="${esc(r.s)}">${star(r.s)}</span> <b>${esc(r.s)}</b><span class="st">-PERP</span></td><td class="${sigc(r.sig)}"><b>${r.sig}</b></td><td class="st" style="text-align:left">${esc(r.tags.join(" · "))}</td><td>${px(r.p)}</td><td>${ps(r.chg)}</td><td>${big(r.vol)}</td><td>${big(r.oi)}</td><td>${ps(r.oid)}</td><td class="${r.fa > 40 ? "dn" : r.fa < -10 ? "up" : ""}">${r.fa >= 0 ? "+" : ""}${r.fa.toFixed(1)}%</td><td>${r.vo.toFixed(2)}</td></tr>`).join("");
+    const tr = rows.slice(0, 200).map((r) => `<tr class="cr"${M.px[r.s] ? ` data-sym="${esc(r.s)}"` : ""}><td><span class="star" data-star="${esc(r.s)}">${star(r.s)}</span> <b>${esc(r.s)}</b>${r.dex ? "" : '<span class="st">-PERP</span>'}</td><td class="${sigc(r.sig)}"><b>${r.sig}</b></td><td class="st" style="text-align:left">${esc(r.tags.join(" · "))}</td><td>${px(r.p)}</td><td>${ps(r.chg)}</td><td>${big(r.vol)}</td><td>${big(r.oi)}</td><td>${ps(r.oid)}</td><td class="${r.fa > 40 ? "dn" : r.fa < -10 ? "up" : ""}">${r.fa >= 0 ? "+" : ""}${r.fa.toFixed(1)}%</td><td>${r.vo.toFixed(2)}</td></tr>`).join("");
     const keep = document.activeElement?.id === "scq", sc = $("s-scr").querySelector(".tw")?.scrollTop || 0;
-    $("s-scr").innerHTML = panel("Hyperliquid perp screener", "live from Hyperliquid · refreshes every 5s · click a row for its chart (Binance-listed coins)", `${kpi}<div class="wh2">Hot right now</div><div class="tiles" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px">${cards}</div><div class="bar" style="margin-top:12px">${chip("sig", "all", "All")}${chip("sig", "buy", "Buy")}${chip("sig", "sell", "Sell")}${chip("sig", "strong", "Strong only")}<input id="scq" value="${esc(HL.q)}" placeholder="Search pair…" autocomplete="off" spellcheck="false" style="background:#0b0b0b;border:1px solid var(--line);color:var(--fg);padding:6px 8px;font:inherit;width:160px"></div><div class="mlegend" style="margin:0 0 8px">Signal = rule-based score of 24h momentum, funding (crowded side fades), and session OI/price flow. It is a screening heuristic, not a prediction or advice. OI Δ counts only since you opened this page.</div><div class="tw" style="max-height:70vh"><table><thead><tr>${th}</tr></thead><tbody>${tr || '<tr><td colspan="10" class="st">'+(HL.rows.length ? "no pairs match this filter" : "loading Hyperliquid…")+'</td></tr>'}</tbody></table></div>`);
+    $("s-scr").innerHTML = panel("Hyperliquid perp screener", "live from Hyperliquid · refreshes every 5s · click a row for its chart (Binance-listed coins)", `${kpi}<div class="wh2">Hot right now</div><div class="tiles" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px">${cards}</div><div class="bar" style="margin-top:12px">${chip("sig", "all", "All")}${chip("sig", "buy", "Buy")}${chip("sig", "sell", "Sell")}${chip("sig", "strong", "Strong only")}<span class="st">|</span>${chip("cls", "all", "All markets")}${chip("cls", "crypto", "Crypto perps")}${chip("cls", "dex", "HIP-3 (stocks, commodities, FX)")}<input id="scq" value="${esc(HL.q)}" placeholder="Search pair…" autocomplete="off" spellcheck="false" style="background:#0b0b0b;border:1px solid var(--line);color:var(--fg);padding:6px 8px;font:inherit;width:160px"></div><div class="mlegend" style="margin:0 0 8px">Signal = rule-based score of 24h momentum, funding (crowded side fades), and session OI/price flow. It is a screening heuristic, not a prediction or advice. OI Δ counts only since you opened this page.</div><div class="tw" style="max-height:70vh"><table><thead><tr>${th}</tr></thead><tbody>${tr || '<tr><td colspan="10" class="st">'+(HL.rows.length ? "no pairs match this filter" : "loading Hyperliquid…")+'</td></tr>'}</tbody></table></div>`);
     const tw = $("s-scr").querySelector(".tw"); if (tw) tw.scrollTop = sc;
     if (keep) { const i = $("scq"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
   }
@@ -299,7 +304,154 @@
     secSign = cur2;
   }
 
+  // ---------- shared helpers for the extra tabs ----------
+  const addr = (a) => a.slice(0, 6) + "…" + a.slice(-4);
+  const usdS = (v) => (v >= 0 ? "+" : "-") + big(Math.abs(v));
+  const lazyAt = {};
+  const lazy = (k, fn, ms) => { if (Date.now() - (lazyAt[k] || 0) > ms) { lazyAt[k] = Date.now(); fn(); } };
+  const inp = "background:#0b0b0b;border:1px solid var(--line);color:var(--fg);padding:6px 8px;font:inherit";
+
+  // ---------- Hyperliquid whales, top traders, vaults, wallet explorer ----------
+  const HW = { snap: null, pos: {}, view: "whales", ex: null, exAddr: "", exErr: "" };
+  const getSnap = lg(async () => { HW.snap = await jget("/hl-snap.json"); });
+  const parsePos = (st) => ({ av: +st.marginSummary.accountValue, ntl: +st.marginSummary.totalNtlPos, wd: +st.withdrawable, list: st.assetPositions.map(({ position: p }) => ({ c: p.coin, sz: +p.szi, entry: +p.entryPx, val: +p.positionValue, upnl: +p.unrealizedPnl, lev: p.leverage?.value, liq: p.liquidationPx ? +p.liquidationPx : null, roe: +p.returnOnEquity })).filter((x) => x.val > 0) });
+  const getWhalePos = lg(async () => {
+    if (!HW.snap) return;
+    for (const w of HW.snap.whales.slice(0, 40)) { try { HW.pos[w.a] = parsePos(await hlPost({ type: "clearinghouseState", user: w.a })); } catch (e) { /* skip */ } await sleep(120); }
+  });
+  async function loadWallet(a) {
+    HW.exAddr = a; HW.exErr = ""; HW.ex = null; rHlw();
+    try { HW.ex = parsePos(await hlPost({ type: "clearinghouseState", user: a })); } catch (e) { HW.exErr = "Could not load this wallet (check the address)."; }
+    rHlw();
+  }
+  const priceOf = (c) => HL.rows.find((r) => r.s === c)?.p;
+  function rHlw() {
+    if (document.activeElement?.id === "wx" && $("s-hlw").innerHTML) return;
+    const S = HW.snap, chip = (v, l) => `<span class="chip${HW.view === v ? " on" : ""}" data-hv="${v}">${l}</span>`;
+    let ex = '<div class="st" style="padding:6px 0">Paste any Hyperliquid wallet (0x…) or click a trader below to see its open positions, leverage and liquidation risk.</div>';
+    if (HW.exErr) ex = `<div class="dn" style="padding:6px 0">${esc(HW.exErr)}</div>`;
+    else if (HW.exAddr && !HW.ex) ex = '<div class="st" style="padding:6px 0">loading wallet…</div>';
+    else if (HW.ex) {
+      const e = HW.ex, lv = e.av ? e.ntl / e.av : 0, tot = e.list.reduce((a, x) => a + x.upnl, 0);
+      ex = `<div class="mk7">${kc("Account value", big(e.av), addr(HW.exAddr))}${kc("Open notional", big(e.ntl), "effective leverage " + lv.toFixed(1) + "x")}${kc("Unrealized PnL", usdS(tot), "", cls(tot))}${kc("Positions", e.list.length, "")}</div><div class="tw" style="margin-top:8px"><table><thead><tr><th>Coin</th><th>Side</th><th>Size $</th><th>Entry</th><th>uPnL</th><th>ROE</th><th>Lev</th><th>Liq px</th><th>To liq</th></tr></thead><tbody>${e.list.sort((a, b) => b.val - a.val).map((x) => { const p = priceOf(x.c), d = x.liq && p ? (x.liq / p - 1) * 100 : null; return `<tr><td><b>${esc(x.c)}</b></td><td class="${x.sz > 0 ? "up" : "dn"}">${x.sz > 0 ? "LONG" : "SHORT"}</td><td>${big(x.val)}</td><td>${px(x.entry)}</td><td class="${cls(x.upnl)}">${usdS(x.upnl)}</td><td>${ps(x.roe * 100, 1)}</td><td>${x.lev ?? "-"}x</td><td>${x.liq ? px(x.liq) : "-"}</td><td class="${d != null && Math.abs(d) < 10 ? "dn" : ""}">${d == null ? "-" : d.toFixed(1) + "%"}</td></tr>`; }).join("") || '<tr><td colspan="9" class="st">no open positions</td></tr>'}</tbody></table></div>`;
+    }
+    let body = '<div class="st" style="padding:10px">loading Hyperliquid trader snapshot…</div>';
+    if (S) {
+      const wl = (list) => list.map((w) => { const p = HW.pos[w.a], lg2 = p ? p.list.filter((x) => x.sz > 0).reduce((a, x) => a + x.val, 0) : null, sh = p ? p.list.filter((x) => x.sz < 0).reduce((a, x) => a + x.val, 0) : null; return `<tr class="cr" data-w="${esc(w.a)}"><td style="text-align:left"><b>${esc(w.n || addr(w.a))}</b></td><td>${big(w.av)}</td><td>${ps(w.rm * 100, 1)}</td><td class="${cls(w.pd)}">${usdS(w.pd)}</td><td class="${cls(w.pw)}">${usdS(w.pw)}</td><td class="${cls(w.pm)}">${usdS(w.pm)}</td><td class="${cls(w.pa)}">${usdS(w.pa)}</td><td>${lg2 == null ? "-" : `<span class="up">${big(lg2)}</span> / <span class="dn">${big(sh)}</span>`}</td></tr>`; }).join("");
+      const th = '<thead><tr><th style="text-align:left">Trader</th><th>Account</th><th>ROI 30d</th><th>PnL 24h</th><th>PnL 7d</th><th>PnL 30d</th><th>PnL all-time</th><th>Long / Short now</th></tr></thead>';
+      if (HW.view === "whales") {
+        const agg = {}; let n = 0;
+        for (const w of S.whales.slice(0, 40)) { const p = HW.pos[w.a]; if (!p) continue; n++; for (const x of p.list) { const g = agg[x.c] || (agg[x.c] = { c: x.c, l: 0, s: 0, nl: 0, ns: 0 }); if (x.sz > 0) { g.l += x.val; g.nl++; } else { g.s += x.val; g.ns++; } } }
+        const rows = Object.values(agg).sort((a, b) => b.l + b.s - (a.l + a.s)).slice(0, 15);
+        const tl = rows.reduce((a, g) => a + g.l, 0), ts = rows.reduce((a, g) => a + g.s, 0);
+        body = `<div class="wh2" style="margin-top:0">What the ${n} biggest whale accounts hold right now</div><div class="mk7">${kc("Whale longs", big(tl), "top 15 coins", "up")}${kc("Whale shorts", big(ts), "top 15 coins", "dn")}${kc("Net bias", usdS(tl - ts), tl + ts ? (tl / (tl + ts) * 100).toFixed(0) + "% long" : "", cls(tl - ts))}</div><div class="tw" style="margin-top:8px"><table><thead><tr><th style="text-align:left">Coin</th><th>Whale longs</th><th>Whale shorts</th><th>Net</th><th>Long / short wallets</th><th>Bias</th></tr></thead><tbody>${rows.map((g) => `<tr${M.px[g.c] ? ` class="cr" data-sym="${esc(g.c)}"` : ""}><td style="text-align:left"><b>${esc(g.c)}</b></td><td class="up">${big(g.l)}</td><td class="dn">${big(g.s)}</td><td class="${cls(g.l - g.s)}">${usdS(g.l - g.s)}</td><td>${g.nl} / ${g.ns}</td><td>${g.l + g.s ? (g.l / (g.l + g.s) * 100).toFixed(0) : 0}% long</td></tr>`).join("") || '<tr><td colspan="6" class="st">loading positions…</td></tr>'}</tbody></table></div><div class="wh2">Biggest accounts (click a row for positions)</div><div class="tw" style="max-height:60vh"><table>${th}<tbody>${wl(S.whales)}</tbody></table></div>`;
+      } else if (HW.view === "top") {
+        body = `<div class="wh2" style="margin-top:0">Best 30-day PnL (accounts over $50k with real volume)</div><div class="tw" style="max-height:70vh"><table>${th}<tbody>${wl(S.top)}</tbody></table></div>`;
+      } else {
+        body = `<div class="wh2" style="margin-top:0">Largest Hyperliquid vaults by TVL (of ${S.vaults.length} shown)</div><div class="tw" style="max-height:70vh"><table><thead><tr><th style="text-align:left">Vault</th><th>TVL</th><th>APR</th><th>PnL 30d</th><th>Age</th><th></th></tr></thead><tbody>${S.vaults.map((v) => `<tr><td style="text-align:left"><b>${esc(v.n)}</b> <span class="st">${esc(addr(v.l))}</span></td><td>${big(v.tvl)}</td><td>${ps(v.apr * 100, 1)}</td><td class="${cls(v.pm)}">${usdS(v.pm)}</td><td class="st">${v.created ? ago(v.created) : "-"}</td><td><a href="https://app.hyperliquid.xyz/vaults/${esc(v.a)}" target="_blank" rel="noopener">open</a></td></tr>`).join("")}</tbody></table></div>`;
+      }
+    }
+    $("s-hlw").innerHTML = panel("Hyperliquid whale tracker", S ? "snapshot " + ago(S.ts) + " old · positions live from Hyperliquid · " + S.count.toLocaleString() + " ranked accounts" : "", `<div class="bar"><input id="wx" value="${esc(HW.exAddr)}" placeholder="Wallet explorer: paste 0x… address then Enter" autocomplete="off" spellcheck="false" style="${inp};width:min(440px,100%)"></div>${ex}`) + panel("Traders & vaults", "public Hyperliquid leaderboard", `<div class="bar">${chip("whales", "Whales")}${chip("top", "Top traders")}${chip("vaults", "Vaults")}</div>${body}`, "margin-top:12px");
+  }
+  $("s-hlw").onclick = (e) => {
+    const v = e.target.dataset?.hv, row = e.target.closest?.("[data-w]");
+    if (v) { HW.view = v; rHlw(); } else if (row) { loadWallet(row.dataset.w); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  };
+  $("s-hlw").addEventListener("keydown", (e) => { if (e.target.id === "wx" && e.key === "Enter") { const a = e.target.value.trim(); if (/^0x[0-9a-fA-F]{40}$/.test(a)) loadWallet(a.toLowerCase()); else { HW.exErr = "That is not a valid 0x wallet address."; HW.exAddr = a; HW.ex = null; e.target.blur(); rHlw(); } } });
+
+  // ---------- Options (Deribit via /api/options) ----------
+  const OP = { cur: "BTC", data: {}, dvol: {}, exp: null };
+  const MON = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };
+  const expMs = (d) => { const m = /^(\d+)([A-Z]{3})(\d+)$/.exec(d); return m ? Date.UTC(2000 + +m[3], MON[m[2]], +m[1], 8) : 0; };
+  const getOpt = lg(async () => {
+    for (const c of ["BTC", "ETH"]) {
+      try { OP.data[c] = await jget("/api/options?c=" + c); } catch (e) { /* keep stale */ }
+      try { const n = Date.now(), d = await jget(`https://www.deribit.com/api/v2/public/get_volatility_index_data?currency=${c}&start_timestamp=${n - 30 * 864e5}&end_timestamp=${n}&resolution=86400`); OP.dvol[c] = d.result.data.map((x) => x[4]); } catch (e) { /* optional */ }
+    }
+  });
+  function rOpt() {
+    const D2 = OP.data[OP.cur], dv = OP.dvol[OP.cur] || [];
+    const chip = (v) => `<span class="chip${OP.cur === v ? " on" : ""}" data-oc="${v}">${v}</span>`;
+    if (!D2) { $("s-opt").innerHTML = panel("Options (Deribit)", "", `<div class="bar">${chip("BTC")}${chip("ETH")}</div><div class="st" style="padding:10px">loading options chain…</div>`); return; }
+    const ex = D2.ex.slice().sort((a, b) => expMs(a.d) - expMs(b.d)).filter((e) => expMs(e.d) > Date.now()), sp = D2.spot;
+    const call = ex.reduce((a, e) => a + e.call, 0), put = ex.reduce((a, e) => a + e.put, 0), sel = ex.find((e) => e.d === OP.exp) || ex.slice().sort((a, b) => b.call + b.put - (a.call + a.put))[0];
+    const dnow = dv.at(-1), d7 = dv.length > 7 ? dnow - dv.at(-8) : null;
+    const rowsT = ex.map((e) => `<tr class="cr" data-oe="${esc(e.d)}"${e === sel ? ' style="outline:1px solid var(--acc)"' : ""}><td style="text-align:left"><b>${esc(e.d)}</b></td><td>${Math.max(0, Math.round((expMs(e.d) - Date.now()) / 864e5))}d</td><td class="up">${big(e.call * sp)}</td><td class="dn">${big(e.put * sp)}</td><td>${e.call ? (e.put / e.call).toFixed(2) : "-"}</td><td>${px(e.pain)}</td><td>${ps((e.pain / sp - 1) * 100, 1)}</td></tr>`).join("");
+    let ladder = "";
+    if (sel) { const ks = sel.strikes, mx = Math.max(1, ...ks.map((k) => Math.max(k[1], k[2]))); ladder = `<div class="wh2">Open interest by strike · ${esc(sel.d)} · max pain ${px(sel.pain)} · spot ${px(sp)}</div><div class="tw" style="max-height:50vh"><table><thead><tr><th style="text-align:left">Strike</th><th>Calls</th><th></th><th></th><th>Puts</th></tr></thead><tbody>${ks.map(([k, c, p]) => `<tr${Math.abs(k - sp) < sp * 0.01 ? ' style="background:#1a1408"' : ""}><td style="text-align:left"><b>${px(k)}</b></td><td class="up">${c ? big(c * sp) : "-"}</td><td style="width:22%"><div style="height:8px;background:var(--up,#2fd27a);width:${(c / mx * 100).toFixed(0)}%;margin-left:auto"></div></td><td style="width:22%"><div style="height:8px;background:var(--dn,#ff4d4d);width:${(p / mx * 100).toFixed(0)}%"></div></td><td class="dn">${p ? big(p * sp) : "-"}</td></tr>`).join("")}</tbody></table></div>`; }
+    $("s-opt").innerHTML = panel("Options (Deribit)", "open interest, put/call, max pain, DVOL · refreshes every 2 min", `<div class="bar">${chip("BTC")}${chip("ETH")}</div><div class="mk7">${kc("Spot", px(sp), OP.cur)}${kc("Call OI", big(call * sp), "notional", "up")}${kc("Put OI", big(put * sp), "notional", "dn")}${kc("Put / Call", call ? (put / call).toFixed(2) : "-", put / call > 1 ? "hedging heavy" : "call heavy")}${kc("DVOL (implied vol)", dnow ? dnow.toFixed(1) : "-", d7 == null ? "" : (d7 >= 0 ? "+" : "") + d7.toFixed(1) + " vs 7d ago", d7 == null ? "" : d7 >= 0 ? "dn" : "up")}</div><div class="wh2">Expiries (click one for its strike ladder)</div><div class="tw"><table><thead><tr><th style="text-align:left">Expiry</th><th>In</th><th>Call OI</th><th>Put OI</th><th>P/C</th><th>Max pain</th><th>vs spot</th></tr></thead><tbody>${rowsT}</tbody></table></div>${ladder}<div class="mlegend" style="margin-top:8px">Max pain = strike where option buyers lose the most at expiry. A gravity-like level near expiry, not a guarantee. Deribit data via a Worker proxy.</div>`);
+  }
+  $("s-opt").onclick = (e) => { const c = e.target.dataset?.oc, r = e.target.closest?.("[data-oe]"); if (c) { OP.cur = c; OP.exp = null; rOpt(); } else if (r) { OP.exp = r.dataset.oe; rOpt(); } };
+
+  // ---------- Cycle models (BTC history from Binance: rainbow regression, S2F, MAs) ----------
+  const CY = { t: [], p: [], m: null };
+  const getCyc = lg(async () => {
+    const t = [], p = []; let st = Date.UTC(2017, 7, 17);
+    for (let i = 0; i < 8; i++) { const k = await jget(`${BA}/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=1000&startTime=${st}`); for (const x of k) { t.push(x[0]); p.push(+x[4]); } if (k.length < 1000) break; st = k.at(-1)[0] + 864e5; }
+    if (p.length < 500) throw new Error("short");
+    CY.t = t; CY.p = p; CY.m = cycModel(t, p);
+  });
+  function fit(xs, ys) { const n = xs.length, mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n; let sxy = 0, sxx = 0; for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; } const b = sxy / sxx, a = my - b * mx; let ss = 0; for (let i = 0; i < n; i++) ss += (ys[i] - a - b * xs[i]) ** 2; return { a, b, sd: Math.sqrt(ss / n) }; }
+  const GEN = Date.UTC(2009, 0, 3), halv = (blocks) => 50 / 2 ** Math.floor(blocks / 210000);
+  function stockFlow(t) { const blocks = (t - GEN) / 864e5 * 144; let stock = 0, left = blocks; for (let e = 0; left > 0; e++) { const n = Math.min(left, 210000); stock += n * 50 / 2 ** e; left -= n; } return stock / (52560 * halv(blocks)); }
+  function cycModel(t, p) {
+    const lp = p.map((x) => Math.log10(x)), rx = t.map((x) => Math.log((x - GEN) / 864e5)), sx = t.map((x) => Math.log10(stockFlow(x)));
+    const R = fit(rx, lp), S = fit(sx, lp), n = p.length;
+    const sma = (k) => (n >= k ? p.slice(-k).reduce((a, b) => a + b, 0) / k : null);
+    return { R, S, rain: rx.map((x) => R.a + R.b * x), s2f: sx.map((x) => S.a + S.b * x), ma200: sma(200), ma1400: sma(1400), ath: Math.max(...p) };
+  }
+  const BANDS = [["Fire sale", "#7b1fa2"], ["Buy!", "#1565c0"], ["Accumulate", "#00838f"], ["Still cheap", "#2e7d32"], ["HODL", "#9e9d24"], ["Is this a bubble?", "#f9a825"], ["FOMO intensifies", "#ef6c00"], ["Sell. Seriously, sell!", "#d84315"], ["Max bubble", "#b71c1c"]];
+  function rCyc() {
+    const m = CY.m;
+    if (!m) { $("s-cyc").innerHTML = panel("Cycle models (BTC)", "", '<div class="st" style="padding:10px">loading ~9 years of BTC history…</div>'); return; }
+    const n = CY.p.length, price = CY.p[n - 1], fairR = 10 ** m.rain[n - 1], fairS = 10 ** m.s2f[n - 1];
+    const z = (Math.log10(price) - m.rain[n - 1]) / m.R.sd, bi = clamp(Math.floor((z + 2.25) / 0.5), 0, 8), band = BANDS[bi];
+    const mayer = m.ma200 ? price / m.ma200 : null;
+    $("s-cyc").innerHTML = panel("Cycle models (BTC)", "Binance daily closes since 2017 · models are fitted to that history", `<div class="mk7">${kc("BTC price", px(price), "daily close")}${kc("Rainbow band", `<span style="color:${band[1]}">${band[0]}</span>`, "model fair ≈ " + px(fairR))}${kc("Mayer multiple", mayer ? mayer.toFixed(2) : "-", "price / 200-day MA" + (mayer ? (mayer > 2.4 ? " · overheated" : mayer < 0.8 ? " · deep value" : "") : ""), mayer > 2.4 ? "dn" : mayer < 0.8 ? "up" : "")}${kc("200-week MA", m.ma1400 ? px(m.ma1400) : "-", m.ma1400 ? ps((price / m.ma1400 - 1) * 100, 0) + " above" : "")}${kc("Stock-to-flow model", px(fairS), "price / model " + (price / fairS).toFixed(2) + "x")}${kc("From ATH", ps((price / m.ath - 1) * 100, 1), "ATH " + px(m.ath))}</div><canvas id="cycc" style="width:100%;height:340px;margin-top:10px;background:#080808;border:1px solid var(--line)"></canvas><div class="bar" style="font-size:11px"><span><b style="color:#fff">▬</b> price</span><span><b style="color:#4aa3ff">▬</b> rainbow fair value</span><span><b style="color:#b36cff">▬</b> stock-to-flow model</span><span class="st">log scale</span></div><div class="mlegend">Rainbow = log-regression of price vs time with ±σ bands (our own fit, so band edges differ from other sites). S2F is shown for reference: it badly over-predicted after 2021 and is widely criticised. SOPR / NVT / NUPL need paid on-chain data and are not included. Educational only, not advice.</div>`);
+    drawCyc();
+  }
+  function drawCyc() {
+    const cv = $("cycc"), m = CY.m; if (!cv || !m) return;
+    const ctx = cv.getContext?.("2d"); if (!ctx) return;
+    const r = window.devicePixelRatio || 1, W = cv.clientWidth, Hh = cv.clientHeight; cv.width = W * r; cv.height = Hh * r; ctx.scale(r, r);
+    const n = CY.p.length, lo = Math.min(...CY.p.map(Math.log10), ...m.rain) - 0.1, hi = Math.max(...CY.p.map(Math.log10), ...m.rain, ...m.s2f) + 0.1;
+    const X = (i) => 38 + i / (n - 1) * (W - 46), Y = (v) => Hh - 18 - (v - lo) / (hi - lo) * (Hh - 28);
+    ctx.font = "10px monospace"; ctx.fillStyle = "#666"; ctx.strokeStyle = "#1a1a1a";
+    for (let v = Math.ceil(lo); v <= hi; v++) { ctx.beginPath(); ctx.moveTo(38, Y(v)); ctx.lineTo(W - 8, Y(v)); ctx.stroke(); ctx.fillText("$" + (10 ** v).toLocaleString(), 2, Y(v) - 2); }
+    for (let b = 0; b < 9; b++) { ctx.strokeStyle = BANDS[b][1] + "88"; ctx.beginPath(); m.rain.forEach((v, i) => { const y = Y(v + (b - 4) * 0.5 * m.R.sd); i ? ctx.lineTo(X(i), y) : ctx.moveTo(X(i), y); }); ctx.stroke(); }
+    const line = (arr, col, lw) => { ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); arr.forEach((v, i) => { const y = Y(v); i ? ctx.lineTo(X(i), y) : ctx.moveTo(X(i), y); }); ctx.stroke(); ctx.lineWidth = 1; };
+    line(m.s2f, "#b36cff", 1); line(m.rain, "#4aa3ff", 1.5); line(CY.p.map(Math.log10), "#ffffff", 1.6);
+  }
+
+  // ---------- Macro (Polymarket odds via /api/macro) ----------
+  const MC = { rows: [] };
+  const getMac = lg(async () => { MC.rows = await jget("/api/macro"); });
+  function rMac() {
+    const r = MC.rows.map((e) => `<tr><td style="text-align:left;white-space:normal;max-width:380px"><a href="https://polymarket.com/event/${esc(e.slug)}" target="_blank" rel="noopener"><b>${esc(e.t)}</b></a><div class="st">${esc(e.q)}</div></td><td style="text-align:left">${e.o.map(([n, p]) => `<div style="min-width:170px"><span class="${p >= 0.5 ? "up" : "st"}">${esc(n)} ${(p * 100).toFixed(0)}%</span><div style="height:4px;background:#222"><div style="height:4px;width:${(p * 100).toFixed(0)}%;background:${p >= 0.5 ? "#2fd27a" : "#555"}"></div></div></div>`).join("")}</td><td>${big(e.v24)}</td><td>${big(e.liq)}</td><td class="st">${e.end ? esc(e.end.slice(0, 10)) : "-"}</td></tr>`).join("");
+    $("s-mac").innerHTML = panel("Macro & event odds (Polymarket)", "most traded prediction markets right now · crowd probability, not a forecast guarantee", `<div class="tw"><table><thead><tr><th style="text-align:left">Event</th><th style="text-align:left">Odds</th><th>Vol 24h</th><th>Liquidity</th><th>Ends</th></tr></thead><tbody>${r || '<tr><td colspan="5" class="st">loading…</td></tr>'}</tbody></table></div>`);
+  }
+
+  // ---------- Stablecoin supply (DefiLlama), shown on the Chains & ETF tab ----------
+  const STBL = { s: null };
+  const getStbl = lg(async () => { const a = await jget("https://stablecoins.llama.fi/stablecoincharts/all"); STBL.s = a.slice(-180).map((x) => x.totalCirculatingUSD.peggedUSD); });
+  function stblPanel() {
+    const s = STBL.s; if (!s) return "";
+    const L = s.at(-1), ch = (d) => (L / s[s.length - 1 - d] - 1) * 100, lo = Math.min(...s), hi = Math.max(...s);
+    const pts = s.map((v, i) => `${(i / (s.length - 1) * 300).toFixed(1)},${(38 - (v - lo) / (hi - lo || 1) * 36).toFixed(1)}`).join(" ");
+    return panel("Stablecoin supply (dry powder)", "total stablecoins in circulation · rising = fresh cash entering crypto · DefiLlama", `<div class="mk7">${kc("Total supply", big(L), "")}${kc("24h", ps(ch(1), 2), usdS(L - s.at(-2)), cls(ch(1)))}${kc("7d", ps(ch(7), 2), usdS(L - s.at(-8)), cls(ch(7)))}${kc("30d", ps(ch(30), 2), usdS(L - s.at(-31)), cls(ch(30)))}${kc("90d", ps(ch(90), 2), usdS(L - s.at(-91)), cls(ch(90)))}</div><svg viewBox="0 0 300 40" preserveAspectRatio="none" style="width:100%;height:70px;margin-top:8px"><polyline fill="none" stroke="#ff9f1a" stroke-width="1.5" points="${pts}"/></svg><div class="st" style="font-size:10px">last 180 days</div>`, "margin-top:12px");
+  }
+
+  // ---------- lazy loaders for the extra tabs ----------
+  const LAZY = {
+    hlw: () => { lazy("snap", () => getSnap().then(getWhalePos), 6e5); lazy("wpos", getWhalePos, 6e4); },
+    opt: () => lazy("opt", getOpt, 12e4),
+    cyc: () => lazy("cyc", getCyc, 36e5),
+    mac: () => lazy("mac", getMac, 3e5),
+  };
+  setInterval(() => { if (document.body.dataset.v === "mkt") LAZY[sub]?.(); }, 15000);
+
   // ---------- boot ----------
+  getStbl(); setInterval(getStbl, 3600000);
   getFund(); setInterval(getFund, 20000);
   connectL();
   const waitPx = setInterval(() => { if (Object.keys(M.px).length > 50) { clearInterval(waitPx); getOI(); getMov(); setInterval(getOI, 120000); setInterval(() => getMov().then(checkMovers), 45000); } }, 1000);
