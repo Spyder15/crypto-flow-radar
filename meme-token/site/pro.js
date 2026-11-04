@@ -143,7 +143,7 @@
       if (document.body.dataset.v === "mkt") renderSub();
     }
   });
-  const getEtf = lg(async () => { CHN.etf = await jget("/api/etf"); });
+  const getEtf = lg(async () => { CHN.etf = await jget("/api/etf"); try { CHN.etfE = (await jget("/api/etf-eth")).data; } catch (e) { /* keep old */ } });
   const SW = { rows: [], sym: {} };
   const getSol = lg(async () => {
     const a = await jget("/api/sol-whales"), seen = new Set(SW.rows.map((r) => r.sig));
@@ -164,6 +164,16 @@
     const tape = `<div class="tw" style="margin-top:8px"><table><thead><tr><th>Time</th><th>Side</th><th>Token</th><th>Size</th><th>Wallet</th></tr></thead><tbody>${SW.rows.slice(0, 25).map((r) => `<tr><td class="st">${ago(r.ts * 1000)} ago</td><td class="${r.side === "buy" ? "up" : "dn"}">${r.side.toUpperCase()}</td><td><b>${lk(r.mint)}</b></td><td>${usd0(r.sol)} <span class="st">(${r.sol.toFixed(0)} SOL)</span></td><td><a href="https://solscan.io/tx/${esc(r.sig)}" target="_blank" rel="noopener">${esc(r.w.slice(0, 4))}…${esc(r.w.slice(-4))}</a></td></tr>`).join("")}</tbody></table></div>`;
     return panel("Solana whale swaps (Helius)", "Jupiter swaps of 3+ SOL · sampled every 10s (Jupiter is very busy, so not every swap is caught) · net = buys minus sells since page opened", tp + tape, "margin-top:12px");
   }
+  function ethEtfPanel() {
+    const rows = CHN.etfE;
+    if (!rows?.length) return panel("Spot Ethereum ETF flows", "iShares ETHA + Bitwise ETHW", '<div class="st" style="padding:10px">ETH ETF data unavailable right now.</div>', "margin-top:12px");
+    const days = {}; for (const r of rows) { const d = days[r.date] || (days[r.date] = { date: r.date, flow: 0 }); d.flow += +r.flowUsd || 0; }
+    const list = Object.values(days).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10), last = list[0], mx = Math.max(1, ...list.map((d) => Math.abs(d.flow)));
+    const latest = {}; for (const r of rows) if (!latest[r.ticker] || r.date > latest[r.ticker].date) latest[r.ticker] = r;
+    const f = Object.values(latest), hold = f.reduce((a, r) => a + (+r.holdings || 0), 0), aum = f.reduce((a, r) => a + (+r.aumUsd || 0), 0), wk = list.slice(0, 5).reduce((a, d) => a + d.flow, 0);
+    const body = `<div class="mk7" style="margin-top:8px">${kc("Net flow (" + last.date + ")", usdS(last.flow), "ETHA + ETHW", cls(last.flow))}${kc("Last 5 trading days", usdS(wk), "net", cls(wk))}${kc("ETF holdings", hold.toFixed(0) + " ETH", "≈ " + big(aum))}</div><div class="tw" style="margin-top:8px"><table><thead><tr><th>Date</th><th>Net flow</th><th></th></tr></thead><tbody>${list.map((d) => `<tr><td>${d.date}</td><td class="${cls(d.flow)}">${usdS(d.flow)}</td><td style="width:45%"><div style="height:8px;width:${(Math.abs(d.flow) / mx * 100).toFixed(0)}%;background:${d.flow >= 0 ? "#2fd27a" : "#ff4d4d"}"></div></td></tr>`).join("")}</tbody></table></div><div class="tw" style="margin-top:8px"><table><thead><tr><th>ETF</th><th>Holdings (ETH)</th><th>Value</th><th>Day flow</th><th>As of</th></tr></thead><tbody>${f.map((r) => `<tr><td><b>${esc(r.ticker)}</b> <span class="st">${esc(r.issuer)}</span></td><td>${(+r.holdings).toFixed(0)}</td><td>${big(+r.aumUsd)}</td><td class="${cls(+r.flowUsd)}">${usdS(+r.flowUsd)}</td><td class="st">${r.date}</td></tr>`).join("")}</tbody></table></div>`;
+    return panel("Spot Ethereum ETF flows", "flow = change in reported holdings × price · only iShares ETHA + Bitwise ETHW publish daily files, so other ETH ETFs (Fidelity, Grayscale…) are not included · data: XOOMAR", body, "margin-top:12px");
+  }
   function rChain() {
     const e = CHN.etf?.data, btc = M.px.BTC?.p || 0;
     let etf = '<div class="st" style="padding:10px">ETF data unavailable right now.</div>';
@@ -173,7 +183,7 @@
     }
     const mx = Math.max(1, ...CHN.rows.map((r) => Math.abs(r.d1 || 0)));
     const chains = `<div class="tw" style="margin-top:8px"><table><thead><tr><th>Chain</th><th>TVL</th><th>TVL 1d</th><th>TVL 7d</th><th>DEX vol 24h</th><th>DEX 1d</th><th>DEX 7d</th></tr></thead><tbody>${CHN.rows.map((r) => `<tr><td><b>${esc(r.n)}</b></td><td>${big(r.tvl)}</td><td style="background:rgba(${(r.d1 || 0) >= 0 ? "47,210,122" : "255,77,77"},${(Math.abs(r.d1 || 0) / mx * 0.25).toFixed(2)})">${ps(r.d1)}</td><td>${ps(r.d7)}</td><td>${r.dv ? big(r.dv) : "-"}</td><td>${ps(r.dv1)}</td><td>${ps(r.dv7)}</td></tr>`).join("") || '<tr><td colspan="7" class="st">loading…</td></tr>'}</tbody></table></div>`;
-    $("s-chain").innerHTML = panel("Spot Bitcoin ETF flows", "issuer holdings change · as-of dates differ per issuer · est. flow = BTC change × price", etf) + panel("Chain money flow", "TVL = capital parked on the chain · DEX volume = trading activity · DefiLlama", chains, "margin-top:12px") + stblPanel() + solPanel();
+    $("s-chain").innerHTML = panel("Spot Bitcoin ETF flows", "issuer holdings change · as-of dates differ per issuer · est. flow = BTC change × price", etf) + ethEtfPanel() + panel("Chain money flow", "TVL = capital parked on the chain · DEX volume = trading activity · DefiLlama", chains, "margin-top:12px") + stblPanel() + solPanel();
   }
 
   // ---------- screener (Hyperliquid perps) ----------

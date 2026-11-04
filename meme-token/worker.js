@@ -24,6 +24,16 @@ export default {
     }
     if (u.pathname === "/api/liqhist") return liqHist(req, env);
     if (u.pathname.startsWith("/api/push/")) return pushApi(req, env, u.pathname);
+    if (u.pathname === "/api/etf-eth") {
+      const cache = caches.default, key = new Request(u.origin + "/api/etf-eth"), hit = await cache.match(key);
+      if (hit) return hit;
+      try {
+        const up = await fetch("https://xoomar.com/api/markets/etf-flows?asset=eth&days=14", { headers: { "user-agent": "spyder-trench" } });
+        const res = new Response(await up.text(), { status: up.status, headers: { ...J, "cache-control": "public, max-age=900" } });
+        if (up.ok) await cache.put(key, res.clone());
+        return res;
+      } catch (e) { return new Response('{"error":"upstream"}', { status: 502, headers: J }); }
+    }
     if (u.pathname !== "/api/etf") return env.ASSETS.fetch(req);
     const cache = caches.default, key = new Request(u.origin + "/api/etf");
     const hit = await cache.match(key);
