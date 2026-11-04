@@ -70,6 +70,9 @@ footer{color:var(--mut);font-size:10px;padding:10px 16px 30px;max-width:1000px;l
 .stile{border:1px solid var(--line);padding:9px 11px;cursor:pointer;background:var(--panel2)}.stile:hover{border-color:#555}.stile.on{outline:2px solid var(--acc)}
 .stile .n{font-weight:700;font-size:12px;display:flex;justify-content:space-between;gap:6px}.stile .a{font-size:18px;font-weight:800;margin:3px 0}.stile .d{font-size:10.5px;color:var(--mut);line-height:1.5}
 .cimg{width:16px;height:16px;border-radius:50%;vertical-align:-3px;margin-right:6px;background:#222}
+.tmap{position:relative;width:100%;aspect-ratio:2/1;min-height:260px;background:#0b0f14;margin-top:8px}.tmc{position:absolute;box-sizing:border-box;border:1px solid #0b0f14;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;color:#e6edf5;line-height:1.25}.tmc:hover{outline:1px solid #fff;z-index:2}.tmc span{font-size:10px;opacity:.85}
+.wcl{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;padding:10px 2px}.wcl span{font-weight:600}
+#s-map,#s-soc{display:block}#s-soc th:nth-child(2),#s-soc td:nth-child(2){text-align:left}
 .mlegend{font-size:10.5px;color:var(--mut);margin-top:8px;line-height:1.6}
 .tw td b.fu,.tw td b.fd{transition:none}
 .wr{display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #141414;font-size:12px}.wr b{min-width:46px}.wr .sp{margin-left:auto}
@@ -114,7 +117,7 @@ footer{padding:10px 10px 24px}
   <div class="live" id="live">LIVE</div>
 </header>
 <div id="v-mkt" class="wrap">
-  <div class="tabs sub" id="subtabs"><span class="tab on" data-u="over">Overview</span><span class="tab" data-u="scr">Screener</span><span class="tab" data-u="deriv">Derivatives</span><span class="tab" data-u="mov">Movers</span><span class="tab" data-u="chain">Chains &amp; ETF</span><span class="tab" data-u="hlw">HL Whales</span><span class="tab" data-u="liq">Liq Map</span><span class="tab" data-u="hype">HYPE &amp; HyperEVM</span><span class="tab" data-u="opt">Options</span><span class="tab" data-u="onc">On-Chain</span><span class="tab" data-u="cyc">Cycles</span><span class="tab" data-u="mac">Macro</span><span class="tab" data-u="jrn">Journal</span><span class="tab" data-u="ask">Ask</span><span class="tab" data-u="watch">Watchlist ★</span></div>
+  <div class="tabs sub" id="subtabs"><span class="tab on" data-u="over">Overview</span><span class="tab" data-u="scr">Screener</span><span class="tab" data-u="deriv">Derivatives</span><span class="tab" data-u="mov">Movers</span><span class="tab" data-u="chain">Chains &amp; ETF</span><span class="tab" data-u="hlw">HL Whales</span><span class="tab" data-u="liq">Liq Map</span><span class="tab" data-u="hype">HYPE &amp; HyperEVM</span><span class="tab" data-u="opt">Options</span><span class="tab" data-u="onc">On-Chain</span><span class="tab" data-u="cyc">Cycles</span><span class="tab" data-u="mac">Macro</span><span class="tab" data-u="jrn">Journal</span><span class="tab" data-u="map">Treemap</span><span class="tab" data-u="soc">Social</span><span class="tab" data-u="ask">Ask</span><span class="tab" data-u="watch">Watchlist ★</span></div>
 <div id="s-over">
   <div class="verdict" id="mverdict"></div>
   <div class="mk7" id="mkpis"></div>

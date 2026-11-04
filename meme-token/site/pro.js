@@ -21,16 +21,16 @@
 
   // ---------- sub tabs ----------
   const wrap = $("v-mkt");
-  for (const id of ["scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "watch"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
+  for (const id of ["scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "watch"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
   function show(u) {
     sub = u;
     document.querySelectorAll("#subtabs .tab").forEach((t) => t.classList.toggle("on", t.dataset.u === u));
-    for (const id of ["over", "scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "watch"]) $("s-" + id).hidden = id !== u;
+    for (const id of ["over", "scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "watch"]) $("s-" + id).hidden = id !== u;
     LAZY[u]?.();
     renderSub();
   }
   $("subtabs").onclick = (e) => { const u = e.target.dataset?.u; if (u) show(u); };
-  function renderSub() { if ((sub === "jrn" || sub === "ask") && $("s-" + sub).innerHTML) return; ({ scr: rScr, hlw: rHlw, liq: rLiq, hype: rHype, onc: rOn, jrn: rJrn, ask: rAsk, opt: rOpt, cyc: rCyc, mac: rMac, deriv: rDeriv, mov: rMov, chain: rChain, watch: rWatch })[sub]?.(); }
+  function renderSub() { if ((sub === "jrn" || sub === "ask") && $("s-" + sub).innerHTML) return; ({ scr: rScr, hlw: rHlw, liq: rLiq, hype: rHype, onc: rOn, jrn: rJrn, ask: rAsk, map: rMap, soc: rSoc, opt: rOpt, cyc: rCyc, mac: rMac, deriv: rDeriv, mov: rMov, chain: rChain, watch: rWatch })[sub]?.(); }
 
   // ---------- data: derivatives ----------
   const lg = (fn) => async () => { try { await fn(); } catch (e) { /* keep stale data */ } if (document.body.dataset.v === "mkt") renderSub(); };
@@ -566,8 +566,95 @@
   $("s-ask").onclick = (e) => { const a = e.target.dataset?.ak; if (a) { AK.q = a; rAsk(); } };
   $("s-ask").addEventListener("keydown", (e) => { if (e.target.id === "akq" && e.key === "Enter") { AK.q = e.target.value.trim(); rAsk(); } });
 
+  // ---------- Treemap + chart (Santiment-style) ----------
+  const TM = { mode: "c24", n: 50, hide: true, sym: "BTC", rng: 180, k: null, kSym: null };
+  const tmCol = (v) => {
+    if (v == null || !isFinite(v)) return "#262f3b";
+    const a = Math.min(1, Math.abs(v) / 10), t = Math.abs(v) < 0.05 ? 0 : 0.18 + a * 0.62;
+    return v >= 0 ? `rgba(46,204,113,${t})` : `rgba(231,76,60,${t})`;
+  };
+  function squarify(items, x, y, w, h, out) {
+    if (!items.length) return;
+    if (items.length === 1) { out.push({ it: items[0], x, y, w, h }); return; }
+    const tot = items.reduce((a, i) => a + i.v, 0), horiz = w >= h, side = horiz ? h : w;
+    let row = [], rs = 0, best = Infinity, i = 0;
+    for (; i < items.length; i++) {
+      const r2 = row.concat(items[i]), s2 = rs + items[i].v, len = s2 / tot * (horiz ? w : h);
+      const worst = Math.max(...r2.map((q) => { const l2 = q.v / s2 * side; return Math.max(len / l2, l2 / len); }));
+      if (worst > best && row.length) break;
+      row = r2; rs = s2; best = worst;
+    }
+    const len = rs / tot * (horiz ? w : h);
+    let o = 0;
+    for (const q of row) { const l2 = q.v / rs * side; out.push({ it: q, x: horiz ? x : x + o, y: horiz ? y + o : y, w: horiz ? len : l2, h: horiz ? l2 : len }); o += l2; }
+    if (horiz) squarify(items.slice(i), x + len, y, w - len, h, out); else squarify(items.slice(i), x, y + len, w, h - len, out);
+  }
+  const MODES = { c24: "Price change 24h", c7: "Price change 7d", c1: "Price change 1h", vol: "Volume / market cap" };
+  function tmVal(c) { return TM.mode === "c24" ? c.c24 : TM.mode === "c7" ? c.c7 : TM.mode === "c1" ? c.c1 : (c.mc ? c.vol / c.mc * 100 : null); }
+  function rMap() {
+    const coins = (M.coins || []).filter((c) => c.mc > 0 && (!TM.hide || !STB.test(c.sym))).slice(0, TM.n);
+    let tree = '<div class="st" style="padding:14px">loading market caps…</div>';
+    if (coins.length) {
+      const out = []; squarify(coins.map((c) => ({ c, v: c.mc })), 0, 0, 100, 100, out);
+      tree = `<div class="tmap">${out.map(({ it, x, y, w, h }) => { const c = it.c, v = tmVal(c), big_ = w * h > 40, mid = w * h > 8; return `<div class="tmc" data-tm="${esc(c.sym)}" title="${esc(c.name)} · mcap ${big(c.mc)}" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%;background:${TM.mode === "vol" ? `rgba(86,156,255,${Math.min(0.8, 0.12 + (v || 0) / 40)})` : tmCol(v)}"><b style="font-size:${big_ ? 15 : mid ? 11 : 8}px">${esc(c.sym)}</b>${mid && v != null ? `<span>${TM.mode === "vol" ? v.toFixed(1) : (v >= 0 ? "+" : "") + v.toFixed(2)}%</span>` : ""}</div>`; }).join("")}</div>`;
+    }
+    const bar = `<div class="bar">${Object.entries(MODES).map(([k, l]) => `<span class="chip${TM.mode === k ? " on" : ""}" data-tmm="${k}">${l}</span>`).join("")}${[30, 50, 100].map((n) => `<span class="chip${TM.n === n ? " on" : ""}" data-tmn="${n}">top ${n}</span>`).join("")}<span class="chip${TM.hide ? " on" : ""}" data-tmh="1">hide stables</span></div>`;
+    const legend = '<div class="mlegend">Colour = performance, size = market cap. Click a tile to chart it below. Source: CoinGecko.</div>';
+    const c = coins.find((x) => x.sym === TM.sym) || (M.coins || []).find((x) => x.sym === TM.sym);
+    const hdr = c ? `<div class="mk7">${kc(esc(c.name) + " (" + esc(c.sym) + ")", "$" + (c.p >= 1 ? c.p.toLocaleString(undefined, { maximumFractionDigits: 2 }) : c.p), "price")}${kc("24h", ps(c.c24), "")}${kc("Market cap", big(c.mc), "rank #" + (c.rank ?? "-"))}${kc("Volume 24h", big(c.vol), "")}</div>` : "";
+    const rb = `<div class="bar">${[[30, "30d"], [90, "90d"], [180, "180d"], [365, "1y"]].map(([d, l]) => `<span class="chip${TM.rng === d ? " on" : ""}" data-tmr="${d}">${l}</span>`).join("")}</div>`;
+    $("s-map").innerHTML = panel("Market overview · treemap", "top " + TM.n + " by market cap", bar + tree + legend) + panel("Chart · " + esc(TM.sym), "price + volume · Binance daily", hdr + rb + `<div id="tmch">${chartSvg()}</div>`, "margin-top:12px");
+  }
+  function chartSvg() {
+    const k = TM.k;
+    if (!k || TM.kSym !== TM.sym + TM.rng) return '<div class="st" style="padding:14px">loading chart…</div>';
+    if (!k.length) return '<div class="st" style="padding:14px">no Binance USDT pair for this coin</div>';
+    const W_ = 900, H_ = 300, pb = 70, cl = k.map((x) => +x[4]), vo = k.map((x) => +x[7]);
+    const lo = Math.min(...cl), hi = Math.max(...cl), vm = Math.max(...vo), n = k.length, bw = W_ / n;
+    const X = (i) => (i + 0.5) * bw, Y = (v) => (H_ - pb - 10) - (v - lo) / (hi - lo || 1) * (H_ - pb - 30) + 10;
+    const line = cl.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1)).join("");
+    const area = line + `L${X(n - 1).toFixed(1)} ${H_ - pb}L${X(0).toFixed(1)} ${H_ - pb}Z`;
+    const up = cl[n - 1] >= cl[0], col = up ? "#2ecc71" : "#e74c3c";
+    const bars = vo.map((v, i) => `<rect x="${(i * bw + 0.5).toFixed(1)}" y="${(H_ - v / vm * (pb - 8)).toFixed(1)}" width="${Math.max(1, bw - 1).toFixed(1)}" height="${(v / vm * (pb - 8)).toFixed(1)}" fill="${+k[i][4] >= +k[i][1] ? "rgba(46,204,113,.45)" : "rgba(231,76,60,.45)"}"/>`).join("");
+    const f = (v) => (v >= 1 ? v.toLocaleString(undefined, { maximumFractionDigits: 2 }) : v.toPrecision(3));
+    const d0 = new Date(k[0][0]).toLocaleDateString(), d1 = new Date(k[n - 1][0]).toLocaleDateString();
+    return `<svg viewBox="0 0 ${W_} ${H_}" style="width:100%;height:auto;max-height:340px"><path d="${area}" fill="${col}" opacity=".08"/><path d="${line}" fill="none" stroke="${col}" stroke-width="1.6"/>${bars}<text x="4" y="12" fill="#8a97a8" font-size="11">${f(hi)}</text><text x="4" y="${H_ - pb - 2}" fill="#8a97a8" font-size="11">${f(lo)}</text><text x="${W_ - 4}" y="${H_ - 2}" fill="#8a97a8" font-size="10" text-anchor="end">${d1}</text><text x="4" y="${H_ - 2}" fill="#8a97a8" font-size="10">${d0}</text></svg>`;
+  }
+  const getTmK = async () => {
+    const key = TM.sym + TM.rng;
+    try { TM.k = await jget(`${BA}/api/v3/klines?symbol=${encodeURIComponent(TM.sym)}USDT&interval=1d&limit=${TM.rng}`); } catch (e) { TM.k = []; }
+    TM.kSym = key; if (sub === "map") { const e = $("tmch"); if (e) e.innerHTML = chartSvg(); }
+  };
+  const tmReload = () => { TM.kSym = null; rMap(); getTmK(); };
+  $("s-map").onclick = (e) => {
+    const t = e.target.closest("[data-tm],[data-tmm],[data-tmn],[data-tmh],[data-tmr]"); if (!t) return;
+    const d = t.dataset;
+    if (d.tm) { TM.sym = d.tm; tmReload(); $("tmch")?.scrollIntoView({ block: "center", behavior: "smooth" }); return; }
+    if (d.tmm) TM.mode = d.tmm; if (d.tmn) TM.n = +d.tmn; if (d.tmh) TM.hide = !TM.hide;
+    if (d.tmr) { TM.rng = +d.tmr; tmReload(); return; }
+    rMap();
+  };
+
+  // ---------- Social / trends (free proxies, no Twitter data) ----------
+  const SO = { tr: null, cats: null, fh: null };
+  const getSoc = lg(async () => {
+    const [t, f] = await Promise.allSettled([jget("https://api.coingecko.com/api/v3/search/trending"), jget("https://api.alternative.me/fng/?limit=30")]);
+    if (t.status === "fulfilled") { SO.tr = (t.value.coins || []).map((x) => x.item); SO.cats = t.value.categories || []; SO.nft = t.value.nfts || []; }
+    if (f.status === "fulfilled") SO.fh = f.value.data.map((x) => +x.value).reverse();
+  });
+  function rSoc() {
+    const f = SO.fh, g = M.g;
+    const fng = f ? `<div class="mk7">${kc("Fear & Greed", f.at(-1), f.at(-1) < 25 ? "extreme fear" : f.at(-1) < 45 ? "fear" : f.at(-1) < 55 ? "neutral" : f.at(-1) < 75 ? "greed" : "extreme greed")}${kc("7d ago", f.at(-8) ?? "-", "")}${kc("30d ago", f[0], "")}${g ? kc("BTC dominance", g.market_cap_percentage.btc.toFixed(1) + "%", "ETH " + g.market_cap_percentage.eth.toFixed(1) + "%") : ""}</div><div style="display:flex;align-items:flex-end;gap:2px;height:60px;margin-top:8px">${f.map((v) => `<div title="${v}" style="flex:1;height:${v}%;background:${v < 25 ? "#e74c3c" : v < 45 ? "#e67e22" : v < 55 ? "#8a97a8" : v < 75 ? "#7bd88f" : "#2ecc71"};opacity:.85"></div>`).join("")}</div>` : '<div class="st" style="padding:10px">loading…</div>';
+    const tr = SO.tr ? `<div class="tw"><table><thead><tr><th>#</th><th>Coin</th><th>Mcap rank</th><th>Price</th><th>24h</th></tr></thead><tbody>${SO.tr.map((x, i) => { const p = x.data?.price_change_percentage_24h?.usd; return `<tr><td>${i + 1}</td><td style="text-align:left"><img src="${esc(x.thumb)}" width="16" height="16" style="vertical-align:middle;margin-right:6px" alt=""><b>${esc(x.symbol)}</b> <span class="st">${esc(x.name)}</span></td><td>${x.market_cap_rank ?? "-"}</td><td>${typeof x.data?.price === "number" ? "$" + (x.data.price >= 1 ? x.data.price.toFixed(2) : x.data.price.toPrecision(3)) : "-"}</td><td>${ps(p)}</td></tr>`; }).join("")}</tbody></table></div>` : '<div class="st" style="padding:10px">loading…</div>';
+    const words = SO.tr ? [...SO.cats.map((c) => [c.name, c.market_cap_1h_change]), ...SO.tr.map((x) => [x.symbol, x.data?.price_change_percentage_24h?.usd])] : [];
+    const cloud = words.length ? `<div class="wcl">${words.map(([w, v], i) => `<span style="font-size:${Math.max(11, 22 - i * 0.7)}px;color:${v == null ? "var(--mut)" : v >= 0 ? "#2ecc71" : "#e74c3c"}">${esc(w)}</span>`).join("")}</div>` : "";
+    const cats = SO.cats?.length ? `<div class="tw"><table><thead><tr><th>Trending category</th><th>Mcap 1h</th><th>Coins</th></tr></thead><tbody>${SO.cats.map((c) => `<tr><td style="text-align:left"><b>${esc(c.name)}</b></td><td>${ps(c.market_cap_1h_change)}</td><td>${c.coins_count}</td></tr>`).join("")}</tbody></table></div>` : "";
+    $("s-soc").innerHTML = panel("Sentiment", "alternative.me Fear & Greed · last 30 days", fng) + panel("Hot trends, 24h", "what people search most on CoinGecko (our free proxy for social buzz)", cloud + '<div class="mlegend">Word size = trend rank, colour = 24h price move. No Twitter/Reddit/AI summary: those need paid APIs.</div>', "margin-top:12px") + panel("Trending coins", "CoinGecko search trending", tr, "margin-top:12px") + (cats ? panel("Trending categories", "narratives getting attention", cats, "margin-top:12px") : "");
+  }
   // ---------- lazy loaders for the extra tabs ----------
   const LAZY = {
+    map: () => { if (TM.kSym !== TM.sym + TM.rng) getTmK(); },
+    soc: () => lazy("soc", getSoc, 3e5),
     hlw: () => { lazy("snap", () => getSnap().then(getWhalePos), 6e5); lazy("wpos", getWhalePos, 6e4); },
     opt: () => lazy("opt", getOpt, 12e4),
     cyc: () => lazy("cyc", getCyc, 36e5),
