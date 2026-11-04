@@ -21,16 +21,16 @@
 
   // ---------- sub tabs ----------
   const wrap = $("v-mkt");
-  for (const id of ["scr", "deriv", "mov", "chain", "hlw", "opt", "cyc", "mac", "watch"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
+  for (const id of ["scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "watch"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
   function show(u) {
     sub = u;
     document.querySelectorAll("#subtabs .tab").forEach((t) => t.classList.toggle("on", t.dataset.u === u));
-    for (const id of ["over", "scr", "deriv", "mov", "chain", "hlw", "opt", "cyc", "mac", "watch"]) $("s-" + id).hidden = id !== u;
+    for (const id of ["over", "scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "watch"]) $("s-" + id).hidden = id !== u;
     LAZY[u]?.();
     renderSub();
   }
   $("subtabs").onclick = (e) => { const u = e.target.dataset?.u; if (u) show(u); };
-  function renderSub() { ({ scr: rScr, hlw: rHlw, opt: rOpt, cyc: rCyc, mac: rMac, deriv: rDeriv, mov: rMov, chain: rChain, watch: rWatch })[sub]?.(); }
+  function renderSub() { if ((sub === "jrn" || sub === "ask") && $("s-" + sub).innerHTML) return; ({ scr: rScr, hlw: rHlw, liq: rLiq, hype: rHype, onc: rOn, jrn: rJrn, ask: rAsk, opt: rOpt, cyc: rCyc, mac: rMac, deriv: rDeriv, mov: rMov, chain: rChain, watch: rWatch })[sub]?.(); }
 
   // ---------- data: derivatives ----------
   const lg = (fn) => async () => { try { await fn(); } catch (e) { /* keep stale data */ } if (document.body.dataset.v === "mkt") renderSub(); };
@@ -441,12 +441,130 @@
     return panel("Stablecoin supply (dry powder)", "total stablecoins in circulation · rising = fresh cash entering crypto · DefiLlama", `<div class="mk7">${kc("Total supply", big(L), "")}${kc("24h", ps(ch(1), 2), usdS(L - s.at(-2)), cls(ch(1)))}${kc("7d", ps(ch(7), 2), usdS(L - s.at(-8)), cls(ch(7)))}${kc("30d", ps(ch(30), 2), usdS(L - s.at(-31)), cls(ch(30)))}${kc("90d", ps(ch(90), 2), usdS(L - s.at(-91)), cls(ch(90)))}</div><svg viewBox="0 0 300 40" preserveAspectRatio="none" style="width:100%;height:70px;margin-top:8px"><polyline fill="none" stroke="#ff9f1a" stroke-width="1.5" points="${pts}"/></svg><div class="st" style="font-size:10px">last 180 days</div>`, "margin-top:12px");
   }
 
+  // ---------- Liquidation map + cascade (from live whale positions) ----------
+  const LM = { coin: "BTC" };
+  function rLiq() {
+    const agg = {};
+    for (const [a, p] of Object.entries(HW.pos)) for (const x of p.list) if (x.liq) { const g = agg[x.c] || (agg[x.c] = { c: x.c, v: 0, rows: [] }); g.v += x.val; g.rows.push({ liq: x.liq, val: x.val, long: x.sz > 0 }); }
+    const coins = Object.values(agg).sort((a, b) => b.v - a.v).slice(0, 10), n = Object.keys(HW.pos).length;
+    const chips = coins.map((g) => `<span class="chip${LM.coin === g.c ? " on" : ""}" data-lc="${esc(g.c)}">${esc(g.c)}</span>`).join("");
+    const g = agg[LM.coin] || coins[0], price = g && priceOf(g.c);
+    let body = '<div class="st" style="padding:10px">loading whale positions (takes ~10s)…</div>';
+    if (g && price) {
+      const B = 30, lo = price * 0.6, hi = price * 1.4, st = (hi - lo) / B, bk = Array.from({ length: B }, (_, i) => ({ p: lo + (i + 0.5) * st, l: 0, s: 0 }));
+      for (const r of g.rows) { const i = Math.floor((r.liq - lo) / st); if (i >= 0 && i < B) bk[i][r.long ? "l" : "s"] += r.val; }
+      const mx = Math.max(1, ...bk.map((b) => b.l + b.s));
+      const cas = [2, 5, 10, 20].map((d) => { const dn = g.rows.filter((r) => r.long && r.liq >= price * (1 - d / 100) && r.liq <= price).reduce((a, r) => a + r.val, 0), up = g.rows.filter((r) => !r.long && r.liq <= price * (1 + d / 100) && r.liq >= price).reduce((a, r) => a + r.val, 0); return [d, dn, up]; });
+      body = `<div class="mk7">${kc("Price", px(price), g.c)}${kc("Long liquidations below", big(g.rows.filter((r) => r.long && r.liq < price).reduce((a, r) => a + r.val, 0)), "whale longs at risk", "dn")}${kc("Short liquidations above", big(g.rows.filter((r) => !r.long && r.liq > price).reduce((a, r) => a + r.val, 0)), "whale shorts at risk", "up")}${kc("Positions counted", g.rows.length, "from " + n + " whale wallets")}</div><div class="wh2">Liquidation cascade: notional forced to close if price moves</div><div class="tw"><table><thead><tr><th style="text-align:left">Move</th><th>Price</th><th>Longs liquidated (drop)</th><th>Price</th><th>Shorts liquidated (rise)</th></tr></thead><tbody>${cas.map(([d, dn, up]) => `<tr><td style="text-align:left"><b>±${d}%</b></td><td>${px(price * (1 - d / 100))}</td><td class="dn">${big(dn)}</td><td>${px(price * (1 + d / 100))}</td><td class="up">${big(up)}</td></tr>`).join("")}</tbody></table></div><div class="wh2">Liquidation map: whale liquidation prices (${esc(g.c)})</div><div class="tw" style="max-height:60vh"><table><thead><tr><th style="text-align:left">Price level</th><th>Distance</th><th>Long liq</th><th style="width:35%"></th><th>Short liq</th></tr></thead><tbody>${bk.slice().reverse().map((b) => `<tr${Math.abs(b.p - price) < st / 2 ? ' style="background:#1a1408"' : ""}><td style="text-align:left"><b>${px(b.p)}</b></td><td>${ps((b.p / price - 1) * 100, 1)}</td><td class="dn">${b.l ? big(b.l) : "-"}</td><td><div style="height:8px;background:${b.p < price ? "#ff4d4d" : "#2fd27a"};width:${((b.l + b.s) / mx * 100).toFixed(0)}%"></div></td><td class="up">${b.s ? big(b.s) : "-"}</td></tr>`).join("")}</tbody></table></div>`;
+    }
+    $("s-liq").innerHTML = panel("Liquidation map & cascade", "built from live positions of the biggest Hyperliquid whales · not the whole market", `<div class="bar">${chips}</div>${body}<div class="mlegend" style="margin-top:8px">This is a partial map: it only counts the ~${n || 40} whale wallets we poll, so real exchange-wide liquidations are larger. Cross-margin liquidation prices are estimates from Hyperliquid. For market-wide forced closes see the Derivatives tab (live Binance liquidations).</div>`);
+  }
+  $("s-liq").onclick = (e) => { const c = e.target.dataset?.lc; if (c) { LM.coin = c; rLiq(); } };
+
+  // ---------- HYPE buyback fund + HyperEVM DeFi ----------
+  const HY = { bal: null, circ: null, hist: LS.get("hypefund", []) };
+  const getHype = lg(async () => {
+    const st = await hlPost({ type: "spotClearinghouseState", user: "0xfefefefefefefefefefefefefefefefefefefefe" });
+    HY.bal = +(st.balances.find((b) => b.coin === "HYPE")?.total || 0);
+    try { const d = await hlPost({ type: "tokenDetails", tokenId: "0x0d01dc56dcaaca66ad901c959b4011ec" }); HY.circ = +d.circulatingSupply; } catch (e) { /* optional */ }
+    const h = HY.hist, now = Date.now();
+    if (!h.length || now - h.at(-1)[0] > 6e5) { h.push([now, HY.bal]); if (h.length > 600) h.shift(); LS.set("hypefund", h); }
+  });
+  function rHype() {
+    const S = HW.snap, p = priceOf("HYPE") || 0, b = HY.bal, h = HY.hist, d0 = h.length > 1 ? b - h[0][1] : null;
+    const fund = b == null ? '<div class="st" style="padding:10px">loading…</div>' : `<div class="mk7">${kc("Assistance Fund HYPE", b.toLocaleString(undefined, { maximumFractionDigits: 0 }), "protocol buyback wallet")}${kc("Value", p ? big(b * p) : "-", "HYPE " + (p ? px(p) : "-"))}${kc("% of circulating", HY.circ ? (b / HY.circ * 100).toFixed(2) + "%" : "-", "")}${kc("Added since first seen", d0 == null ? "-" : (d0 >= 0 ? "+" : "") + d0.toLocaleString(undefined, { maximumFractionDigits: 0 }), d0 == null ? "keep the page open / revisit" : "in " + ago(h[0][0]), d0 > 0 ? "up" : "")}</div>`;
+    const bridge = S?.defi?.find((x) => x.cat === "Bridge" && /Hyperliquid/.test(x.n));
+    const defi = S?.defi ? `<div class="mk7">${kc("DeFi TVL on Hyperliquid", big(S.defi.reduce((a, x) => a + x.tvl, 0)), "top " + S.defi.length + " protocols")}${bridge ? kc("USDC bridge TVL", big(bridge.tvl), "1d " + (bridge.d1 >= 0 ? "+" : "") + bridge.d1.toFixed(2) + "% · 7d " + (bridge.d7 >= 0 ? "+" : "") + bridge.d7.toFixed(2) + "% (capital flow in/out)", cls(bridge.d1)) : ""}</div><div class="tw" style="margin-top:8px;max-height:60vh"><table><thead><tr><th style="text-align:left">Protocol</th><th>Category</th><th>TVL</th><th>1d</th><th>7d</th></tr></thead><tbody>${S.defi.map((x) => `<tr><td style="text-align:left"><a href="${esc(x.url || "#")}" target="_blank" rel="noopener"><b>${esc(x.n)}</b></a></td><td class="st">${esc(x.cat || "")}</td><td>${big(x.tvl)}</td><td>${ps(x.d1)}</td><td>${ps(x.d7)}</td></tr>`).join("")}</tbody></table></div>` : '<div class="st" style="padding:10px">loading…</div>';
+    $("s-hype").innerHTML = panel("HYPE buyback (Assistance Fund)", "Hyperliquid fees buy HYPE into this wallet · balance read live on-chain", fund + '<div class="mlegend" style="margin-top:8px">The fund wallet\'s HYPE balance only grows from buybacks, so its growth is the buyback pace. "Added since first seen" is measured from when this browser first opened the tab.</div>') + panel("HyperEVM / Hyperliquid DeFi & bridge flow", "DefiLlama TVL by protocol · snapshot " + (S ? ago(S.ts) + " old" : ""), defi, "margin-top:12px");
+  }
+
+  // ---------- On-chain valuation (MVRV, NUPL, NVT) ----------
+  const ON = { d: {}, nvt: null };
+  const getOn = lg(async () => {
+    for (const a of ["btc", "eth"]) {
+      const r = await jget(`https://community-api.coinmetrics.io/v4/timeseries/asset-metrics?assets=${a}&metrics=CapMVRVCur,CapMrktCurUSD&frequency=1d&start_time=${new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10)}&page_size=1000`);
+      ON.d[a] = r.data.map((x) => ({ mv: +x.CapMVRVCur, mc: +x.CapMrktCurUSD }));
+    }
+    try { const t = await jget("https://api.blockchain.info/charts/estimated-transaction-volume-usd?timespan=120days&format=json&cors=true"), v = t.values.map((x) => x.y).slice(-90); ON.nvt = ON.d.btc.at(-1).mc / (v.reduce((a, b) => a + b, 0) / v.length); } catch (e) { /* optional */ }
+  });
+  const zone = (n) => (n < 0 ? ["Capitulation", "#7b1fa2"] : n < 0.25 ? ["Hope / fear", "#1565c0"] : n < 0.5 ? ["Optimism", "#2e7d32"] : n < 0.75 ? ["Belief", "#f9a825"] : ["Euphoria / greed", "#d84315"]);
+  function rOn() {
+    const card = (a, S) => {
+      const d = ON.d[a]; if (!d) return "";
+      const L = d.at(-1), nupl = 1 - 1 / L.mv, z = zone(nupl), rc = L.mc / L.mv, p = M.px[S]?.p, spark = d.slice(-365).map((x) => x.mv), lo = Math.min(...spark), hi = Math.max(...spark);
+      const pts = spark.map((v, i) => `${(i / (spark.length - 1) * 300).toFixed(1)},${(38 - (v - lo) / (hi - lo || 1) * 36).toFixed(1)}`).join(" ");
+      return `<div class="wh2">${S}</div><div class="mk7">${kc("MVRV", L.mv.toFixed(2), L.mv > 3.2 ? "historically overheated" : L.mv < 1 ? "below realized value (cheap)" : "market cap / realized cap")}${kc("NUPL", nupl.toFixed(2), `<span style="color:${z[1]}">${z[0]}</span>`)}${kc("Realized cap", big(rc), "avg on-chain cost basis")}${kc("Realized price", p ? px(p / L.mv) : "-", p ? "price is " + ((L.mv - 1) * 100).toFixed(0) + "% above" : "")}${a === "btc" && ON.nvt ? kc("NVT (90d)", ON.nvt.toFixed(0), ON.nvt > 150 ? "expensive vs network use" : ON.nvt < 50 ? "cheap vs network use" : "market cap / tx volume") : ""}</div><svg viewBox="0 0 300 40" preserveAspectRatio="none" style="width:100%;height:60px;margin-top:6px"><polyline fill="none" stroke="#ff9f1a" stroke-width="1.5" points="${pts}"/></svg><div class="st" style="font-size:10px">MVRV, last 12 months</div>`;
+    };
+    $("s-onc").innerHTML = panel("On-chain valuation", "Coin Metrics community data (daily) · NUPL = 1 − 1/MVRV · NVT = market cap / 90d avg on-chain USD volume", (ON.d.btc ? card("btc", "BTC") + card("eth", "ETH") : '<div class="st" style="padding:10px">loading…</div>') + '<div class="mlegend" style="margin-top:8px">SOPR needs per-coin spent-output data that is not free, so it is not shown. Valuation indicators are context, not timing signals. Not advice.</div>');
+  }
+
+  // ---------- Trade journal (stored only in this browser) ----------
+  const JR = { list: LS.get("journal", []), msg: "" };
+  const jsave = () => LS.set("journal", JR.list);
+  const jpnl = (t) => (t.exit / t.entry - 1) * (t.side === "SHORT" ? -1 : 1) * t.size - (t.fee || 0);
+  function rJrn() {
+    const L = JR.list.slice().sort((a, b) => a.ts - b.ts), pn = L.map(jpnl), tot = pn.reduce((a, b) => a + b, 0), win = pn.filter((v) => v > 0), los = pn.filter((v) => v < 0);
+    let eq = 0, peak = 0, dd = 0; const curve = pn.map((v) => (eq += v, peak = Math.max(peak, eq), dd = Math.min(dd, eq - peak), eq));
+    const pf = los.length ? win.reduce((a, b) => a + b, 0) / Math.abs(los.reduce((a, b) => a + b, 0)) : null;
+    const mn = Math.min(0, ...curve), mxv = Math.max(0, ...curve), pts = curve.map((v, i) => `${(curve.length > 1 ? i / (curve.length - 1) * 300 : 150).toFixed(1)},${(38 - (v - mn) / (mxv - mn || 1) * 36).toFixed(1)}`).join(" ");
+    const f = (id, ph, w) => `<input id="${id}" placeholder="${ph}" autocomplete="off" style="${inp};width:${w}px">`;
+    $("s-jrn").innerHTML = panel("Trade journal", "saved only in this browser (localStorage) · nothing is uploaded", `<div class="bar">${f("jsym", "Symbol e.g. BTC", 110)}<select id="jside" style="${inp}"><option>LONG</option><option>SHORT</option></select>${f("jen", "Entry price", 100)}${f("jex", "Exit price", 100)}${f("jsz", "Size $ notional", 120)}${f("jfee", "Fees $ (opt.)", 100)}${f("jnote", "Note", 160)}<span class="chip on" data-j="add">Add trade</span></div><div class="bar"><textarea id="jcsv" rows="2" placeholder="Or paste CSV rows: symbol,side,entry,exit,size[,fees[,note]]  (one trade per line)" style="${inp};width:min(520px,100%)"></textarea><span class="chip" data-j="csv">Import CSV</span><span class="chip" data-j="clear">Clear all</span><span class="st">${esc(JR.msg)}</span></div><div class="mk7">${kc("Trades", L.length, "")}${kc("Net PnL", usdS(tot), "after fees", cls(tot))}${kc("Win rate", L.length ? (win.length / L.length * 100).toFixed(0) + "%" : "-", win.length + "W / " + los.length + "L")}${kc("Profit factor", pf == null ? "-" : pf.toFixed(2), "gross win / gross loss")}${kc("Avg win / loss", win.length || los.length ? `${big(win.length ? win.reduce((a, b) => a + b, 0) / win.length : 0)} / ${big(los.length ? Math.abs(los.reduce((a, b) => a + b, 0) / los.length) : 0)}` : "-", "")}${kc("Max drawdown", big(Math.abs(dd)), "on closed trades", dd < 0 ? "dn" : "")}</div>${curve.length > 1 ? `<svg viewBox="0 0 300 40" preserveAspectRatio="none" style="width:100%;height:70px;margin-top:8px"><polyline fill="none" stroke="#ff9f1a" stroke-width="1.5" points="${pts}"/></svg><div class="st" style="font-size:10px">equity curve (closed trades)</div>` : ""}<div class="tw" style="margin-top:8px;max-height:50vh"><table><thead><tr><th style="text-align:left">Date</th><th style="text-align:left">Symbol</th><th>Side</th><th>Entry</th><th>Exit</th><th>Size</th><th>PnL</th><th style="text-align:left">Note</th><th></th></tr></thead><tbody>${L.slice().reverse().map((t) => `<tr><td class="st" style="text-align:left">${new Date(t.ts).toISOString().slice(0, 10)}</td><td style="text-align:left"><b>${esc(t.sym)}</b></td><td class="${t.side === "LONG" ? "up" : "dn"}">${t.side}</td><td>${px(t.entry)}</td><td>${px(t.exit)}</td><td>${big(t.size)}</td><td class="${cls(jpnl(t))}">${usdS(jpnl(t))}</td><td class="st" style="text-align:left">${esc(t.note || "")}</td><td><span class="chip" data-jd="${t.id}">✕</span></td></tr>`).join("") || '<tr><td colspan="9" class="st">no trades yet</td></tr>'}</tbody></table></div>`);
+  }
+  $("s-jrn").onclick = (e) => {
+    const j = e.target.dataset?.j, jd = e.target.dataset?.jd, v = (id) => $(id)?.value.trim() || "";
+    if (jd) { JR.list = JR.list.filter((t) => String(t.id) !== jd); jsave(); rJrn(); return; }
+    if (j === "add") {
+      const t = { id: Date.now() + Math.random(), ts: Date.now(), sym: v("jsym").toUpperCase(), side: $("jside").value, entry: +v("jen"), exit: +v("jex"), size: +v("jsz"), fee: +v("jfee") || 0, note: v("jnote") };
+      if (!t.sym || !(t.entry > 0) || !(t.exit > 0) || !(t.size > 0)) { JR.msg = "Fill symbol, entry, exit and size."; rJrn(); return; }
+      JR.list.push(t); JR.msg = ""; jsave(); rJrn();
+    } else if (j === "csv") {
+      let n = 0;
+      for (const ln of v("jcsv").split("\n")) { const c = ln.split(",").map((x) => x.trim()); const t = { id: Date.now() + Math.random(), ts: Date.now() + n, sym: (c[0] || "").toUpperCase(), side: /s/i.test(c[1] || "") ? "SHORT" : "LONG", entry: +c[2], exit: +c[3], size: +c[4], fee: +c[5] || 0, note: c[6] || "" }; if (t.sym && t.entry > 0 && t.exit > 0 && t.size > 0) { JR.list.push(t); n++; } }
+      JR.msg = n + " trades imported"; jsave(); rJrn();
+    } else if (j === "clear" && confirm("Delete all journal trades?")) { JR.list = []; jsave(); rJrn(); }
+  };
+
+  // ---------- Ask (rule-based questions over the screener data, no external AI) ----------
+  const AK = { q: "" };
+  const ASKS = ["Top gainers", "Biggest losers", "Negative funding", "Top volume", "Most volatile", "Cheap coins", "Funding arbitrage", "Highest open interest", "Strong buy", "Stocks"];
+  function askRows(q) {
+    const t = q.toLowerCase(), R = HL.rows.filter((r) => !r.dex && r.vol > 2e5), top = (a, f, n = 15) => a.slice().sort(f).slice(0, n);
+    if (/stock|equit|commodit|forex|fx|hip/.test(t)) return ["HIP-3 markets by volume", top(HL.rows.filter((r) => r.dex), (a, b) => b.vol - a.vol)];
+    if (/negative funding/.test(t)) return ["Most negative funding (shorts pay longs)", top(R.filter((r) => r.fa < 0), (a, b) => a.fa - b.fa)];
+    if (/arbitrage/.test(t)) return ["Largest funding gaps (cash-and-carry candidates)", top(R.filter((r) => r.vol > 1e6), (a, b) => Math.abs(b.fa) - Math.abs(a.fa))];
+    if (/funding/.test(t)) return ["Highest funding (crowded longs)", top(R, (a, b) => b.fa - a.fa)];
+    if (/gain|pump|up/.test(t)) return ["Top gainers 24h", top(R, (a, b) => b.chg - a.chg)];
+    if (/lose|dump|down/.test(t)) return ["Biggest losers 24h", top(R, (a, b) => a.chg - b.chg)];
+    if (/volat/.test(t)) return ["Most volatile (24h move, vol > $1M)", top(R.filter((r) => r.vol > 1e6), (a, b) => Math.abs(b.chg) - Math.abs(a.chg))];
+    if (/cheap|low price/.test(t)) return ["Cheap coins (price under $0.10, by volume)", top(R.filter((r) => r.p < 0.1), (a, b) => b.vol - a.vol)];
+    if (/open interest|\boi\b/.test(t)) return ["Highest open interest", top(R, (a, b) => b.oi - a.oi)];
+    if (/strong|buy|bull/.test(t)) return ["Buy signals (screener score)", top(R.filter((r) => r.sig.includes("BUY")), (a, b) => b.score - a.score)];
+    if (/sell|bear/.test(t)) return ["Sell signals (screener score)", top(R.filter((r) => r.sig.includes("SELL")), (a, b) => a.score - b.score)];
+    if (/volume|liquid/.test(t)) return ["Top volume", top(R, (a, b) => b.vol - a.vol)];
+    const w = q.toUpperCase().split(/[^A-Z0-9:]+/).find((x) => x && HL.rows.some((r) => r.s === x));
+    if (w) return ["Summary for " + w, HL.rows.filter((r) => r.s === w)];
+    return null;
+  }
+  function rAsk() {
+    const res = AK.q ? askRows(AK.q) : null;
+    let out = '<div class="st" style="padding:10px">Pick a question above or type a coin / question (e.g. "BTC", "negative funding", "top gainers").</div>';
+    if (AK.q && !res) out = '<div class="dn" style="padding:10px">Could not understand that. Try one of the chips or a coin symbol.</div>';
+    if (res) out = `<div class="wh2" style="margin-top:0">${esc(res[0])}</div><div class="tw"><table><thead><tr><th style="text-align:left">Pair</th><th>Signal</th><th>Price</th><th>24h</th><th>Vol 24h</th><th>OI</th><th>Funding ann.</th><th style="text-align:left">Flags</th></tr></thead><tbody>${res[1].map((r) => `<tr class="cr"${M.px[r.s] ? ` data-sym="${esc(r.s)}"` : ""}><td style="text-align:left"><b>${esc(r.s)}</b></td><td class="${sigc(r.sig)}">${r.sig}</td><td>${px(r.p)}</td><td>${ps(r.chg)}</td><td>${big(r.vol)}</td><td>${big(r.oi)}</td><td>${r.fa >= 0 ? "+" : ""}${r.fa.toFixed(1)}%</td><td class="st" style="text-align:left">${esc(r.tags.join(" · "))}</td></tr>`).join("") || '<tr><td colspan="8" class="st">nothing matches right now</td></tr>'}</tbody></table></div>`;
+    const api = [["/api/options?c=BTC", "Deribit option chain summary (BTC or ETH)"], ["/api/macro", "Polymarket top events and odds"], ["/api/etf", "Spot BTC ETF holdings by issuer"], ["/api/sol-whales", "Recent large Jupiter swaps on Solana"], ["/hl-snap.json", "Hyperliquid top accounts, traders, vaults, DeFi (refreshed every 30 min)"]];
+    $("s-ask").innerHTML = panel("Ask the terminal", "rule-based answers from live Hyperliquid data · not an AI model", `<div class="bar">${ASKS.map((a) => `<span class="chip" data-ak="${esc(a)}">${a}</span>`).join("")}</div><div class="bar"><input id="akq" value="${esc(AK.q)}" placeholder="Ask: top gainers, negative funding, BTC …  then Enter" autocomplete="off" spellcheck="false" style="${inp};width:min(520px,100%)"></div>${out}`) + panel("Open data endpoints", "free JSON, no key, cached: use them in your own tools", `<div class="tw"><table><tbody>${api.map(([u, d]) => `<tr><td style="text-align:left"><a href="${u}" target="_blank" rel="noopener"><b>${u}</b></a></td><td class="st" style="text-align:left">${d}</td></tr>`).join("")}</tbody></table></div>`, "margin-top:12px");
+  }
+  $("s-ask").onclick = (e) => { const a = e.target.dataset?.ak; if (a) { AK.q = a; rAsk(); } };
+  $("s-ask").addEventListener("keydown", (e) => { if (e.target.id === "akq" && e.key === "Enter") { AK.q = e.target.value.trim(); rAsk(); } });
+
   // ---------- lazy loaders for the extra tabs ----------
   const LAZY = {
     hlw: () => { lazy("snap", () => getSnap().then(getWhalePos), 6e5); lazy("wpos", getWhalePos, 6e4); },
     opt: () => lazy("opt", getOpt, 12e4),
     cyc: () => lazy("cyc", getCyc, 36e5),
     mac: () => lazy("mac", getMac, 3e5),
+    liq: () => { lazy("snap", () => getSnap().then(getWhalePos), 6e5); lazy("wpos", getWhalePos, 6e4); },
+    hype: () => { lazy("snap", () => getSnap().then(getWhalePos), 6e5); lazy("hype", getHype, 12e4); },
+    onc: () => lazy("onc", getOn, 36e5),
   };
   setInterval(() => { if (document.body.dataset.v === "mkt") LAZY[sub]?.(); }, 15000);
 

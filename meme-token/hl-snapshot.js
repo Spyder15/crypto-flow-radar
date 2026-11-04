@@ -17,7 +17,13 @@ const win = (r, k) => (r.windowPerformances.find((w) => w[0] === k) || [0, {}])[
     .filter((v) => !v.summary.isClosed)
     .map((v) => ({ n: v.summary.name, a: v.summary.vaultAddress, l: v.summary.leader, tvl: +v.summary.tvl, apr: v.apr, pm: +(v.pnls.find((p) => p[0] === "month")?.[1].at(-1) || 0), created: v.summary.createTimeMillis }))
     .sort((a, b) => b.tvl - a.tvl).slice(0, 100);
+  let defi = [];
+  try {
+    defi = (await (await fetch("https://api.llama.fi/protocols")).json()).filter((p) => (p.chains || []).includes("Hyperliquid L1"))
+      .map((p) => ({ n: p.name, cat: p.category, tvl: (p.chainTvls && p.chainTvls["Hyperliquid L1"]) || 0, d1: p.change_1d, d7: p.change_7d, url: p.url }))
+      .filter((p) => p.tvl > 0).sort((a, b) => b.tvl - a.tvl).slice(0, 40);
+  } catch (e) { /* optional */ }
   fs.mkdirSync(dir + "/site", { recursive: true });
-  fs.writeFileSync(dir + "/site/hl-snap.json", JSON.stringify({ ts: Date.now(), count: traders.length, whales: byAv, top: byPm, vaults }));
+  fs.writeFileSync(dir + "/site/hl-snap.json", JSON.stringify({ ts: Date.now(), count: traders.length, whales: byAv, top: byPm, vaults, defi }));
   console.log("hl-snap", byAv.length, byPm.length, vaults.length);
 })();
