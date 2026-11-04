@@ -278,7 +278,7 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 - Not built (no free data / out of scope): liquidation map and cascade, SOPR/NVT/NUPL, HYPE burns, bridge flows (DefiLlama paid), AI query, trade journal, TV webhook.
 - Local deploy needs `node hl-snapshot.js` first so `site/hl-snap.json` exists.
 
-**Aur tabs:** Liq Map (whale positions se liquidation cascade, partial), HYPE & HyperEVM (Assistance Fund buyback balance, DeFi TVL, bridge TVL), On-Chain (MVRV, NUPL, NVT via Coin Metrics), Journal (localStorage + CSV import), Ask (rule-based query, AI nahi). SOPR, ETH ETF, TV Webhook, Embed Widgets free data/backend ke bina possible nahi.
+**Aur tabs:** Liq Map (whale positions se liquidation cascade, partial), HYPE & HyperEVM (Assistance Fund buyback balance, DeFi TVL, bridge TVL), On-Chain (MVRV, NUPL, NVT via Coin Metrics), Journal (localStorage + CSV import), Ask (rule-based query, AI nahi). Bridge flow (DefiLlama TVL delta), Embed widgets (`/embed.html?w=gainers|losers|volume|funding&n=10` iframe), TradingView webhook (`POST /api/tv?key=TV_KEY` → Telegram; secrets TV_KEY, TG_TOKEN, TG_CHAT via `wrangler secret put`). SOPR aur ETH ETF free source ke bina possible nahi.
 
 ### 19.5 Dhyan
 - Free plan limits: Cloudflare account me 5 crons, 50 subrequests per invocation. Dono accounts ke crons bhare hain, isliye site me cron worker nahi, GitHub Actions snapshot hai.

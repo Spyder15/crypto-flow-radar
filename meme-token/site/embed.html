@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPYDER widget</title>
+<style>
+body{margin:0;background:#0b0f14;color:#d6dde6;font:12px ui-monospace,Menlo,monospace}
+h1{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a97a8;margin:0;padding:8px 10px;border-bottom:1px solid #1c2530;display:flex;justify-content:space-between}
+h1 a{color:#8a97a8;text-decoration:none}
+table{width:100%;border-collapse:collapse}td,th{padding:5px 10px;text-align:right;border-bottom:1px solid #141b24}
+td:first-child,th:first-child{text-align:left}th{color:#6b7787;font-weight:400}
+.u{color:#2ecc71}.d{color:#e74c3c}
+</style></head><body>
+<h1><span id="t">loading…</span><a href="/" target="_blank" rel="noopener">SPYDER ↗</a></h1>
+<table id="x"></table>
+<script>
+// ?w=gainers|losers|volume|funding  &n=10
+const q = new URLSearchParams(location.search), w = q.get("w") || "gainers", n = Math.min(30, +q.get("n") || 10);
+const T = { gainers: "Top gainers 24h", losers: "Top losers 24h", volume: "Top volume 24h", funding: "Most negative funding" };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fv = (v) => v >= 1e9 ? (v / 1e9).toFixed(2) + "B" : v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : (v / 1e3).toFixed(0) + "K";
+const fp = (p) => p >= 100 ? p.toFixed(2) : p >= 1 ? p.toFixed(3) : p.toPrecision(3);
+async function go() {
+  const [m, c] = await (await fetch("https://api.hyperliquid.xyz/info", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "metaAndAssetCtxs" }) })).json();
+  let r = m.universe.map((u, i) => { const x = c[i], p = +x.markPx, pv = +x.prevDayPx; return { s: u.name, p, ch: pv ? (p / pv - 1) * 100 : 0, v: +x.dayNtlVlm, f: +x.funding * 24 * 365 * 100 }; }).filter((x) => x.v > 1e5);
+  const s = { gainers: (a, b) => b.ch - a.ch, losers: (a, b) => a.ch - b.ch, volume: (a, b) => b.v - a.v, funding: (a, b) => a.f - b.f }[w] || ((a, b) => b.ch - a.ch);
+  r = r.sort(s).slice(0, n);
+  document.getElementById("t").textContent = T[w] || T.gainers;
+  document.getElementById("x").innerHTML = "<tr><th>Coin</th><th>Price</th><th>24h</th><th>" + (w === "funding" ? "Fund/yr" : "Vol") + "</th></tr>" +
+    r.map((x) => `<tr><td><b>${esc(x.s)}</b></td><td>${fp(x.p)}</td><td class="${x.ch >= 0 ? "u" : "d"}">${x.ch >= 0 ? "+" : ""}${x.ch.toFixed(2)}%</td><td>${w === "funding" ? x.f.toFixed(1) + "%" : "$" + fv(x.v)}</td></tr>`).join("");
+}
+go(); setInterval(go, 30000);
+</script></body></html>
