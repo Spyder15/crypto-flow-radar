@@ -75,6 +75,29 @@ footer{color:var(--mut);font-size:10px;padding:10px 16px 30px;max-width:1000px;l
 .wr{display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #141414;font-size:12px}.wr b{min-width:46px}.wr .sp{margin-left:auto}
 .wh2{color:var(--acc);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;margin:10px 0 2px}
 .bd{font-size:10px;font-weight:800;padding:1px 6px;letter-spacing:.06em}.bd.up{background:rgba(47,210,122,.18)}.bd.dn{background:rgba(255,77,77,.18)}
+.sub{margin-top:10px;border:1px solid var(--line);background:var(--panel);overflow-x:auto;white-space:nowrap}.sub .tab{display:inline-block}
+.bell{cursor:pointer;border:1px solid var(--line);padding:5px 10px;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--mut);user-select:none}.bell.on{color:#000;background:var(--acc);border-color:var(--acc)}
+.star{cursor:pointer;color:var(--acc);font-size:14px;user-select:none}tr.cr{cursor:pointer}tr.cr:hover td{background:#121212}
+#toasts{position:fixed;right:12px;bottom:12px;display:flex;flex-direction:column;gap:6px;z-index:30;max-width:min(380px,calc(100vw - 24px))}
+.toast{background:#111;border:1px solid var(--acc);border-left:4px solid var(--acc);padding:9px 12px;font-size:12px;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.6)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:20;display:flex;align-items:center;justify-content:center;padding:12px}.modal[hidden]{display:none}
+.mbox{background:var(--panel);border:1px solid var(--line);width:min(980px,100%);max-height:94vh;overflow:auto;padding:12px 14px}
+.mbox h3{margin:0;font-size:13px;letter-spacing:.1em;color:var(--acc);display:flex;gap:10px;align-items:center;flex-wrap:wrap}.mbox h3 .x{margin-left:auto;cursor:pointer;color:var(--mut);font-size:16px}
+.mbox canvas{width:100%;height:380px;display:block;background:#080808;border:1px solid var(--line);margin-top:8px}
+.frm{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-top:10px}.frm label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--mut)}
+.frm input,.frm select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);font:inherit;padding:6px 8px}.frm .full{grid-column:1/-1}
+.alog{max-height:150px;overflow:auto;margin-top:8px}
+@media(max-width:700px){
+body{font-size:12px}
+header{gap:8px;padding:8px 10px}.logo{font-size:13px}.nav{order:5;width:100%}.nv{flex:1;text-align:center;padding:7px 4px}.bell span{display:none}.live{font-size:10px}#q{width:100%;order:6}
+.wrap{padding:0 8px 24px}.verdict{padding:10px;gap:10px}.verdict .tx{min-width:0}
+.mk7{grid-template-columns:repeat(2,1fr)}.kpi{padding:9px 10px}.kpi .v{font-size:16px}
+.stiles{grid-template-columns:repeat(2,1fr)}.stile .a{font-size:15px}
+.panel{padding:8px}.tw{max-height:62vh}td{padding:6px 5px}th{padding:6px 5px}
+.two,.frm{grid-template-columns:1fr}.mbox{padding:10px}.mbox canvas{height:300px}
+#mcq{width:100%!important}
+footer{padding:10px 10px 24px}
+}
 </style>
 </head>
 <body data-v="mkt">
@@ -82,9 +105,12 @@ footer{color:var(--mut);font-size:10px;padding:10px 16px 30px;max-width:1000px;l
   <div class="logo"><b>SPYDER</b>TRENCH</div>
   <div class="nav"><span class="nv on" data-v="mkt">MARKET FLOW</span><span class="nv" data-v="meme">MEME TRENCH</span></div>
   <input id="q" style="display:none" placeholder="Search symbol or address..." autocomplete="off" spellcheck="false">
+  <div class="bell" id="bell" title="Alerts">🔔 <span>ALERTS</span></div>
   <div class="live" id="live">LIVE</div>
 </header>
 <div id="v-mkt" class="wrap">
+  <div class="tabs sub" id="subtabs"><span class="tab on" data-u="over">Overview</span><span class="tab" data-u="deriv">Derivatives</span><span class="tab" data-u="mov">Movers</span><span class="tab" data-u="chain">Chains &amp; ETF</span><span class="tab" data-u="watch">Watchlist ★</span></div>
+<div id="s-over">
   <div class="verdict" id="mverdict"></div>
   <div class="mk7" id="mkpis"></div>
   <section class="panel" style="margin-top:12px"><h2>Where is the money going? <em id="msecnote">sector market-cap change, last 24h · click a sector to see its coins</em></h2><div class="stiles" id="mtiles"></div>
@@ -99,6 +125,7 @@ footer{color:var(--mut);font-size:10px;padding:10px 16px 30px;max-width:1000px;l
     <input id="mcq" placeholder="Search any coin in the list..." autocomplete="off" spellcheck="false" style="background:var(--panel2);border:1px solid var(--line);color:var(--txt);font:inherit;padding:6px 10px;width:260px;margin-bottom:8px">
     <div class="tw" id="mcoins"></div>
   </section>
+</div>
 </div>
 <div id="v-meme" hidden>
 <div class="tape"><div class="in" id="tape"></div></div>
@@ -361,7 +388,7 @@ load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
     $("mbar").innerHTML = PRE.map(([k, l, sk, sd]) => `<span class="chip${M.sk === sk && M.sd === sd ? " on" : ""}" data-p="${k}">${l}</span>`).join("") + `<span class="chip${M.more ? " on" : ""}" data-p="m">Show 250</span>` + (sel ? '<span class="chip" data-p="x">✕ clear sector</span>' : "");
     const v = (c, k) => k === "vm" ? (c.mc ? c.vol / c.mc : 0) : k === "sym" ? c.sym : k === "tf" ? tfv(c.sym) ?? -1e15 : c[k] ?? -1e9;
     const q = (M.q || "").toLowerCase(), all = M.coins.filter((c) => !q || c.sym.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)).sort((a, b) => M.sk === "sym" ? M.sd * a.sym.localeCompare(b.sym) : M.sd * (v(a, M.sk) - v(b, M.sk))), rows = q ? all : all.slice(0, M.more ? 250 : 100);
-    $("mcoins").innerHTML = rows.length ? `<table><thead><tr>${COLS.map(([k, l]) => `<th class="${k === M.sk ? "on" : ""}" data-s="${k}">${l}${k === M.sk ? (M.sd < 0 ? " ▼" : " ▲") : ""}</th>`).join("")}</tr></thead><tbody>${rows.map((c) => `<tr><td class="st">${c.rank ?? ""}</td><td><img class="cimg" loading="lazy" src="${esc(c.img)}" alt=""><b>${esc(c.sym)}</b> <span class="st">${esc(c.name)}</span></td><td><b data-px="${c.sym}">${px(c.p)}</b></td><td>${pc(c.c1)}</td><td data-c24="${c.sym}">${pc(c.c24)}</td><td>${pc(c.c7)}</td><td><span class="${c.fl >= 0 ? "up" : "dn"}">${sgb(c.fl)}</span></td><td data-tf="${c.sym}">${tfh(c.sym)}</td><td>${big(c.mc)}</td><td>${big(c.vol)}</td><td class="st">${c.mc ? (c.vol / c.mc * 100).toFixed(1) + "%" : "-"}</td></tr>`).join("")}</tbody></table>` : '<div class="st" style="padding:14px">Loading coins…</div>';
+    $("mcoins").innerHTML = rows.length ? `<table><thead><tr>${COLS.map(([k, l]) => `<th class="${k === M.sk ? "on" : ""}" data-s="${k}">${l}${k === M.sk ? (M.sd < 0 ? " ▼" : " ▲") : ""}</th>`).join("")}</tr></thead><tbody>${rows.map((c) => `<tr data-sym="${esc(c.sym)}" class="cr"><td class="st">${c.rank ?? ""}</td><td><span class="star" data-star="${esc(c.sym)}">${window.SP?.star?.(c.sym) ?? "☆"}</span> <img class="cimg" loading="lazy" src="${esc(c.img)}" alt=""><b>${esc(c.sym)}</b> <span class="st">${esc(c.name)}</span></td><td><b data-px="${c.sym}">${px(c.p)}</b></td><td>${pc(c.c1)}</td><td data-c24="${c.sym}">${pc(c.c24)}</td><td>${pc(c.c7)}</td><td><span class="${c.fl >= 0 ? "up" : "dn"}">${sgb(c.fl)}</span></td><td data-tf="${c.sym}">${tfh(c.sym)}</td><td>${big(c.mc)}</td><td>${big(c.vol)}</td><td class="st">${c.mc ? (c.vol / c.mc * 100).toFixed(1) + "%" : "-"}</td></tr>`).join("")}</tbody></table>` : '<div class="st" style="padding:14px">Loading coins…</div>';
     live();
   }
   function status() {
@@ -385,7 +412,7 @@ load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
   });
   let waitW = 0;
   function connectW() {
-    const syms = Object.keys(M.px).filter((s) => !STB.test(s) && !/(UP|DOWN|BULL|BEAR)$/.test(s));
+    const syms = Object.keys(M.px).filter((s) => !STB.test(s) && !/(UP|DOWN|BULL|BEAR)$/.test(s)).slice(0, 1000);
     if (!syms.length || (!U.size && waitW++ < 6)) { setTimeout(connectW, 1500); return; }
     let ws; try { ws = new WebSocket("wss://stream.binance.com:9443/stream"); } catch (e) { return; }
     subN = syms.length;
@@ -399,7 +426,7 @@ load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
     const ent = Object.entries(net).sort((a, b) => b[1] - a[1]), l = (a) => a.length ? a.map(([s, v]) => `<b>${s}</b> <span class="${v >= 0 ? "up" : "dn"}">${sgb(v)}</span>`).join(" · ") : "-";
     $("mwf").innerHTML = GR.map(([k, n]) => `<span class="chip${grp === k ? " on" : ""}" data-g="${k}">${n}</span>`).join("");
     $("mwsum").innerHTML = `Watching <b>${subN}</b> coins on Binance (BTC/ETH $500k+, others $50k-$200k+ by liquidity) · last 30 min:<br>Whales <span class="up">BUYING</span>: ${l(ent.filter((e) => e[1] > 0).slice(0, 6))}<br>Whales <span class="dn">SELLING</span>: ${l(ent.filter((e) => e[1] < 0).reverse().slice(0, 6))}`;
-    const cex = WF.slice(0, 20).map((w) => `<div class="wr"><span class="bd ${w.buy ? "up" : "dn"}">${w.buy ? "BUY" : "SELL"}</span><b>${w.s}</b><span class="st">${w.g}</span><span class="${w.buy ? "up" : "dn"}">${big(w.u)}</span><span class="st">@ ${px(w.p)}</span><span class="st sp">${ago(w.ts)} ago</span></div>`).join("");
+    const cex = WF.slice(0, 20).map((w) => `<div class="wr"><span class="bd ${w.buy ? "up" : "dn"}">${w.buy ? "BUY" : "SELL"}</span><b data-sym="${w.s}" style="cursor:pointer">${w.s}</b><span class="st">${w.g}</span><span class="${w.buy ? "up" : "dn"}">${big(w.u)}</span><span class="st">@ ${px(w.p)}</span><span class="st sp">${ago(w.ts)} ago</span></div>`).join("");
     const on = grp !== "all" && grp !== "Meme" ? [] : typeof D !== "undefined" && D ? D.feed.filter((f) => f.usd >= 5000 && now - f.ts < 864e5 && D.tokens[f.token] && !STB.test(String(D.tokens[f.token].sym).toUpperCase())).sort((a, b) => b.usd - a.usd).slice(0, 12) : [];
     const chn = on.map((f) => { const t = D.tokens[f.token]; return `<div class="wr"><span class="bd up">BUY</span><b>$${esc(t.sym)}</b><span class="up">${usd(f.usd)}</span><span class="st">${esc(CH[t.net] || t.net)} · ${esc(f.name || short(f.w))}</span><span class="st sp">${ago(f.ts)} ago</span></div>`; }).join("");
     $("mwhale").innerHTML = '<div class="wh2" style="margin-top:0">Exchange whale trades (live)</div>' + (cex || '<div class="st">waiting for big trades…</div>') + (grp === "all" || grp === "Meme" ? '<div class="wh2">On-chain whale buys · DEX memecoins, 17 chains (24h, wallets shown)</div>' + (chn || '<div class="st">loading wallet data…</div>') : "");
@@ -407,7 +434,7 @@ load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
   }
   function connect() {
     let ws; try { ws = new WebSocket("wss://stream.binance.com:9443/ws/!miniTicker@arr"); } catch (e) { return; }
-    ws.onmessage = (m) => { try { for (const t of JSON.parse(m.data)) if (t.s.endsWith("USDT")) { const o = +t.o, c = +t.c; if (o > 0) M.px[t.s.slice(0, -4)] = { p: c, ch: (c / o - 1) * 100 }; } M.ws = Date.now(); if (document.body.dataset.v === "mkt") { live(); status(); } } catch (e) { /* ignore bad frame */ } };
+    ws.onmessage = (m) => { try { for (const t of JSON.parse(m.data)) if (t.s.endsWith("USDT")) { const o = +t.o, c = +t.c; if (o > 0) M.px[t.s.slice(0, -4)] = { p: c, ch: (c / o - 1) * 100, q: +t.q }; } M.ws = Date.now(); if (document.body.dataset.v === "mkt") { live(); status(); } } catch (e) { /* ignore bad frame */ } };
     ws.onclose = () => setTimeout(connect, 4000); ws.onerror = () => ws.close();
   }
   document.querySelector(".nav").onclick = (e) => { const v = e.target.dataset?.v; if (!v) return; document.body.dataset.v = v; document.querySelectorAll(".nv").forEach((n) => n.classList.toggle("on", n.dataset.v === v)); $("v-mkt").hidden = v !== "mkt"; $("v-meme").hidden = v !== "meme"; $("q").style.display = v === "meme" ? "" : "none"; };
@@ -419,7 +446,9 @@ load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
   $("mwf").onclick = (e) => { const g = e.target.dataset?.g; if (g) { grp = g; whales(); } };
   setInterval(() => { if (document.body.dataset.v === "mkt") whales(); }, 1000);
   setInterval(getG, 60000); setInterval(getC, 90000); setInterval(getK, 45000); setInterval(getF, 600000); setInterval(getS, 600000); setInterval(status, 1000);
+  window.SP = { M, F, W, big, sgb, px, pc, jget, STB, CG };
 })();
 </script>
+<script src="pro.js"></script>
 </body>
 </html>

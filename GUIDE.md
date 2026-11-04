@@ -257,6 +257,17 @@ Browser khud, apne IP se (dono APIs me open CORS hai), ye loops chalata hai:
 - Auto: GitHub Actions (upar). Secret: `CLOUDFLARE_API_TOKEN` (repo secret, naye account ka token, "Edit Cloudflare Workers" / Workers Scripts Edit). Secret ka naam exact hona chahiye, naam ke aage space nahi.
 - Chain add karna: `whale-config.json` `networks` me GeckoTerminal network id daalo; chip label ke liye `index.html` me `CH` map aur DexScreener slug alag ho to `DX` map update karo; GoPlus naam alag ho to `whale-buys.js` `GP` map.
 
+### 19.4b Market Flow ke pro features (`site/pro.js`)
+Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchlist.
+- **Derivatives**: Binance futures funding (premiumIndex, 20s), OI + long/short ratio (top 15), live liquidations (`!forceOrder@arr` WebSocket; long liq = SELL side), 15 min bias.
+- **Movers**: top 200 coins ka 5m/1h change + volume surge (5m vol / avg 5m vol). PUMP/DUMP/VOL tags.
+- **Chains & ETF**: DefiLlama top chains TVL 1d/7d + DEX volume; BTC ETF holdings via worker proxy `/api/etf` (`meme-token/worker.js`, btcetfdata.com, 10 min cache). ETH ETF source nahi hai.
+- **Watchlist**: star click, localStorage `spy.watch`.
+- **Chart**: kisi bhi coin symbol pe click: candles + net taker flow (Binance klines).
+- **Alerts** (bell): whale/liquidation/pump/sector flip pe toast + sound + desktop notification + optional Telegram (token browser localStorage me). Sirf page khula ho tabhi chalta hai.
+- Mobile layout (`@media max-width:700px`). Helius real-time Solana whales API key chahiye, abhi nahi.
+- `wrangler.jsonc`: `main: worker.js`, assets binding `ASSETS`, `/api/*` pehle worker.
+
 ### 19.5 Dhyan
 - Free plan limits: Cloudflare account me 5 crons, 50 subrequests per invocation. Dono accounts ke crons bhare hain, isliye site me cron worker nahi, GitHub Actions snapshot hai.
 - GitHub Actions free minutes limited hain (private repo ~2000/month). Har run ~11 min, isliye 30 min schedule. Bill/minutes khatam hone par schedule ruk sakta hai, tab bhi browser live scan snapshot ke bina bhi chalta hai (purane snapshot se).
