@@ -36,7 +36,7 @@ h2{margin:0 0 2px;font-size:11px;letter-spacing:.14em;color:var(--acc);text-tran
 .tag{font-size:10px;padding:1px 6px;background:#181818;color:#a0a0a0;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border:1px solid #242424}
 .tag.c{background:#2a1c05;color:var(--acc);border-color:#3d2a0a}
 .st{color:var(--mut);font-size:11px}.st b{color:var(--txt);font-weight:600}
-.up{color:var(--grn)}.dn{color:var(--red)}
+.fu{color:var(--grn)!important}.fd{color:var(--red)!important}.st b{transition:color .6s}.up{color:var(--grn)}.dn{color:var(--red)}
 .who{font-weight:700}.buy{color:var(--grn);font-weight:700}
 .badge{font-size:10px;font-weight:700;padding:1px 6px;letter-spacing:.04em;text-transform:uppercase}
 .good{background:#0c2417;color:var(--grn)}.warn{background:#2c1f06;color:var(--amb)}.risk{background:#2c0e0e;color:var(--red)}.unknown{background:#1a1a1a;color:var(--mut)}
@@ -84,7 +84,7 @@ function links(t) {
 }
 function info(t) {
   const s = t.sec || {}, lv = s.level || "unknown", txt = { good: "✓ good", warn: "⚠ warn", risk: "✕ risk", unknown: "? n/a" }[lv];
-  return `<div class="row st" style="margin-top:6px"><span>MC <b>${t.mc ? usd(t.mc) : "-"}</b></span><span>V <b>${usd(t.vol24 || 0)}</b></span><span>L <b>${usd(t.liq || 0)}</b></span><span class="${t.chg24 >= 0 ? "up" : "dn"}"><b>${t.chg24 >= 0 ? "+" : ""}${(t.chg24 || 0).toFixed(1)}%</b> 24h</span>${s.top10 ? `<span>TOP10 <b>${s.top10.toFixed(0)}%</b></span>` : ""}${s.holders ? `<span>HOLDERS <b>${s.holders.toLocaleString()}</b></span>` : ""}<span class="badge ${lv}" title="${esc((s.flags || []).join(", "))}">SAFE ${txt}</span></div>`;
+  return `<div class="row st" style="margin-top:6px"><span>MC <b class="${t.fat && Date.now() - t.fat < 4000 ? t.flash : ""}">${t.mc ? usd(t.mc) : "-"}</b></span><span>V <b>${usd(t.vol24 || 0)}</b></span><span>L <b>${usd(t.liq || 0)}</b></span><span class="${t.chg24 >= 0 ? "up" : "dn"}"><b>${t.chg24 >= 0 ? "+" : ""}${(t.chg24 || 0).toFixed(1)}%</b> 24h</span>${s.top10 ? `<span>TOP10 <b>${s.top10.toFixed(0)}%</b></span>` : ""}${t.tx5 ? `<span>5M <b class="up">${t.tx5.buys}B</b>/<b class="dn">${t.tx5.sells}S</b></span>` : ""}${s.holders ? `<span>HOLDERS <b>${s.holders.toLocaleString()}</b></span>` : ""}<span class="badge ${lv}" title="${esc((s.flags || []).join(", "))}">SAFE ${txt}</span></div>`;
 }
 function head(t) { return `<div class="row"><span class="sym">$${esc(t.sym)}</span><span class="tag c">${CH[t.net] || t.net}</span>${t.dex ? `<span class="tag">${esc(t.dex)}</span>` : ""}<span class="st">${age(t.created)}</span><span class="sp row">${links(t)}</span></div>`; }
 function pass(tk, usdv) {
@@ -110,7 +110,7 @@ function render() {
   if (!D) return;
   kpis(); flowPanel();
   const feed = D.feed.filter((f) => pass(f.token, f.usd)).slice(0, 60);
-  $("feed").innerHTML = feed.length ? feed.map((f) => { const t = D.tokens[f.token]; return `<div class="card">${head(t)}<div class="row" style="margin-top:6px"><span class="who">${esc(f.name || short(f.w))}</span><span class="st">bought</span><span class="buy">${usd(f.usd)}</span><span class="st sp">${ago(f.ts)} ago</span></div>${info(t)}</div>`; }).join("") : '<div class="empty">No buys match this filter yet.</div>';
+  $("feed").innerHTML = feed.length ? feed.map((f) => { const t = D.tokens[f.token]; return `<div class="card">${head(t)}<div class="row" style="margin-top:6px"><span class="who">${esc(f.name || short(f.w))}</span><span class="st">bought</span><span class="buy">${usd(f.usd)}</span><span class="st sp ag" data-ts="${f.ts}">${ago(f.ts)} ago</span></div>${info(t)}</div>`; }).join("") : '<div class="empty">No buys match this filter yet.</div>';
   const cut = Date.now() - win * 36e5;
   const heat = D.heating.map((h) => { const b = h.buys.filter((x) => x.ts >= cut && x.usd >= +$("min").value); return { token: h.token, b, buyers: new Set(b.map((x) => x.w)).size }; }).filter((h) => h.buyers && pass(h.token, 0)).sort((a, b) => b.buyers - a.buyers || b.b.reduce((s, x) => s + x.usd, 0) - a.b.reduce((s, x) => s + x.usd, 0)).slice(0, 25);
   $("heat").innerHTML = heat.length ? heat.map((h) => { const t = D.tokens[h.token]; return `<div class="card">${head(t)}<div class="row" style="margin-top:6px"><span><b>${h.buyers}</b> <span class="st">buyer${h.buyers > 1 ? "s" : ""}</span></span><span class="buy">${usd(h.b.reduce((s, x) => s + x.usd, 0))}</span><span class="st">total bought</span></div>${info(t)}</div>`; }).join("") : '<div class="empty">Nothing heating up in this window.</div>';
@@ -148,11 +148,12 @@ async function load() {
 }
 // Live scan: the browser itself polls GeckoTerminal (open CORS, ~24 calls/min) pool by pool, so new buys and flow appear within seconds/minutes.
 async function scan() {
-  let wait = 2500;
+  let wait = 2200;
   try {
     const ks = D ? Object.keys(D.tokens).filter((k) => D.tokens[k].pool) : [];
     if (ks.length) {
-      const k = ks[LV.i++ % ks.length], t = D.tokens[k];
+      const hot = [...new Set(D.feed.filter((f) => Date.now() - f.ts < 9e5).map((f) => f.token))].filter((x) => D.tokens[x]?.pool).slice(0, 8), n = LV.i++;
+      const k = hot.length && n % 3 === 0 ? hot[(n / 3 | 0) % hot.length] : ks[n % ks.length], t = D.tokens[k];
       const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/${t.net}/pools/${t.pool}/trades`, { headers: { accept: "application/json" } });
       if (r.status === 429) wait = 20000;
       else if (r.ok) {
@@ -166,13 +167,43 @@ async function scan() {
         c.buy = Math.max(0, c.buy + f.buy - old.buy); c.sell = Math.max(0, c.sell + f.sell - old.sell); c.net = c.buy - c.sell;
         LV.flow[k] = f; t.flow = f; rebuildFlow();
         for (const b of add) if (addBuy(k, b)) LV.feed.push({ ...b, token: k });
-        D.feed.sort((a, b) => b.ts - a.ts); LV.last = now; render();
+        D.feed.sort((a, b) => b.ts - a.ts); LV.last = now; dirty = true;
       }
     }
   } catch (e) { wait = 8000; }
   setTimeout(scan, wait);
 }
-load(); setInterval(load, 60000); setInterval(render, 5000); scan();
+let dirty = false, DXI = 0;
+// Second feed: DexScreener (open CORS, high rate limit) refreshes price/MC/volume/5m txns for every watched pool, one chain batch per second.
+async function dexLoop() {
+  let wait = 1000;
+  try {
+    const nets = D ? [...new Set(Object.values(D.tokens).map((t) => t.net))] : [];
+    if (nets.length) {
+      const net = nets[DXI++ % nets.length], ts = Object.values(D.tokens).filter((t) => t.net === net && t.pool);
+      for (let i = 0; i < ts.length; i += 30) {
+        const ch = ts.slice(i, i + 30), r = await fetch(`https://api.dexscreener.com/latest/dex/pairs/${DX[net] || net}/${ch.map((t) => t.pool).join(",")}`);
+        if (r.status === 429) { wait = 15000; break; }
+        if (!r.ok) continue;
+        for (const p of (await r.json()).pairs || []) {
+          const t = ch.find((x) => x.pool.toLowerCase() === String(p.pairAddress).toLowerCase()); if (!t) continue;
+          const mc = nn(p.marketCap) || nn(p.fdv);
+          if (mc && t.mc && mc !== t.mc) { t.flash = mc > t.mc ? "fu" : "fd"; t.fat = Date.now(); }
+          if (mc) t.mc = mc; t.liq = nn(p.liquidity?.usd) || t.liq; t.vol24 = nn(p.volume?.h24) || t.vol24; if (p.priceChange?.h24 != null) t.chg24 = nn(p.priceChange.h24); t.tx5 = p.txns?.m5;
+        }
+        dirty = true;
+      }
+    }
+  } catch (e) { wait = 5000; }
+  setTimeout(dexLoop, wait);
+}
+function tick() {
+  if (!D) return;
+  if (dirty) { dirty = false; render(); }
+  document.querySelectorAll(".ag").forEach((e) => { e.textContent = ago(+e.dataset.ts) + " ago"; });
+  $("live").textContent = LV.last ? "LIVE · scanning · tick " + ago(LV.last) + " ago" : "LIVE · snapshot " + ago(D.updated) + " old";
+}
+load(); setInterval(load, 60000); setInterval(tick, 1000); scan(); dexLoop();
 </script>
 </body>
 </html>
