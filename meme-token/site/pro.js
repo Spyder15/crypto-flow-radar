@@ -56,6 +56,17 @@
     ws.onclose = () => setTimeout(connectL, 5000); ws.onerror = () => ws.close();
   }
 
+  const OKX = { ct: null };
+  async function connectO() {
+    try {
+      if (!OKX.ct) { OKX.ct = {}; for (const i of (await jget("https://www.okx.com/api/v5/public/instruments?instType=SWAP")).data) OKX.ct[i.instId] = { v: +i.ctVal, usd: i.ctValCcy === "USD" }; }
+    } catch (e) { OKX.ct = null; return setTimeout(connectO, 15000); }
+    let ws; try { ws = new WebSocket("wss://ws.okx.com:8443/ws/v5/public"); } catch (e) { return; }
+    ws.onopen = () => ws.send(JSON.stringify({ op: "subscribe", args: [{ channel: "liquidation-orders", instType: "SWAP" }] }));
+    ws.onmessage = (m) => { try { const d = JSON.parse(m.data); for (const r of d.data || []) { const c = OKX.ct[r.instId]; if (!c) continue; for (const x of r.details) LQ.unshift({ s: r.instFamily.split("-")[0], long: x.posSide === "long", u: c.usd ? +x.sz * c.v : +x.sz * c.v * +x.bkPx, ts: +x.ts }); } if (LQ.length > 1500) LQ.length = 1500; } catch (e) { /* ignore frame */ } };
+    ws.onclose = () => setTimeout(connectO, 5000); ws.onerror = () => ws.close();
+  }
+
   function rDeriv() {
     const now = Date.now(), L = LQ.filter((x) => now - x.ts < 9e5), lng = L.filter((x) => x.long).reduce((a, x) => a + x.u, 0), sht = L.filter((x) => !x.long).reduce((a, x) => a + x.u, 0);
     const bias = lng + sht < 1 ? "waiting for liquidations…" : lng > sht * 1.5 ? "Longs are getting wiped (price falling)" : sht > lng * 1.5 ? "Shorts are getting squeezed (price rising)" : "balanced";
@@ -71,7 +82,7 @@
     <div class="cols" style="margin-top:12px">
       <div>${panel("Funding rates", "positive = longs pay shorts (crowded longs) · % per 8h", `<div class="two" style="margin-top:8px"><div><div class="wh2" style="margin-top:0">Most crowded LONGS</div>${hi.map(fr).join("") || '<span class="st">loading…</span>'}</div><div><div class="wh2" style="margin-top:0">Most crowded SHORTS</div>${lo.map(fr).join("") || '<span class="st">loading…</span>'}</div></div>`)}
       ${panel("Open interest + long/short ratio", "top 15 perps by volume · L/S = accounts long ÷ short", `<div class="tw"><table><thead><tr><th>Coin</th><th>OI</th><th>1h</th><th>24h</th><th>L/S</th><th>Funding</th></tr></thead><tbody>${oiRows || '<tr><td colspan="6" class="st">loading…</td></tr>'}</tbody></table></div>`, "margin-top:12px")}</div>
-      ${panel("Liquidation tape", "live, Binance futures", `<div class="mlegend" style="margin:6px 0">Last 15 min by coin: ${liqTop.length ? liqTop.map(([s, v]) => `<b>${esc(s)}</b> ${big(v)}`).join(" · ") : "-"}</div><div class="tw" style="max-height:640px">${tape || '<div class="st">waiting for liquidations…</div>'}</div>`)}
+      ${panel("Liquidation tape", "live, Binance + OKX futures", `<div class="mlegend" style="margin:6px 0">Last 15 min by coin: ${liqTop.length ? liqTop.map(([s, v]) => `<b>${esc(s)}</b> ${big(v)}`).join(" · ") : "-"}</div><div class="tw" style="max-height:640px">${tape || '<div class="st">waiting for liquidations…</div>'}</div>`)}
     </div>`;
   }
 
@@ -1072,7 +1083,7 @@
   // ---------- boot ----------
   getStbl(); setInterval(getStbl, 3600000);
   getFund(); setInterval(getFund, 20000);
-  connectL();
+  connectL(); connectO();
   const waitPx = setInterval(() => { if (Object.keys(M.px).length > 50) { clearInterval(waitPx); getOI(); getMov(); setInterval(getOI, 120000); setInterval(() => getMov().then(checkMovers), 45000); } }, 1000);
   getChains(); setInterval(getChains, 900000); getEtf(); setInterval(getEtf, 900000); getSol(); setInterval(getSol, 10000);
   setInterval(() => { checkAlerts(); if (document.body.dataset.v === "mkt" && (sub === "deriv" || sub === "watch")) renderSub(); }, 1000);
