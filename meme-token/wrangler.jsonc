@@ -1,5 +1,6 @@
 {
   "name": "meme-trench",
+  "account_id": "6a0e122454d35c51ea05b398e82cc2c4",
   "compatibility_date": "2025-01-01",
   "assets": { "directory": "./site" }
 }
