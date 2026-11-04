@@ -200,7 +200,7 @@
       return `<tr class="cr" data-sym="${esc(s)}"><td><span class="star" data-star="${esc(s)}">★</span> <b>${esc(s)}</b></td><td>${t ? px(t.p) : "-"}</td><td>${ps(t?.ch)}</td><td>${ps(m?.c5m)}</td><td>${fl == null ? "-" : `<span class="${cls(fl)}">${sgb(fl)}</span>`}</td><td>${wn ? `<span class="${cls(wn)}">${sgb(wn)}</span>` : "-"}</td><td>${f ? ps(f.fr, 4) : "-"}</td><td>${DV.oi[s] ? big(DV.oi[s].v) : "-"}</td></tr>`;
     }).join("");
     if (document.activeElement?.id === "wadd") return;
-    $("s-watch").innerHTML = panel("My watchlist ★", "saved in this browser · click ★ on any coin to add / remove", `<div class="bar"><input id="wadd" placeholder="Add symbol, e.g. PEPE then Enter" autocomplete="off" spellcheck="false" style="background:var(--panel2);border:1px solid var(--line);color:var(--txt);font:inherit;padding:6px 10px;width:260px"></div><div class="tw"><table><thead><tr><th>Coin</th><th>Price</th><th>24h</th><th>5m</th><th>Live net buying</th><th>Whales 30m</th><th>Funding</th><th>OI</th></tr></thead><tbody>${rows || '<tr><td colspan="8" class="st">Nothing here yet. Tap ☆ next to a coin.</td></tr>'}</tbody></table></div>`);
+    $("s-watch").innerHTML = panel("My watchlist ★", "saved in this browser · click ★ on any coin to add / remove", `<div class="bar"><input id="wadd" placeholder="Add symbol, e.g. PEPE then Enter" autocomplete="off" spellcheck="false" style="background:var(--panel2);border:1px solid var(--line);color:var(--txt);font:inherit;padding:6px 10px;width:260px"><span class="chip on" data-go="wadd">Search</span></div><div class="tw"><table><thead><tr><th>Coin</th><th>Price</th><th>24h</th><th>5m</th><th>Live net buying</th><th>Whales 30m</th><th>Funding</th><th>OI</th></tr></thead><tbody>${rows || '<tr><td colspan="8" class="st">Nothing here yet. Tap ☆ next to a coin.</td></tr>'}</tbody></table></div>`);
   }
   $("s-watch").addEventListener("keydown", (e) => { if (e.target.id === "wadd" && e.key === "Enter") { const s = e.target.value.trim().toUpperCase(); if (s && !WLIST.includes(s)) { WLIST.push(s); LS.set("watch", WLIST); } e.target.value = ""; e.target.blur(); rWatch(); } });
 
@@ -319,7 +319,7 @@
   const parsePos = (st) => ({ av: +st.marginSummary.accountValue, ntl: +st.marginSummary.totalNtlPos, wd: +st.withdrawable, list: st.assetPositions.map(({ position: p }) => ({ c: p.coin, sz: +p.szi, entry: +p.entryPx, val: +p.positionValue, upnl: +p.unrealizedPnl, lev: p.leverage?.value, liq: p.liquidationPx ? +p.liquidationPx : null, roe: +p.returnOnEquity })).filter((x) => x.val > 0) });
   const getWhalePos = lg(async () => {
     if (!HW.snap) return;
-    for (const w of HW.snap.whales.slice(0, 40)) { try { HW.pos[w.a] = parsePos(await hlPost({ type: "clearinghouseState", user: w.a })); } catch (e) { /* skip */ } await sleep(120); }
+    for (const w of HW.snap.whales.slice(0, 40)) { try { HW.pos[w.a] = parsePos(await hlPost({ type: "clearinghouseState", user: w.a })); if (sub === "hlw" || sub === "liq") renderSub(); } catch (e) { /* skip */ } await sleep(120); }
   });
   async function loadWallet(a) {
     HW.exAddr = a; HW.exErr = ""; HW.ex = null; rHlw();
@@ -353,7 +353,7 @@
         body = `<div class="wh2" style="margin-top:0">Largest Hyperliquid vaults by TVL (of ${S.vaults.length} shown)</div><div class="tw" style="max-height:70vh"><table><thead><tr><th style="text-align:left">Vault</th><th>TVL</th><th>APR</th><th>PnL 30d</th><th>Age</th><th></th></tr></thead><tbody>${S.vaults.map((v) => `<tr><td style="text-align:left"><b>${esc(v.n)}</b> <span class="st">${esc(addr(v.l))}</span></td><td>${big(v.tvl)}</td><td>${ps(v.apr * 100, 1)}</td><td class="${cls(v.pm)}">${usdS(v.pm)}</td><td class="st">${v.created ? ago(v.created) : "-"}</td><td><a href="https://app.hyperliquid.xyz/vaults/${esc(v.a)}" target="_blank" rel="noopener">open</a></td></tr>`).join("")}</tbody></table></div>`;
       }
     }
-    $("s-hlw").innerHTML = panel("Hyperliquid whale tracker", S ? "snapshot " + ago(S.ts) + " old · positions live from Hyperliquid · " + S.count.toLocaleString() + " ranked accounts" : "", `<div class="bar"><input id="wx" value="${esc(HW.exAddr)}" placeholder="Wallet explorer: paste 0x… address then Enter" autocomplete="off" spellcheck="false" style="${inp};width:min(440px,100%)"></div>${ex}`) + panel("Traders & vaults", "public Hyperliquid leaderboard", `<div class="bar">${chip("whales", "Whales")}${chip("top", "Top traders")}${chip("vaults", "Vaults")}</div>${body}`, "margin-top:12px");
+    $("s-hlw").innerHTML = panel("Hyperliquid whale tracker", S ? "snapshot " + ago(S.ts) + " old · positions live from Hyperliquid · " + S.count.toLocaleString() + " ranked accounts" : "", `<div class="bar"><input id="wx" value="${esc(HW.exAddr)}" placeholder="Wallet explorer: paste 0x… address then Enter" autocomplete="off" spellcheck="false" style="${inp};width:min(440px,100%)"><span class="chip on" data-go="wx">Search</span></div>${ex}`) + panel("Traders & vaults", "public Hyperliquid leaderboard", `<div class="bar">${chip("whales", "Whales")}${chip("top", "Top traders")}${chip("vaults", "Vaults")}</div>${body}`, "margin-top:12px");
   }
   $("s-hlw").onclick = (e) => {
     const v = e.target.dataset?.hv, row = e.target.closest?.("[data-w]");
@@ -409,7 +409,7 @@
     const n = CY.p.length, price = CY.p[n - 1], fairR = 10 ** m.rain[n - 1], fairS = 10 ** m.s2f[n - 1];
     const z = (Math.log10(price) - m.rain[n - 1]) / m.R.sd, bi = clamp(Math.floor((z + 2.25) / 0.5), 0, 8), band = BANDS[bi];
     const mayer = m.ma200 ? price / m.ma200 : null;
-    $("s-cyc").innerHTML = panel("Cycle models (BTC)", "Binance daily closes since 2017 · models are fitted to that history", `<div class="mk7">${kc("BTC price", px(price), "daily close")}${kc("Rainbow band", `<span style="color:${band[1]}">${band[0]}</span>`, "model fair ≈ " + px(fairR))}${kc("Mayer multiple", mayer ? mayer.toFixed(2) : "-", "price / 200-day MA" + (mayer ? (mayer > 2.4 ? " · overheated" : mayer < 0.8 ? " · deep value" : "") : ""), mayer > 2.4 ? "dn" : mayer < 0.8 ? "up" : "")}${kc("200-week MA", m.ma1400 ? px(m.ma1400) : "-", m.ma1400 ? ps((price / m.ma1400 - 1) * 100, 0) + " above" : "")}${kc("Stock-to-flow model", px(fairS), "price / model " + (price / fairS).toFixed(2) + "x")}${kc("From ATH", ps((price / m.ath - 1) * 100, 1), "ATH " + px(m.ath))}</div><canvas id="cycc" style="width:100%;height:340px;margin-top:10px;background:#080808;border:1px solid var(--line)"></canvas><div class="bar" style="font-size:11px"><span><b style="color:#fff">▬</b> price</span><span><b style="color:#4aa3ff">▬</b> rainbow fair value</span><span><b style="color:#b36cff">▬</b> stock-to-flow model</span><span class="st">log scale</span></div><div class="mlegend">Rainbow = log-regression of price vs time with ±σ bands (our own fit, so band edges differ from other sites). S2F is shown for reference: it badly over-predicted after 2021 and is widely criticised. SOPR / NVT / NUPL need paid on-chain data and are not included. Educational only, not advice.</div>`);
+    $("s-cyc").innerHTML = panel("Cycle models (BTC)", "Binance daily closes since 2017 · models are fitted to that history", `<div class="mk7">${kc("BTC price", px(price), "daily close")}${kc("Rainbow band", `<span style="color:${band[1]}">${band[0]}</span>`, "model fair ≈ " + px(fairR))}${kc("Mayer multiple", mayer ? mayer.toFixed(2) : "-", "price / 200-day MA" + (mayer ? (mayer > 2.4 ? " · overheated" : mayer < 0.8 ? " · deep value" : "") : ""), mayer > 2.4 ? "dn" : mayer < 0.8 ? "up" : "")}${kc("200-week MA", m.ma1400 ? px(m.ma1400) : "-", m.ma1400 ? ps((price / m.ma1400 - 1) * 100, 0) + " above" : "")}${kc("Stock-to-flow model", px(fairS), "price / model " + (price / fairS).toFixed(2) + "x")}${kc("From ATH", ps((price / m.ath - 1) * 100, 1), "ATH " + px(m.ath))}</div><canvas id="cycc" style="width:100%;height:340px;margin-top:10px;background:var(--panel);border:1px solid var(--line)"></canvas><div class="bar" style="font-size:11px"><span><b style="color:#fff">▬</b> price</span><span><b style="color:#4aa3ff">▬</b> rainbow fair value</span><span><b style="color:#b36cff">▬</b> stock-to-flow model</span><span class="st">log scale</span></div><div class="mlegend">Rainbow = log-regression of price vs time with ±σ bands (our own fit, so band edges differ from other sites). S2F is shown for reference: it badly over-predicted after 2021 and is widely criticised. SOPR / NVT / NUPL need paid on-chain data and are not included. Educational only, not advice.</div>`);
     drawCyc();
   }
   function drawCyc() {
@@ -418,11 +418,11 @@
     const r = window.devicePixelRatio || 1, W = cv.clientWidth, Hh = cv.clientHeight; cv.width = W * r; cv.height = Hh * r; ctx.scale(r, r);
     const n = CY.p.length, lo = Math.min(...CY.p.map(Math.log10), ...m.rain) - 0.1, hi = Math.max(...CY.p.map(Math.log10), ...m.rain, ...m.s2f) + 0.1;
     const X = (i) => 38 + i / (n - 1) * (W - 46), Y = (v) => Hh - 18 - (v - lo) / (hi - lo) * (Hh - 28);
-    ctx.font = "10px monospace"; ctx.fillStyle = "#666"; ctx.strokeStyle = "#1a1a1a";
+    const dk = document.documentElement.dataset.theme === "dark"; ctx.font = "10px monospace"; ctx.fillStyle = "#888"; ctx.strokeStyle = dk ? "#222" : "#e3e6ec";
     for (let v = Math.ceil(lo); v <= hi; v++) { ctx.beginPath(); ctx.moveTo(38, Y(v)); ctx.lineTo(W - 8, Y(v)); ctx.stroke(); ctx.fillText("$" + (10 ** v).toLocaleString(), 2, Y(v) - 2); }
     for (let b = 0; b < 9; b++) { ctx.strokeStyle = BANDS[b][1] + "88"; ctx.beginPath(); m.rain.forEach((v, i) => { const y = Y(v + (b - 4) * 0.5 * m.R.sd); i ? ctx.lineTo(X(i), y) : ctx.moveTo(X(i), y); }); ctx.stroke(); }
     const line = (arr, col, lw) => { ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); arr.forEach((v, i) => { const y = Y(v); i ? ctx.lineTo(X(i), y) : ctx.moveTo(X(i), y); }); ctx.stroke(); ctx.lineWidth = 1; };
-    line(m.s2f, "#b36cff", 1); line(m.rain, "#4aa3ff", 1.5); line(CY.p.map(Math.log10), "#1e2330", 1.6);
+    line(m.s2f, "#b36cff", 1); line(m.rain, "#4aa3ff", 1.5); line(CY.p.map(Math.log10), dk ? "#e8e8e8" : "#1e2330", 1.6);
   }
 
   // ---------- Macro (Polymarket odds via /api/macro) ----------
@@ -555,6 +555,10 @@
     if (/volume|liquid/.test(t)) return ["Top volume", top(R, (a, b) => b.vol - a.vol)];
     const w = q.toUpperCase().split(/[^A-Z0-9:]+/).find((x) => x && HL.rows.some((r) => r.s === x));
     if (w) return ["Summary for " + w, HL.rows.filter((r) => r.s === w)];
+    const part = q.toUpperCase().split(/[^A-Z0-9]+/).filter((x) => x.length >= 2);
+    const m = HL.rows.filter((r) => part.some((x) => r.s.toUpperCase().includes(x) || (r.tags || []).some((g) => g.toUpperCase().includes(x))));
+    if (m.length) return ['Coins matching "' + q + '"', m.sort((a, b) => b.vol - a.vol).slice(0, 15)];
+    if (/ai|agent|meme|l2|defi|gaming|rwa/i.test(q)) return ["Top volume (no category data; showing the most traded perps)", top(R, (a, b) => b.vol - a.vol)];
     return null;
   }
   function rAsk() {
@@ -563,7 +567,7 @@
     if (AK.q && !res) out = '<div class="dn" style="padding:10px">Could not understand that. Try one of the chips or a coin symbol.</div>';
     if (res) out = `<div class="wh2" style="margin-top:0">${esc(res[0])}</div><div class="tw"><table><thead><tr><th style="text-align:left">Pair</th><th>Signal</th><th>Price</th><th>24h</th><th>Vol 24h</th><th>OI</th><th>Funding ann.</th><th style="text-align:left">Flags</th></tr></thead><tbody>${res[1].map((r) => `<tr class="cr"${M.px[r.s] ? ` data-sym="${esc(r.s)}"` : ""}><td style="text-align:left"><b>${esc(r.s)}</b></td><td class="${sigc(r.sig)}">${r.sig}</td><td>${px(r.p)}</td><td>${ps(r.chg)}</td><td>${big(r.vol)}</td><td>${big(r.oi)}</td><td>${r.fa >= 0 ? "+" : ""}${r.fa.toFixed(1)}%</td><td class="st" style="text-align:left">${esc(r.tags.join(" · "))}</td></tr>`).join("") || '<tr><td colspan="8" class="st">nothing matches right now</td></tr>'}</tbody></table></div>`;
     const api = [["/api/options?c=BTC", "Deribit option chain summary (BTC or ETH)"], ["/api/macro", "Polymarket top events and odds"], ["/api/etf", "Spot BTC ETF holdings by issuer"], ["/api/sol-whales", "Recent large Jupiter swaps on Solana"], ["/hl-snap.json", "Hyperliquid top accounts, traders, vaults, DeFi (refreshed every 30 min)"]];
-    $("s-ask").innerHTML = panel("Ask the terminal", "rule-based answers from live Hyperliquid data · not an AI model", `<div class="bar">${ASKS.map((a) => `<span class="chip" data-ak="${esc(a)}">${a}</span>`).join("")}</div><div class="bar"><input id="akq" value="${esc(AK.q)}" placeholder="Ask: top gainers, negative funding, BTC …  then Enter" autocomplete="off" spellcheck="false" style="${inp};width:min(520px,100%)"></div>${out}`) + panel("Open data endpoints", "free JSON, no key, cached: use them in your own tools", `<div class="tw"><table><tbody>${api.map(([u, d]) => `<tr><td style="text-align:left"><a href="${u}" target="_blank" rel="noopener"><b>${u}</b></a></td><td class="st" style="text-align:left">${d}</td></tr>`).join("")}</tbody></table></div>`, "margin-top:12px") + panel("Embed widgets", "put a live table on any site with an iframe (w = gainers | losers | volume | funding)", `<pre class="mlegend" style="white-space:pre-wrap;user-select:all">${esc('<iframe src="' + location.origin + '/embed.html?w=gainers&n=10" width="360" height="380" style="border:0"></iframe>')}</pre><iframe src="/embed.html?w=gainers&n=6" width="360" height="260" style="border:1px solid #e3e7ee;max-width:100%"></iframe>`, "margin-top:12px");
+    $("s-ask").innerHTML = panel("Ask the terminal", "rule-based answers from live Hyperliquid data · not an AI model", `<div class="bar">${ASKS.map((a) => `<span class="chip" data-ak="${esc(a)}">${a}</span>`).join("")}</div><div class="bar"><input id="akq" value="${esc(AK.q)}" placeholder="Ask: top gainers, negative funding, BTC …  then Enter" autocomplete="off" spellcheck="false" style="${inp};width:min(520px,100%)"><span class="chip on" data-go="akq">Search</span></div>${out}`) + panel("Open data endpoints", "free JSON, no key, cached: use them in your own tools", `<div class="tw"><table><tbody>${api.map(([u, d]) => `<tr><td style="text-align:left"><a href="${u}" target="_blank" rel="noopener"><b>${u}</b></a></td><td class="st" style="text-align:left">${d}</td></tr>`).join("")}</tbody></table></div>`, "margin-top:12px") + panel("Embed widgets", "put a live table on any site with an iframe (w = gainers | losers | volume | funding)", `<pre class="mlegend" style="white-space:pre-wrap;user-select:all">${esc('<iframe src="' + location.origin + '/embed.html?w=gainers&n=10" width="360" height="380" style="border:0"></iframe>')}</pre><iframe src="/embed.html?w=gainers&n=6" width="360" height="260" style="border:1px solid #e3e7ee;max-width:100%"></iframe>`, "margin-top:12px");
   }
   $("s-ask").onclick = (e) => { const a = e.target.dataset?.ak; if (a) { AK.q = a; rAsk(); } };
   $("s-ask").addEventListener("keydown", (e) => { if (e.target.id === "akq" && e.key === "Enter") { AK.q = e.target.value.trim(); rAsk(); } });
@@ -679,7 +683,7 @@
   function rFlow() {
     if (document.activeElement?.id === "flq") return;
     const chips = topByVol(12).map((s) => `<span class="chip${FL.sym === s ? " on" : ""}" data-fl="${esc(s)}">${esc(s)}</span>`).join("");
-    const bar = `<div class="bar">${chips}<input id="flq" placeholder="any Binance coin + Enter" autocomplete="off" spellcheck="false" style="${inpS};width:190px"></div>`;
+    const bar = `<div class="bar">${chips}<input id="flq" placeholder="any Binance coin + Enter" autocomplete="off" spellcheck="false" style="${inpS};width:190px"><span class="chip on" data-go="flq">Search</span></div>`;
     let body = '<div class="st" style="padding:14px">loading order book…</div>';
     if (FL.book && FL.k) {
       const { bids, asks } = FL.book, mid = (bids[0][0] + asks[0][0]) / 2;
@@ -734,7 +738,7 @@
   function rCmp() {
     if (document.activeElement?.id === "cmq") return;
     const chips = CP.syms.map((s, i) => `<span class="chip on" data-cx="${esc(s)}" style="background:${COLS6[i % 6]};border-color:${COLS6[i % 6]}">${esc(s)} ✕</span>`).join("");
-    const bar = `<div class="bar">${chips}<input id="cmq" placeholder="add coin + Enter (max 6)" autocomplete="off" spellcheck="false" style="${inpS};width:190px">${[[30, "30d"], [90, "90d"], [180, "180d"], [365, "1y"]].map(([d, l]) => `<span class="chip${CP.rng === d ? " on" : ""}" data-cr="${d}">${l}</span>`).join("")}</div>`;
+    const bar = `<div class="bar">${chips}<input id="cmq" placeholder="add coin + Enter (max 6)" autocomplete="off" spellcheck="false" style="${inpS};width:190px"><span class="chip on" data-go="cmq">Search</span>${[[30, "30d"], [90, "90d"], [180, "180d"], [365, "1y"]].map(([d, l]) => `<span class="chip${CP.rng === d ? " on" : ""}" data-cr="${d}">${l}</span>`).join("")}</div>`;
     const ser = CP.syms.map((s, i) => ({ s, c: CP.k[s + CP.rng], col: COLS6[i % 6] })).filter((x) => x.c?.length > 1);
     let chart = '<div class="st" style="padding:14px">loading…</div>';
     if (ser.length) {
@@ -1041,6 +1045,8 @@
     const b = $("pushbox"); if (!b) return; await pushState();
     b.innerHTML = `<div style="margin-top:12px"><div class="st" style="margin-bottom:6px">PUSH · alerts even when the browser is closed</div><span class="chip${PS.on ? " on" : ""}" data-rl="push">${PS.on ? "Push ON · click to turn off" : "Turn on push alerts"}</span> ${PS.msg ? `<span class="dn">${esc(PS.msg)}</span>` : ""}<div class="mlegend">Your armed rules above are sent to the server, which checks them every ~5 min against Hyperliquid prices/funding and sends a push to this device. Needs a browser with notification permission.</div></div>`;
   }
+
+  document.addEventListener("click", (e) => { const g = e.target.closest?.("[data-go]"); const i = g && $(g.dataset.go); if (i) i.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
 
   // ---------- lazy loaders for the extra tabs ----------
   const LAZY = {
