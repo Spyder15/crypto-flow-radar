@@ -117,8 +117,12 @@ export async function track(env, notify) {
     if (t.closed) { await recordClosed(env, t); if (t.pending?.length) await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 }); else await env.TRADES.delete(key); } else await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 });
     if (events.length) done.push(`${t.sym} ${events.map((e) => e.type).join(",")}`);
   }
-  await env.TRADES.put("health:track", JSON.stringify({ at: now, ok: !errors.length, errors: errors.slice(0, 3) }), { expirationTtl: 2 * 86400 });
-  if (!errors.length) await env.TRADES.put("health:track:ok", String(now), { expirationTtl: 2 * 86400 });
+  // KV free tier: ~1000 writes/day. Healthy runs refresh the heartbeat at most every 25 min (watchdog threshold is 45).
+  const prevOk = +(await env.TRADES.get("health:track:ok")) || 0;
+  if (errors.length || now - prevOk > 25 * 60e3) {
+    await env.TRADES.put("health:track", JSON.stringify({ at: now, ok: !errors.length, errors: errors.slice(0, 3) }), { expirationTtl: 2 * 86400 });
+    if (!errors.length) await env.TRADES.put("health:track:ok", String(now), { expirationTtl: 2 * 86400 });
+  }
   return { open: done, errors: errors.slice(0, 5) };
 }
 
