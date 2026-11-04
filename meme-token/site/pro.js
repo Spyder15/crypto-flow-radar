@@ -109,6 +109,26 @@
     }
   });
   const getEtf = lg(async () => { CHN.etf = await jget("/api/etf"); });
+  const SW = { rows: [], sym: {} };
+  const getSol = lg(async () => {
+    const a = await jget("/api/sol-whales"), seen = new Set(SW.rows.map((r) => r.sig));
+    SW.rows = [...a.filter((r) => !seen.has(r.sig)), ...SW.rows].slice(0, 300);
+    const need = [...new Set(SW.rows.map((r) => r.mint))].filter((m) => !(m in SW.sym)).slice(0, 30);
+    if (need.length) {
+      need.forEach((m) => (SW.sym[m] = null));
+      try { for (const p of await jget("https://api.dexscreener.com/tokens/v1/solana/" + need.join(","))) if (p.baseToken && !SW.sym[p.baseToken.address]) SW.sym[p.baseToken.address] = p.baseToken.symbol; } catch (e) { /* symbols optional */ }
+    }
+    if (document.body.dataset.v === "mkt") renderSub();
+  });
+  function solPanel() {
+    const sp = M.px.SOL?.p || 0, usd0 = (s) => (sp ? big(s * sp) : s.toFixed(0) + " SOL"), g = {};
+    for (const r of SW.rows) { const m = g[r.mint] || (g[r.mint] = { mint: r.mint, buy: 0, sell: 0, n: 0 }); m[r.side] += r.sol; m.n++; }
+    const nm = (m) => esc(SW.sym[m] || m.slice(0, 4) + "…" + m.slice(-4)), lk = (m) => `<a href="https://dexscreener.com/solana/${esc(m)}" target="_blank" rel="noopener">${nm(m)}</a>`;
+    const top = Object.values(g).sort((a, b) => b.buy - b.sell - (a.buy - a.sell)).slice(0, 12);
+    const tp = `<div class="tw"><table><thead><tr><th>Token</th><th>Whale buys</th><th>Whale sells</th><th>Net</th><th>Swaps</th></tr></thead><tbody>${top.map((m) => `<tr><td><b>${lk(m.mint)}</b></td><td class="up">${usd0(m.buy)}</td><td class="dn">${usd0(m.sell)}</td><td class="${cls(m.buy - m.sell)}">${usd0(m.buy - m.sell)}</td><td>${m.n}</td></tr>`).join("") || '<tr><td colspan="5" class="st">collecting…</td></tr>'}</tbody></table></div>`;
+    const tape = `<div class="tw" style="margin-top:8px"><table><thead><tr><th>Time</th><th>Side</th><th>Token</th><th>Size</th><th>Wallet</th></tr></thead><tbody>${SW.rows.slice(0, 25).map((r) => `<tr><td class="st">${ago(r.ts * 1000)} ago</td><td class="${r.side === "buy" ? "up" : "dn"}">${r.side.toUpperCase()}</td><td><b>${lk(r.mint)}</b></td><td>${usd0(r.sol)} <span class="st">(${r.sol.toFixed(0)} SOL)</span></td><td><a href="https://solscan.io/tx/${esc(r.sig)}" target="_blank" rel="noopener">${esc(r.w.slice(0, 4))}…${esc(r.w.slice(-4))}</a></td></tr>`).join("")}</tbody></table></div>`;
+    return panel("Solana whale swaps (Helius)", "Jupiter swaps of 3+ SOL · sampled every 10s (Jupiter is very busy, so not every swap is caught) · net = buys minus sells since page opened", tp + tape, "margin-top:12px");
+  }
   function rChain() {
     const e = CHN.etf?.data, btc = M.px.BTC?.p || 0;
     let etf = '<div class="st" style="padding:10px">ETF data unavailable right now.</div>';
@@ -118,7 +138,7 @@
     }
     const mx = Math.max(1, ...CHN.rows.map((r) => Math.abs(r.d1 || 0)));
     const chains = `<div class="tw" style="margin-top:8px"><table><thead><tr><th>Chain</th><th>TVL</th><th>TVL 1d</th><th>TVL 7d</th><th>DEX vol 24h</th><th>DEX 1d</th><th>DEX 7d</th></tr></thead><tbody>${CHN.rows.map((r) => `<tr><td><b>${esc(r.n)}</b></td><td>${big(r.tvl)}</td><td style="background:rgba(${(r.d1 || 0) >= 0 ? "47,210,122" : "255,77,77"},${(Math.abs(r.d1 || 0) / mx * 0.25).toFixed(2)})">${ps(r.d1)}</td><td>${ps(r.d7)}</td><td>${r.dv ? big(r.dv) : "-"}</td><td>${ps(r.dv1)}</td><td>${ps(r.dv7)}</td></tr>`).join("") || '<tr><td colspan="7" class="st">loading…</td></tr>'}</tbody></table></div>`;
-    $("s-chain").innerHTML = panel("Spot Bitcoin ETF flows", "issuer holdings change · as-of dates differ per issuer · est. flow = BTC change × price", etf) + panel("Chain money flow", "TVL = capital parked on the chain · DEX volume = trading activity · DefiLlama", chains, "margin-top:12px");
+    $("s-chain").innerHTML = panel("Spot Bitcoin ETF flows", "issuer holdings change · as-of dates differ per issuer · est. flow = BTC change × price", etf) + panel("Chain money flow", "TVL = capital parked on the chain · DEX volume = trading activity · DefiLlama", chains, "margin-top:12px") + solPanel();
   }
 
   // ---------- watchlist ----------
@@ -238,7 +258,7 @@
   getFund(); setInterval(getFund, 20000);
   connectL();
   const waitPx = setInterval(() => { if (Object.keys(M.px).length > 50) { clearInterval(waitPx); getOI(); getMov(); setInterval(getOI, 120000); setInterval(() => getMov().then(checkMovers), 45000); } }, 1000);
-  getChains(); setInterval(getChains, 900000); getEtf(); setInterval(getEtf, 900000);
+  getChains(); setInterval(getChains, 900000); getEtf(); setInterval(getEtf, 900000); getSol(); setInterval(getSol, 10000);
   setInterval(() => { checkAlerts(); if (document.body.dataset.v === "mkt" && (sub === "deriv" || sub === "watch")) renderSub(); }, 1000);
   setInterval(checkSectors, 30000);
 })();
