@@ -398,3 +398,7 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 - Snapshot "Post to X" image attach nahi karta (X ki limit).
 - Quant bot me funding accrual nahi.
 - Meme Quant KV write sirf trade change par, warna max 15 min me ek (KV 1000 writes/day bachane ke liye). Site me 'updated' 15 min tak purana dikh sakta hai.
+
+### 24.1 Recent incidents (2026-11-05)
+- **Meme quant bot first run failed** (commit `52a3994`): KV write path fixed in `6827320` (run-key endpoint `POST /api/mq/put`). Runs #2-#4 passed.
+- **Cloudflare KV 50% daily alert**: 5-min bot wrote KV too often. Fixed in `bb43e2c` (write only on trade change, else max once per 15 min). Limit resets 00:00 UTC. Agar phir bhi high ho to Workers Paid ($5/month).
