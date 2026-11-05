@@ -397,3 +397,4 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 - Free limits: Cloudflare KV 1000 writes/day (Meme Quant ~288/day), 5 crons, 50 subrequests; GeckoTerminal ~30/min; GitHub Actions minutes.
 - Snapshot "Post to X" image attach nahi karta (X ki limit).
 - Quant bot me funding accrual nahi.
+- Meme Quant KV write sirf trade change par, warna max 15 min me ek (KV 1000 writes/day bachane ke liye). Site me 'updated' 15 min tak purana dikh sakta hai.

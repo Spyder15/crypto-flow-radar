@@ -42,8 +42,10 @@ async function save(s) {
 }
 
 const now = Date.now();
+const fp = (x) => JSON.stringify([x.open.map((o) => [o.id, o.tp1Hit, +o.sl.toFixed(12), +o.real.toFixed(4)]), x.closed.length, x.cash.toFixed(2)]);
 const S = (await load()) || { cfg: C, cash: C.start, open: [], closed: [], curve: [], cool: {}, sec: {}, day: { d: "", pnl: 0 }, seq: 0 };
 S.cfg = C; S.sec ||= {}; S.cool ||= {};
+S._fp = fp(S);
 const key = (ds, addr) => `${ds}:${addr}`.toLowerCase();
 
 async function universe() {
@@ -169,6 +171,8 @@ for (const k of Object.keys(S.cool)) if (now - S.cool[k] > 48 * 36e5) delete S.c
 for (const k of Object.keys(S.sec)) if (now - S.sec[k].at > 24 * 36e5) delete S.sec[k];
 S.closed = S.closed.slice(0, 300);
 S.curve.push([now, +equity().toFixed(2)]); S.curve = S.curve.slice(-1200);
-S.equity = +equity().toFixed(2); S.upd = now;
-await save(S);
+S.equity = +equity().toFixed(2);
+// KV free tier = 1000 writes/day: write on trade changes, otherwise at most every 15 min
+const changed = fp(S) !== S._fp || !S.upd || now - S.upd >= 15 * 6e4;
+if (changed) { S.upd = now; delete S._fp; await save(S); } else console.log("no change, KV write skipped");
 console.log(`equity ${S.equity} cash ${S.cash.toFixed(2)} open ${S.open.length} closed ${S.closed.length}`);
