@@ -36,7 +36,7 @@
       const iv = t.t1 - t.t0 > 40 * 36e5 ? 60 : 15;
       jobs.push(fetchK(t.sym, iv, t.t0 - 4 * 36e5, t.t1 + 4 * 36e5).then((k) => { KC["c" + t.id] = k; }).catch(() => {}));
     }
-    await Promise.all(jobs); R.quant(); renderModal();
+    await Promise.all(jobs); R.quant(); if (MO) await loadModalK(); renderModal();
   }
   const chart = (k, t, ex, H = 180) => {
     if (!k || k.length < 2) return '<div class="st" style="padding:10px">chart loading…</div>';
@@ -106,71 +106,178 @@
       panel("Closed trades", "last 30", hist, "margin-top:12px");
   };
 
-  // ---------------- full-screen trade chart ----------------
-  let MO = null; // {id, open}
+  // ---------------- full-screen trade chart (TradingView-style) ----------------
+  let MO = null; // {id}
   const hm = (ts, long) => { const d = new Date(ts); return long ? d.toLocaleDateString([], { day: "2-digit", month: "short" }) + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
-  const dur = (ms) => { const m = Math.round(ms / 6e4); return m < 60 ? m + "m" : Math.floor(m / 60) + "h " + (m % 60) + "m"; };
-  let GEO = null;
-  const bigChart = (k, t, ex, live) => {
-    if (!k || k.length < 2) return '<div class="st" style="padding:40px;text-align:center">loading candles…</div>';
-    const W = 900, H = 430, pr = 76, pw = W - pr, ph = H - 30, dt = k[1].t - k[0].t, step = pw / k.length;
-    const lv = [t.entry, t.sl, t.tp, live].filter(isFinite), hi = Math.max(...k.map((c) => c.h), ...lv), lo = Math.min(...k.map((c) => c.l), ...lv), pd = (hi - lo) * 0.07;
-    const y = (v) => 6 + ph - (v - lo + pd) / (hi - lo + 2 * pd) * ph, xi = (ts) => (Math.max(k.findIndex((c) => c.t + dt > ts), 0) + 0.5) * step;
-    GEO = { k, step, pw, y, lo, hi, pd, ph, t };
-    let g = "";
-    for (let j = 0; j <= 6; j++) { const v = lo - pd + (hi - lo + 2 * pd) * j / 6; g += `<line x1="0" x2="${pw}" y1="${y(v)}" y2="${y(v)}" stroke="#8a94a6" opacity=".18"/><text x="${pw + 6}" y="${y(v) + 4}" fill="#8a94a6" font-size="11">${fnum(v)}</text>`; }
-    const ev = Math.max(1, Math.ceil(k.length / 7)), span = k[k.length - 1].t - k[0].t > 36e5 * 30;
-    for (let i = 0; i < k.length; i += ev) g += `<text x="${(i + 0.5) * step}" y="${H - 8}" fill="#8a94a6" font-size="11" text-anchor="middle">${hm(k[i].t, span)}</text>`;
-    const zone = (a, b, col) => `<rect x="0" width="${pw}" y="${Math.min(y(a), y(b))}" height="${Math.abs(y(a) - y(b))}" fill="${col}" opacity=".09"/>`;
-    const cs = k.map((c, i) => { const x = (i + 0.5) * step, col = c.c >= c.o ? GREEN : RED; return `<line x1="${x}" x2="${x}" y1="${y(c.h)}" y2="${y(c.l)}" stroke="${col}"/><rect x="${x - Math.max(step * 0.34, 0.8)}" width="${Math.max(step * 0.68, 1.6)}" y="${Math.min(y(c.o), y(c.c))}" height="${Math.max(Math.abs(y(c.o) - y(c.c)), 1)}" fill="${col}"/>`; }).join("");
-    const tag = (v, col, lab, dash = "6 4") => `<line x1="0" x2="${pw}" y1="${y(v)}" y2="${y(v)}" stroke="${col}" stroke-dasharray="${dash}"/><rect x="${pw}" y="${y(v) - 9}" width="${pr - 2}" height="18" rx="3" fill="${col}"/><text x="${pw + 4}" y="${y(v) + 4}" fill="#fff" font-size="11" font-weight="700">${lab} ${fnum(v)}</text>`;
-    let o = zone(t.entry, t.tp, GREEN) + zone(t.entry, t.sl, RED) + g + cs + tag(t.tp, GREEN, "TP") + tag(t.sl, RED, "SL") + tag(t.entry, "#6b7686", "IN", "2 3");
-    if (live != null && !ex) o += tag(live, "#e8a317", "NOW", "3 3");
-    o += `<line x1="${xi(t.t0)}" x2="${xi(t.t0)}" y1="6" y2="${ph + 6}" stroke="#9aa4b2" stroke-dasharray="2 3"/><text x="${xi(t.t0) > pw - 130 ? xi(t.t0) - 4 : xi(t.t0) + 4}" y="18" text-anchor="${xi(t.t0) > pw - 130 ? "end" : "start"}" fill="#9aa4b2" font-size="11">${t.side === "long" ? "▲ ENTRY LONG" : "▼ ENTRY SHORT"}</text>`;
-    if (ex) o += `<circle cx="${xi(ex.t)}" cy="${y(ex.px)}" r="6" fill="${ex.col}" stroke="#fff" stroke-width="2"/><text x="${Math.min(xi(ex.t), pw - 90)}" y="${Math.max(y(ex.px) - 12, 28)}" fill="${ex.col}" font-size="12" font-weight="700">${ex.lab}</text>`;
-    o += `<g id="qx" style="display:none;pointer-events:none"><line id="qxv" y1="6" y2="${ph + 6}" stroke="#9aa4b2" stroke-dasharray="3 3"/><line id="qxh" x1="0" x2="${pw}" stroke="#9aa4b2" stroke-dasharray="3 3"/><rect id="qxr" x="${pw}" width="${pr - 2}" height="18" rx="3" fill="#2b3340"/><text id="qxt" x="${pw + 4}" fill="#fff" font-size="11"></text></g>`;
-    return `<svg id="qsvg" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;cursor:crosshair">${o}</svg>`;
-  };
+  const dur = (ms) => { const m = Math.round(ms / 6e4); return m < 60 ? m + "m" : m < 2880 ? Math.floor(m / 60) + "h " + (m % 60) + "m" : Math.floor(m / 1440) + "d " + Math.floor(m % 1440 / 60) + "h"; };
+  const TF = { "1m": [6e4, "1", "1m"], "5m": [3e5, "5", "5m"], "15m": [9e5, "15", "15m"], "30m": [18e5, "30", "30m"], "1h": [36e5, "60", "1h"], "4h": [144e5, "240", "4h"], "1D": [864e5, "D", "1d"] };
+  const PAD = 8, CW = 900, CH_ = 530;
+  const CH = Object.assign({ tf: "15m", type: "c", ma: true }, LS.get("qch", {}), { n: 100, off: 0, fit: true, drag: null });
+  const MK = {}; let CX = null, GEO = null;
+  const saveCH = () => LS.set("qch", { tf: CH.tf, type: CH.type, ma: CH.ma });
+
+  async function fetchTF(sym, tf, st, en) {
+    const [, by, bn] = TF[tf], lim = st ? 1000 : 500;
+    try {
+      const r = await jget(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${sym}&interval=${by}${st ? "&start=" + st : ""}${en ? "&end=" + en : ""}&limit=${lim}`);
+      if (r.retCode !== 0) throw 0;
+      return r.result.list.slice().reverse().map((x) => ({ t: +x[0], o: +x[1], h: +x[2], l: +x[3], c: +x[4], v: +x[5] }));
+    } catch {
+      const r = await jget(`https://fapi.binance.com/fapi/v1/klines?symbol=${sym}&interval=${bn}${st ? "&startTime=" + st : ""}${en ? "&endTime=" + en : ""}&limit=${lim}`);
+      return r.map((x) => ({ t: +x[0], o: +x[1], h: +x[2], l: +x[3], c: +x[4], v: +x[5] }));
+    }
+  }
+  const curTrade = () => { if (!MO || !Q) return null; let t = Q.open.find((x) => x.id === MO.id); if (t) return { t, closed: false }; t = Q.closed.find((x) => x.id === MO.id); return t ? { t, closed: true } : null; };
+  async function loadModalK() {
+    const c = curTrade(); if (!c) return;
+    const { t, closed } = c, key = `${t.sym}|${CH.tf}|${closed ? t.id : "live"}`, hit = MK[key], ms = TF[CH.tf][0];
+    if (hit && (closed || Date.now() - hit.at < 12e3)) return;
+    let st, en;
+    if (closed) { en = Math.min(Date.now(), t.t1 + 80 * ms); st = t.t0 - 80 * ms; if ((en - st) / ms > 999) st = en - 999 * ms; }
+    try { MK[key] = { k: await fetchTF(t.sym, CH.tf, st, en), at: Date.now() }; } catch { if (!hit) MK[key] = { k: [], at: Date.now() - 6e3 }; }
+  }
+  const mkKey = (c) => `${c.t.sym}|${CH.tf}|${c.closed ? c.t.id : "live"}`;
+
+  function fitView(k, t, closed) {
+    const ms = TF[CH.tf][0], first = Math.max(0, k.findIndex((c) => c.t + ms > t.t0)), last = closed ? Math.max(first, k.findIndex((c) => c.t + ms > t.t1)) : k.length - 1;
+    const span = (last < 0 ? k.length - 1 : last) - first + 1;
+    CH.n = Math.max(40, Math.min(400, Math.round(span * 1.5 + 24 + PAD)));
+    CH.off = closed ? Math.max(0, k.length + PAD - ((last < 0 ? k.length - 1 : last) + 1 + Math.round(CH.n * 0.25))) : 0;
+  }
+  const niceStep = (raw) => { const m = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / m; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * m; };
+  const sma = (k, i, p) => { if (i < p - 1) return null; let s = 0; for (let j = i - p + 1; j <= i; j++) s += k[j].c; return s / p; };
+  const fmtAx = (ms, ts, prev) => { const d = new Date(ts); if (ms >= 864e5) return d.toLocaleDateString([], { day: "2-digit", month: "short" }); if (d.getHours() === 0 && d.getMinutes() === 0) return d.toLocaleDateString([], { day: "2-digit", month: "short" }); return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }); };
+  const vfmt = (v) => (v >= 1e9 ? (v / 1e9).toFixed(2) + "B" : v >= 1e6 ? (v / 1e6).toFixed(2) + "M" : v >= 1e3 ? (v / 1e3).toFixed(1) + "K" : v.toFixed(0));
+
+  function draw() {
+    const host = $("qchart"); if (!host || !CX) return;
+    const { t, closed, k, ex } = CX, ms = TF[CH.tf][0];
+    if (!k || k.length < 2) { host.innerHTML = `<div class="st" style="padding:60px;text-align:center">${k ? "no candles for this timeframe" : "loading candles…"}</div>`; GEO = null; return; }
+    if (CH.fit) { fitView(k, t, closed); CH.fit = false; }
+    const pr = 78, pw = CW - pr, ph = 350, vy = ph + 18, vh = 66, n = CH.n;
+    CH.off = Math.max(-20, Math.min(k.length + PAD - Math.min(30, k.length), CH.off));
+    const end = k.length + PAD - CH.off, start = end - n, i0 = Math.max(0, start), i1 = Math.min(k.length, end) - 1;
+    if (i1 < i0) { CH.off = 0; return draw(); }
+    const vis = k.slice(i0, i1 + 1), step = pw / n, x = (idx) => (idx - start + 0.5) * step;
+    let lo = Math.min(...vis.map((c) => c.l)), hi = Math.max(...vis.map((c) => c.h));
+    const span0 = hi - lo || hi * 0.01 || 1, lv = [t.entry, t.sl, t.tp].filter(isFinite);
+    for (const v of lv) if (v > lo - span0 * 0.6 && v < hi + span0 * 0.6) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    const pd = (hi - lo) * 0.07 || 1, plo = lo - pd, phi = hi + pd, y = (v) => 8 + ph - (v - plo) / (phi - plo) * ph, yc = (v) => Math.max(14, Math.min(ph, y(v)));
+    const vmax = Math.max(...vis.map((c) => c.v || 0), 1), vyf = (v) => vy + vh - (v / vmax) * vh;
+    const up = (c) => c.c >= c.o, last = k[k.length - 1];
+    let o = "";
+    // grid + price axis
+    const gs = niceStep((phi - plo) / 7), dec = gs >= 1 ? (gs % 1 ? 1 : 0) : Math.min(8, Math.ceil(-Math.log10(gs)) + 1);
+    for (let v = Math.ceil(plo / gs) * gs; v < phi; v += gs) o += `<line x1="0" x2="${pw}" y1="${y(v)}" y2="${y(v)}" stroke="#8a94a6" opacity=".16"/><text x="${pw + 7}" y="${y(v) + 4}" fill="#8a94a6" font-size="11">${v.toFixed(dec)}</text>`;
+    // time axis
+    const every = Math.max(1, Math.ceil(n / 8));
+    for (let idx = Math.ceil(i0 / every) * every; idx <= i1; idx += every) o += `<line x1="${x(idx)}" x2="${x(idx)}" y1="8" y2="${vy + vh}" stroke="#8a94a6" opacity=".1"/><text x="${x(idx)}" y="${CH_ - 8}" fill="#8a94a6" font-size="11" text-anchor="middle">${fmtAx(ms, k[idx].t)}</text>`;
+    // trade zones
+    const zone = (a, b, col) => `<rect x="0" width="${pw}" y="${Math.min(yc(a), yc(b))}" height="${Math.abs(yc(a) - yc(b))}" fill="${col}" opacity=".08"/>`;
+    o += zone(t.entry, t.tp, GREEN) + zone(t.entry, t.sl, RED);
+    // volume
+    o += `<text x="6" y="${vy + 11}" fill="#8a94a6" font-size="10">Vol ${vfmt(vis[vis.length - 1].v || 0)}</text>`;
+    if (CH.type === "c") o += vis.map((c, j) => { const xx = x(i0 + j), bw = Math.max(step * 0.68, 1.6); return `<line x1="${xx}" x2="${xx}" y1="${y(c.h)}" y2="${y(c.l)}" stroke="${up(c) ? GREEN : RED}"/><rect x="${xx - bw / 2}" width="${bw}" y="${Math.min(y(c.o), y(c.c))}" height="${Math.max(Math.abs(y(c.o) - y(c.c)), 1)}" fill="${up(c) ? GREEN : RED}"/>`; }).join("");
+    else { const pts = vis.map((c, j) => `${x(i0 + j).toFixed(1)},${y(c.c).toFixed(1)}`).join(" "); o += `<polygon points="${x(i0)},${ph + 8} ${pts} ${x(i1)},${ph + 8}" fill="#2962ff" opacity=".1"/><polyline points="${pts}" fill="none" stroke="#2962ff" stroke-width="2"/>`; }
+    o += vis.map((c, j) => { const xx = x(i0 + j), bw = Math.max(step * 0.68, 1.6); return `<rect x="${xx - bw / 2}" width="${bw}" y="${vyf(c.v || 0)}" height="${vy + vh - vyf(c.v || 0)}" fill="${up(c) ? GREEN : RED}" opacity=".45"/>`; }).join("");
+    // moving averages
+    if (CH.ma) for (const [p, col] of [[20, "#e8a317"], [50, "#2962ff"]]) {
+      const pts = []; for (let idx = i0; idx <= i1; idx++) { const m = sma(k, idx, p); if (m != null && y(m) > 0 && y(m) < ph + 10) pts.push(`${x(idx).toFixed(1)},${y(m).toFixed(1)}`); }
+      if (pts.length > 1) o += `<polyline points="${pts.join(" ")}" fill="none" stroke="${col}" stroke-width="1.3" opacity=".9"/>`;
+    }
+    // price tags
+    const tag = (v, col, lab, dash) => { const out = y(v) < 14 ? "↑ " : y(v) > ph ? "↓ " : "", yy = yc(v); return `<line x1="0" x2="${pw}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-dasharray="${dash}" opacity=".9"/><rect x="${pw}" y="${yy - 9}" width="${pr - 2}" height="18" rx="3" fill="${col}"/><text x="${pw + 4}" y="${yy + 4}" fill="#fff" font-size="11" font-weight="700">${out}${lab} ${fnum(v)}</text>`; };
+    o += tag(t.tp, GREEN, "TP", "6 4") + tag(t.sl, RED, "SL", "6 4") + tag(t.entry, "#6b7686", "IN", "2 3");
+    if (!closed) o += tag(last.c, up(last) ? GREEN : RED, "", "1 3");
+    // markers
+    const ei = k.findIndex((c) => c.t + ms > t.t0);
+    if (ei >= i0 && ei <= i1) {
+      const xe = x(ei), ye = yc(t.entry), L = t.side === "long";
+      o += `<line x1="${xe}" x2="${xe}" y1="8" y2="${vy + vh}" stroke="#9aa4b2" stroke-dasharray="2 3"/><polygon points="${L ? `${xe},${ye + 4} ${xe - 7},${ye + 16} ${xe + 7},${ye + 16}` : `${xe},${ye - 4} ${xe - 7},${ye - 16} ${xe + 7},${ye - 16}`}" fill="${L ? GREEN : RED}" stroke="#fff" stroke-width="1"/><text x="${xe + 10}" y="${L ? ye + 14 : ye - 8}" fill="${L ? GREEN : RED}" font-size="11" font-weight="700">${L ? "LONG" : "SHORT"} ${fnum(t.entry)}</text>`;
+    }
+    if (ex) {
+      const xi = k.findIndex((c) => c.t + ms > ex.t);
+      if (xi >= i0 && xi <= i1) o += `<circle cx="${x(xi)}" cy="${yc(ex.px)}" r="6" fill="${ex.col}" stroke="#fff" stroke-width="2"/><text x="${Math.min(x(xi), pw - 90)}" y="${Math.max(yc(ex.px) - 12, 24)}" fill="${ex.col}" font-size="12" font-weight="700">${ex.lab}</text>`;
+    }
+    o += `<text x="${pw / 2}" y="${ph / 2}" text-anchor="middle" fill="#8a94a6" opacity=".07" font-size="64" font-weight="800">${esc(t.sym.replace("USDT", ""))}</text>`;
+    o += `<g id="qx" style="display:none;pointer-events:none"><line id="qxv" y1="8" y2="${vy + vh}" stroke="#9aa4b2" stroke-dasharray="3 3"/><line id="qxh" x1="0" x2="${pw}" stroke="#9aa4b2" stroke-dasharray="3 3"/><rect id="qxr" x="${pw}" width="${pr - 2}" height="18" rx="3" fill="#2b3340"/><text id="qxt" x="${pw + 4}" fill="#fff" font-size="11"></text><rect id="qxb" y="${CH_ - 22}" width="108" height="18" rx="3" fill="#2b3340"/><text id="qxbt" y="${CH_ - 9}" fill="#fff" font-size="11" text-anchor="middle"></text></g>`;
+    GEO = { k, step, pw, ph, start, plo, phi, ms, i0, i1, t };
+    host.innerHTML = `<svg id="qsvg" viewBox="0 0 ${CW} ${CH_}" style="width:100%;height:auto;display:block;cursor:crosshair;touch-action:none;user-select:none">${o}</svg>`;
+  }
+
+  const tfBar = () => `<div class="qtb">${Object.keys(TF).map((k) => `<span class="chip${CH.tf === k ? " on" : ""}" data-tf="${k}">${k}</span>`).join("")}<span class="qsep"></span><span class="chip${CH.type === "c" ? " on" : ""}" data-ct="c">Candles</span><span class="chip${CH.type === "l" ? " on" : ""}" data-ct="l">Line</span><span class="chip${CH.ma ? " on" : ""}" data-ma="1">MA 20/50</span><span class="chip" data-fit="1">⤢ Fit trade</span><span class="st" style="margin-left:auto">scroll = zoom · drag = move · double-click = fit</span></div>`;
+
   const renderModal = () => {
-    const box = $("qmodal-b"); if (!box || !MO || !Q) return;
-    let t = Q.open.find((x) => x.id === MO.id), closed = false;
-    if (!t) { t = Q.closed.find((x) => x.id === MO.id); closed = true; }
-    if (!t) { box.innerHTML = '<div class="st" style="padding:20px">This trade is no longer available.</div>'; return; }
-    const k = KC[(closed ? "c" : "o") + t.id], live = !closed && k && k.length ? k[k.length - 1].c : null, dir = t.side === "long" ? 1 : -1, fee = Q.cfg.fee || 0.0011;
+    const box = $("qmodal-b"); if (!box || !MO || !Q || CH.drag) return;
+    const c = curTrade();
+    if (!c) { box.innerHTML = '<div class="st" style="padding:20px">This trade is no longer available.</div>'; return; }
+    const { t, closed } = c, k15 = KC[(closed ? "c" : "o") + t.id], mk = MK[mkKey(c)], ck = mk ? mk.k : null;
+    const live = !closed ? (ck && ck.length ? ck[ck.length - 1].c : k15 && k15.length ? k15[k15.length - 1].c : null) : null, dir = t.side === "long" ? 1 : -1, fee = Q.cfg.fee || 0.0011;
     const px_ = closed ? t.exit : live, pnl = px_ == null ? null : closed ? t.pnl : dir * (live - t.entry) * t.qty - t.qty * (t.entry + live) * fee / 2;
-    const r = pnl == null ? null : pnl / t.risk, hit = closed ? "" : touched(k, t), win = pnl != null && pnl >= 0;
+    const r = pnl == null ? null : pnl / t.risk, hit = closed ? "" : touched(k15, t), win = pnl != null && pnl >= 0;
     const rr = Math.abs(t.tp - t.entry) / Math.abs(t.entry - t.sl), notional = t.qty * t.entry;
     const lab = closed ? (t.reason === "TP" ? "✅ TAKE PROFIT HIT" : t.reason === "SL" ? "❌ STOP LOSS HIT" : "⏱ TIME EXIT") : win ? "🟢 IN PROFIT" : "🔴 IN LOSS";
-    const cell = (a, b, c = "") => `<div class="qk"><span>${a}</span><b class="${c}">${b}</b></div>`;
-    box.innerHTML = `<div class="qh"><div><b style="font-size:20px">${esc(t.sym.replace("USDT", ""))}/USDT</b> <b class="${dir > 0 ? "up" : "dn"}" style="font-size:15px">${t.side.toUpperCase()}</b> <span class="st">${NAME[t.strat]} · perp · 15m candles</span> ${closed ? "" : '<span class="qlive">● LIVE</span>'}</div><span data-snap-ignore><span class="chip" data-snap="modal" title="Chart snapshot">📷 Snapshot</span> <button id="qclose" class="chip">✕ Close</button></span></div>` +
+    const cell = (a, b, cl = "") => `<div class="qk"><span>${a}</span><b class="${cl}">${b}</b></div>`;
+    CX = { t, closed, k: ck, ex: closed ? { px: t.exit, t: t.t1, col: win ? GREEN : RED, lab: t.reason === "TIME" ? "TIME EXIT" : t.reason + " HIT" } : null };
+    box.innerHTML = `<div class="qh"><div><b style="font-size:20px">${esc(t.sym.replace("USDT", ""))}/USDT</b> <b class="${dir > 0 ? "up" : "dn"}" style="font-size:15px">${t.side.toUpperCase()}</b> <span class="st">${NAME[t.strat]} · perp · ${CH.tf}</span> ${closed ? "" : '<span class="qlive">● LIVE</span>'}</div><span data-snap-ignore><span class="chip" data-snap="modal" title="Chart snapshot">📷 Snapshot</span> <button id="qclose" class="chip">✕ Close</button></span></div>` +
       `<div class="qb ${win ? "up" : "dn"}"><span style="font-size:22px;font-weight:800">${lab}</span>${pnl == null ? "" : `<span style="font-size:22px;font-weight:800">${pnl >= 0 ? "+" : "-"}$${Math.abs(pnl).toFixed(2)} (${r >= 0 ? "+" : ""}${r.toFixed(2)}R · ${sg(pnl / Q.cfg.start * 100)}% of account)</span>`}</div>` +
       (hit ? `<div class="${hit === "TP" ? "up" : "dn"}" style="font-weight:700;margin:6px 0">${hit === "TP" ? "✅ Take profit level was touched" : "❌ Stop loss level was touched"}. The bot books it on its next run (up to 30 min).</div>` : "") +
-      `<div id="qro" class="st" style="height:18px;margin:6px 0">hover the chart for candle details</div>${bigChart(k, t, closed ? { px: t.exit, t: t.t1, col: win ? GREEN : RED, lab: t.reason === "TIME" ? "TIME EXIT" : t.reason + " HIT" } : null, live)}` +
+      tfBar() + `<div id="qro" class="st" style="height:18px;margin:4px 0">hover the chart for candle details</div><div id="qchart"></div>` +
       `<div class="qg">${cell("Entry", fnum(t.entry))}${cell("Stop loss", fnum(t.sl), "dn")}${cell("Take profit", fnum(t.tp), "up")}${cell(closed ? "Exit" : "Live price", px_ == null ? "-" : fnum(px_))}${cell("Reward : risk", "1 : " + rr.toFixed(2))}${cell("Risk", "$" + t.risk.toFixed(2) + " (" + (Q.cfg.riskPct) + "%)")}${cell("Size", fnum(t.qty, 4) + " · $" + fnum(notional, 0))}${cell("Leverage", (notional / Q.cfg.start).toFixed(2) + "x of start equity")}${cell("Opened", hm(t.t0, true))}${cell(closed ? "Held" : "Open for", dur((closed ? t.t1 : Date.now()) - t.t0))}${cell("Fees", "$" + (t.qty * (t.entry + (px_ || t.entry)) * fee / 2).toFixed(2))}${cell("Max hold", { mom: "48h", mr: "24h", fund: "24h" }[t.strat])}</div>` +
       `<div class="st" style="margin-top:8px"><b>Why this trade:</b> ${esc(t.why)}</div>`;
+    draw();
+  };
+  const refresh = async () => { await loadModalK(); renderModal(); };
+
+  const hover = (e) => {
+    const svg = e.target.closest?.("#qsvg"), G = GEO; if (!svg || !G) return;
+    const b = svg.getBoundingClientRect(), sx = (e.clientX - b.left) / b.width * CW, sy = (e.clientY - b.top) / b.height * CH_;
+    if (sx > G.pw || sy > G.ph + 8) return;
+    const idx = Math.min(G.i1, Math.max(G.i0, Math.floor(sx / G.step) + G.start)), c = G.k[idx], xx = (idx - G.start + 0.5) * G.step;
+    const v = G.plo + (1 - (sy - 8) / G.ph) * (G.phi - G.plo), set = (id, a) => { const el = $(id); for (const n in a) el.setAttribute(n, a[n]); };
+    $("qx").style.display = ""; set("qxv", { x1: xx, x2: xx }); set("qxh", { y1: sy, y2: sy }); set("qxr", { y: sy - 9 }); set("qxt", { y: sy + 4 }); $("qxt").textContent = fnum(v);
+    set("qxb", { x: xx - 54 }); set("qxbt", { x: xx }); $("qxbt").textContent = hm(c.t, true);
+    const dir = G.t.side === "long" ? 1 : -1, vs = (c.c / G.t.entry - 1) * 100 * dir;
+    $("qro").innerHTML = `${hm(c.t, true)} · O ${fnum(c.o)} H ${fnum(c.h)} L ${fnum(c.l)} C <span class="${c.c >= c.o ? "up" : "dn"}">${fnum(c.c)} (${((c.c / c.o - 1) * 100).toFixed(2)}%)</span> · Vol ${vfmt(c.v || 0)} · vs entry <span class="${vs >= 0 ? "up" : "dn"}">${vs >= 0 ? "+" : ""}${vs.toFixed(2)}%</span>`;
   };
   const openModal = (id) => {
-    MO = { id };
+    MO = { id }; CH.fit = true; CH.off = 0; CX = null;
     let m = $("qmodal");
     if (!m) {
       m = document.createElement("div"); m.id = "qmodal";
-      m.innerHTML = '<style>#qmodal{position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.72);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:20px 10px}#qmodal-b{background:var(--panel,#fff);color:var(--txt,inherit);border:1px solid var(--line);border-radius:12px;width:min(980px,100%);padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.5)}.qh{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}.qb{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:10px 14px;border-radius:8px;border:1px solid currentColor;background:rgba(127,127,127,.08)}.qg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px}.qk{border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}.qk span{font-size:11px;opacity:.65;text-transform:uppercase;letter-spacing:.04em}.qlive{color:#2fd27a;font-size:12px;font-weight:700;animation:qp 1.4s infinite}@keyframes qp{50%{opacity:.35}}</style><div id="qmodal-b"></div>';
+      m.innerHTML = '<style>#qmodal{position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.72);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:20px 10px}#qmodal-b{background:var(--panel,#fff);color:var(--txt,inherit);border:1px solid var(--line);border-radius:12px;width:min(1100px,100%);padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.5)}.qh{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}.qb{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:10px 14px;border-radius:8px;border:1px solid currentColor;background:rgba(127,127,127,.08)}.qtb{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px}.qtb .chip{cursor:pointer}.qsep{width:1px;height:18px;background:var(--line);margin:0 4px}.qg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px}.qk{border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}.qk span{font-size:11px;opacity:.65;text-transform:uppercase;letter-spacing:.04em}.qlive{color:#2fd27a;font-size:12px;font-weight:700;animation:qp 1.4s infinite}@keyframes qp{50%{opacity:.35}}</style><div id="qmodal-b"></div>';
       document.body.appendChild(m);
-      m.addEventListener("click", (e) => { if (e.target === m || e.target.id === "qclose") closeModal(); });
-      m.addEventListener("mousemove", (e) => {
-        const svg = e.target.closest?.("#qsvg"); if (!svg || !GEO) return;
-        const b = svg.getBoundingClientRect(), sx = (e.clientX - b.left) / b.width * 900, sy = (e.clientY - b.top) / b.height * 430, G = GEO;
-        const i = Math.min(G.k.length - 1, Math.max(0, Math.floor(sx / G.step))), c = G.k[i], x = (i + 0.5) * G.step;
-        if (sx > G.pw) return;
-        const v = G.lo - G.pd + (1 - (sy - 6) / G.ph) * (G.hi - G.lo + 2 * G.pd), set = (id, a) => { const el = $(id); for (const n in a) el.setAttribute(n, a[n]); };
-        $("qx").style.display = ""; set("qxv", { x1: x, x2: x }); set("qxh", { y1: sy, y2: sy }); set("qxr", { y: sy - 9 }); set("qxt", { y: sy + 4 }); $("qxt").textContent = fnum(v);
-        $("qro").innerHTML = `${hm(c.t, true)} · O ${fnum(c.o)} H ${fnum(c.h)} L ${fnum(c.l)} C <span class="${c.c >= c.o ? "up" : "dn"}">${fnum(c.c)} (${((c.c / c.o - 1) * 100).toFixed(2)}%)</span>`;
+      m.addEventListener("click", (e) => {
+        if (e.target === m || e.target.id === "qclose") return closeModal();
+        const d = e.target.closest("[data-tf],[data-ct],[data-ma],[data-fit]"); if (!d) return;
+        if (d.dataset.tf) { CH.tf = d.dataset.tf; CH.fit = true; CH.off = 0; saveCH(); renderModal(); refresh(); return; }
+        if (d.dataset.ct) CH.type = d.dataset.ct; else if (d.dataset.ma) CH.ma = !CH.ma; else if (d.dataset.fit) CH.fit = true;
+        saveCH(); renderModal();
       });
+      m.addEventListener("dblclick", (e) => { if (e.target.closest("#qsvg")) { CH.fit = true; draw(); } });
+      m.addEventListener("wheel", (e) => {
+        const svg = e.target.closest("#qsvg"), G = GEO; if (!svg || !G) return;
+        e.preventDefault();
+        const b = svg.getBoundingClientRect(), fx = Math.max(0, Math.min(1, (e.clientX - b.left) / b.width * CW / G.pw)), n0 = CH.n, n1 = Math.max(20, Math.min(600, Math.round(n0 * (e.deltaY > 0 ? 1.15 : 1 / 1.15))));
+        const anchor = G.start + fx * n0; CH.n = n1; const newStart = anchor - fx * n1; CH.off = Math.round(G.k.length + PAD - (newStart + n1)); draw();
+      }, { passive: false });
+      m.addEventListener("pointerdown", (e) => { if (e.target.closest("#qsvg") && e.button === 0) CH.drag = { x: e.clientX, off: CH.off, moved: false }; });
+      m.addEventListener("pointermove", (e) => {
+        const d = CH.drag;
+        if (d && GEO) {
+          const svg = $("qsvg"), b = svg.getBoundingClientRect(), dc = Math.round((e.clientX - d.x) / (b.width / CW * GEO.step));
+          if (dc !== 0 || d.moved) { d.moved = true; const off = d.off + dc; if (off !== CH.off) { CH.off = off; draw(); } }
+          return;
+        }
+        hover(e);
+      });
+      const up = () => { CH.drag = null; };
+      m.addEventListener("pointerup", up); m.addEventListener("pointercancel", up); document.addEventListener("pointerup", up);
       m.addEventListener("mouseleave", () => { const x = $("qx"); if (x) x.style.display = "none"; });
     }
-    m.style.display = "flex"; document.body.style.overflow = "hidden"; renderModal();
+    m.style.display = "flex"; document.body.style.overflow = "hidden"; renderModal(); refresh();
   };
-  const closeModal = () => { MO = null; const m = $("qmodal"); if (m) m.style.display = "none"; document.body.style.overflow = ""; };
+  const closeModal = () => { MO = null; CH.drag = null; const m = $("qmodal"); if (m) m.style.display = "none"; document.body.style.overflow = ""; };
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && MO) closeModal(); });
   SP.snapModal = () => {
     const t = MO && (Q.open.find((x) => x.id === MO.id) || Q.closed.find((x) => x.id === MO.id)), sym = t ? t.sym.replace("USDT", "") : "trade";
