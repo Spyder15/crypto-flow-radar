@@ -21,12 +21,12 @@
 
   // ---------- sub tabs ----------
   const wrap = $("v-mkt");
-  for (const id of ["scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "flow", "lmap", "cmp", "gas", "pf", "fmap", "bas", "sm", "bt", "rules", "multi", "views", "brief", "watch", "coin", "calc", "paper", "lhist", "hist"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
+  for (const id of ["scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "flow", "lmap", "cmp", "gas", "pf", "fmap", "bas", "sm", "bt", "rules", "multi", "views", "brief", "watch", "coin", "calc", "paper", "lhist", "hist", "quant", "learn"]) { const d = document.createElement("div"); d.id = "s-" + id; d.hidden = true; wrap.appendChild(d); }
   function show(u) {
     if (u === "views") window.__ls = sub;
     sub = u;
     document.querySelectorAll("#subtabs .tab").forEach((t) => t.classList.toggle("on", t.dataset.u === u));
-    for (const id of ["over", "scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "flow", "lmap", "cmp", "gas", "pf", "fmap", "bas", "sm", "bt", "rules", "multi", "views", "brief", "watch", "coin", "calc", "paper", "lhist", "hist"]) $("s-" + id).hidden = id !== u;
+    for (const id of ["over", "scr", "deriv", "mov", "chain", "hlw", "liq", "hype", "opt", "onc", "cyc", "mac", "jrn", "ask", "map", "soc", "flow", "lmap", "cmp", "gas", "pf", "fmap", "bas", "sm", "bt", "rules", "multi", "views", "brief", "watch", "coin", "calc", "paper", "lhist", "hist", "quant", "learn"]) $("s-" + id).hidden = id !== u;
     LAZY[u]?.(); window.SP.xl?.[u]?.();
     renderSub();
     setHash();

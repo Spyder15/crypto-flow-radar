@@ -319,3 +319,8 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 - Workflow `concurrency: meme-trench` hai: ek time par ek run, doosra wait karta hai.
 - Local `git pull --rebase` zaroori hai push se pehle, kyunki workflows `state.json` files commit karte rehte hain.
 - Free-tier me real-time ki limits: GeckoTerminal ~30/min, DexScreener ~300/min (pairs), GoPlus rate-limited. Zyada speed ke liye paid RPC/WebSocket chahiye.
+
+### 19.4f Quant Bot and Learn tabs
+- `meme-token/quant-bot.js` is a paper-only quant bot (no keys, no real orders). It runs inside `meme-token.yml` every 30 min. Strategies: momentum breakout, mean reversion (RSI + Bollinger, ranging markets only) and funding fade, on the top 20 Bybit perps (1h candles). Start $1000, 0.5% risk per trade, max 5 open, 3% daily loss stop, fees and slippage counted.
+- State and results live in `meme-token/site/quant.json` (committed by the workflow, served by the site). Reset the bot by deleting that file.
+- `site/quant.js` renders the **Quant Bot** tab (equity, drawdown, profit factor, per-strategy table, trades) and the **Learn** tab (lessons with calculators, interview-style questions, progress in `localStorage`).
