@@ -261,7 +261,7 @@ Browser khud, apne IP se (dono APIs me open CORS hai), ye loops chalata hai:
 Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchlist.
 - **Derivatives**: Binance futures funding (premiumIndex, 20s), OI + long/short ratio (top 15), live liquidations (`!forceOrder@arr` WebSocket; long liq = SELL side), 15 min bias.
 - **Movers**: top 200 coins ka 5m/1h change + volume surge (5m vol / avg 5m vol). PUMP/DUMP/VOL tags.
-- **Chains & ETF**: DefiLlama top chains TVL 1d/7d + DEX volume; BTC ETF holdings via worker proxy `/api/etf` (`meme-token/worker.js`, btcetfdata.com, 10 min cache). ETH ETF source nahi hai.
+- **Chains & ETF**: DefiLlama top chains TVL 1d/7d + DEX volume; BTC ETF holdings via worker proxy `/api/etf` (btcetfdata.com, 10 min cache) aur ETH ETF flows via `/api/etf-eth` (xoomar.com, `XOOMAR_KEY` secret).
 - **Watchlist**: star click, localStorage `spy.watch`.
 - **Chart**: kisi bhi coin symbol pe click: candles + net taker flow (Binance klines).
 - **Alerts** (bell): whale/liquidation/pump/sector flip pe toast + sound + desktop notification + optional Telegram (token browser localStorage me). Sirf page khula ho tabhi chalta hai.
@@ -331,3 +331,69 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 - Strategies: whale follow, volume breakout, dip reclaim; GoPlus check before entry; SL, TP1 half + trail, liquidity-pull exit, time stop.
 - Website tab `Meme Quant` = `site/mquant.js` (DexScreener live P/L, GeckoTerminal candle chart popup).
 - `site/shell.js`: left sidebar, Cmd/Ctrl+K palette, status bar, settings (theme, density, ticker, accent).
+
+
+---
+
+## 22. Ab tak ka poora kaam (timeline, A to Z)
+
+**A. Telegram signal bot (`bot/`, `wrangler.jsonc`)**
+- Bybit top 125 perps par 1H/4H/1D scan, CHoCH/BOS + FVG, 8 me se `MIN_CONF` (ab 6) confirmations. Entry/SL/TP1-3 + chart Telegram par.
+- Trade tracker (15m candles): TP1 hit, SL breakeven, TP2 hit, SL to TP1, SL hit, TP3. TP1/TP2 message ka `undefined` crash bug fix hua. Retry/429/watchdog add.
+- Radar (whale wallets, funding, volume burst), daily/weekly report, Spyder strategy (24 markets: gold, forex, stocks) alag worker `wrangler.markets.jsonc`.
+- Sirf Spyder wala markets bot naye Cloudflare account par deploy; signal na aane wale issues (cron/limits) debug hue.
+
+**B. Paper bot (`paper-bot/`)**: Bybit paper trading $100, 1% risk, 3% DD halt, GitHub Actions har 15 min.
+
+**C. SPYDER TRENCH website (`meme-token/`)**
+- Meme tab: tokens, heating up, inflow/outflow, whale buys (Solana/ETH/Base/BSC...), safety (GoPlus), meme money flow, trench redesign.
+- Market Flow terminal (~38 tabs): Overview, Screener, Movers, Treemap, Chains, Coin, Compare, History, Watchlist, Derivatives, Liq Map/History, Funding Map, Basis & L/S, Options, Orderflow, HL Whales, HYPE, On-Chain, Smart Money, Gas/Network, Social, Macro, Cycles, Daily Brief, Views, Ask, Portfolio, Paper, Quant Bot, Meme Quant, Backtest, Alert Rules, Multi-chart, Journal, Calc, Learn.
+- 16 features + ETH ETF flows, Buildix-style pro tabs, light/dark theme, embed widgets, shareable links, PWA + web push (VAPID, KV `PUSH`).
+- Bug fixes: OKX liquidations, KV write audit (free limit 1000 writes/day), sw cache.
+- **Quant Bot tab** (`quant-bot.js`, 30 min): paper, Bybit top 20 perps, momentum / mean reversion / funding fade, $1000, 0.5% risk, fees+slippage. State `site/quant.json`.
+- **Quant chart popup** (`site/quant.js`): TradingView-style, har timeframe (1m..1D), zoom/pan, volume, MA, candle/line, crosshair, SL/TP/entry lines, "Fit trade", Snapshot (html2canvas) + share text.
+- **Pro shell** (`site/shell.js`): left sidebar (6 groups, favorites, collapse), Cmd/Ctrl+K palette, settings (theme, density, ticker, accent), status bar (sessions, clock), mobile drawer. MEME mode me sidebar meme pages dikhata hai (Tokens, Heating up, Inflow/Outflow, Meme Quant, Smart Money, On-Chain, Social).
+- **Meme Quant** (`meme-quant-bot.js`, har 5 min, `.github/workflows/meme-quant.yml`): paper $1000, 4% per trade, max 8 open, 5% daily stop. Strategies: whale follow, volume breakout, dip reclaim. GoPlus rug check, SL 15%, TP1 half +30% then trail, liquidity-pull exit, time stop. State KV `mq`: read `/api/mq`, write `POST /api/mq/put` + `x-run-key`. Tab `site/mquant.js`: live P/L, candle chart popup, exit markers, snapshot.
+
+**D. CI/Deploy**: `meme-token.yml` (30 min: feed, quant bot, deploy, save state), `meme-quant.yml` (5 min), `paper-bot.yml`, `whales.yml`, `push-check.yml`, `pages.yml`. Deploy: `cd meme-token && npx wrangler@4 deploy` (data.json + hl-snapshot pehle refresh). Check: live HTML me `data-u=` tabs count = 38.
+
+## 23. Third-party services (kya, kis liye)
+
+| Service | Kis kaam ke liye | Kahan use hota hai | Key? |
+|---|---|---|---|
+| **Cloudflare Workers + KV + Assets** | Hosting, API proxy, state (KV `TRADES`, `PUSH`) | dono workers | Account token |
+| **GitHub Actions / Pages** | Cron bots, deploy, state commit, static site | `.github/workflows` | `GITHUB_TOKEN`, secrets |
+| **Telegram Bot API** | Signals aur updates bhejna | `bot/` | `TG_TOKEN` (secret) |
+| **Bybit** (+ mirrors bytick, bybitglobal, bybit.nl/.kz) | Candles, OI, funding, tickers; paper bots ka data | bot, paper-bot, quant-bot | Nahi |
+| **Binance** (spot/fapi/dapi, WebSocket) | Live prices, liquidations, orderflow, premium index | site, radar | Nahi |
+| **OKX** | Liquidation / instruments data | worker `/api/okx-inst` | Nahi |
+| **Hyperliquid** (api + stats-data) | Whale leaderboard, positions, HL snapshot | whales, HL Whales, Liq Map | Nahi |
+| **Hypurrscan** | Wallet explorer links | radar, whale alerts | Nahi |
+| **DexScreener** | Meme token pairs, live price/volume, boosts | site, scan, Meme Quant | Nahi |
+| **GeckoTerminal** | On-chain candles (OHLCV), pools, whale trades | chart popup, Meme Quant, feed | Nahi |
+| **GoPlus** | Token security / rug check | scan, Meme Quant | Nahi |
+| **RugCheck** | Solana token report link | alerts | Nahi |
+| **Jupiter (jup.ag)** | Solana swap link | token cards | Nahi |
+| **Helius** | Solana whale transactions | `/api/sol-whales` | `HELIUS_KEY` (worker secret) |
+| **PublicNode RPC** (eth, sol) | ETH gas, SOL fees | Network tab | Nahi |
+| **mempool.space** | BTC fees/mempool | Network tab | Nahi |
+| **DefiLlama** (api, stablecoins) | Chain TVL, DEX volume, stablecoins, bridges | Chains, Macro | Nahi |
+| **CoinGecko** | Market caps, trending, categories (rate-limit noise normal) | Overview, Social, Treemap | Nahi |
+| **alternative.me** | Fear & Greed | Social, Macro | Nahi |
+| **Coin Metrics community** | MVRV, NUPL, NVT | On-Chain | Nahi |
+| **blockchain.info** | BTC tx volume | On-Chain | Nahi |
+| **Deribit** | Options book, DVOL | Options tab | Nahi |
+| **Polymarket (gamma-api)** | Prediction markets | Macro/Views | Nahi |
+| **btcetfdata.com** | BTC ETF holdings | `/api/etf` | Nahi |
+| **xoomar.com** | ETH ETF flows, economic calendar | `/api/etf-eth` | `XOOMAR_KEY` (secret) |
+| **QuickChart** | Signal chart images (sirf public candles/levels) | bot | Nahi |
+| **html2canvas (cdnjs)** | Snapshot of page/chart | `site/snap.js` | Nahi |
+| **Web Push (VAPID)** | Browser notifications | worker `/api/push/*` | `VAPID` keys, `PUSH_RUN_KEY` |
+
+**Secrets list**: GitHub: `CLOUDFLARE_API_TOKEN`, `PUSH_RUN_KEY`. Worker: `HELIUS_KEY`, `XOOMAR_KEY`, `PUSH_RUN_KEY`, VAPID private. Bot: `TG_TOKEN`, `RUN_KEY`. Chat me paste hui keys (Cloudflare token, Helius, xoomar) rotate karo.
+
+## 24. Limits aur reminders
+- Dono quant bots paper-only hain; 50+ trades ke baad hi result trust karo. Real me slippage, rugs, fills worse.
+- Free limits: Cloudflare KV 1000 writes/day (Meme Quant ~288/day), 5 crons, 50 subrequests; GeckoTerminal ~30/min; GitHub Actions minutes.
+- Snapshot "Post to X" image attach nahi karta (X ki limit).
+- Quant bot me funding accrual nahi.
