@@ -142,7 +142,7 @@
     const rr = Math.abs(t.tp - t.entry) / Math.abs(t.entry - t.sl), notional = t.qty * t.entry;
     const lab = closed ? (t.reason === "TP" ? "✅ TAKE PROFIT HIT" : t.reason === "SL" ? "❌ STOP LOSS HIT" : "⏱ TIME EXIT") : win ? "🟢 IN PROFIT" : "🔴 IN LOSS";
     const cell = (a, b, c = "") => `<div class="qk"><span>${a}</span><b class="${c}">${b}</b></div>`;
-    box.innerHTML = `<div class="qh"><div><b style="font-size:20px">${esc(t.sym.replace("USDT", ""))}/USDT</b> <b class="${dir > 0 ? "up" : "dn"}" style="font-size:15px">${t.side.toUpperCase()}</b> <span class="st">${NAME[t.strat]} · perp · 15m candles</span> ${closed ? "" : '<span class="qlive">● LIVE</span>'}</div><button id="qclose" class="chip">✕ Close</button></div>` +
+    box.innerHTML = `<div class="qh"><div><b style="font-size:20px">${esc(t.sym.replace("USDT", ""))}/USDT</b> <b class="${dir > 0 ? "up" : "dn"}" style="font-size:15px">${t.side.toUpperCase()}</b> <span class="st">${NAME[t.strat]} · perp · 15m candles</span> ${closed ? "" : '<span class="qlive">● LIVE</span>'}</div><span data-snap-ignore><span class="chip" data-snap="modal" title="Chart snapshot">📷 Snapshot</span> <button id="qclose" class="chip">✕ Close</button></span></div>` +
       `<div class="qb ${win ? "up" : "dn"}"><span style="font-size:22px;font-weight:800">${lab}</span>${pnl == null ? "" : `<span style="font-size:22px;font-weight:800">${pnl >= 0 ? "+" : "-"}$${Math.abs(pnl).toFixed(2)} (${r >= 0 ? "+" : ""}${r.toFixed(2)}R · ${sg(pnl / Q.cfg.start * 100)}% of account)</span>`}</div>` +
       (hit ? `<div class="${hit === "TP" ? "up" : "dn"}" style="font-weight:700;margin:6px 0">${hit === "TP" ? "✅ Take profit level was touched" : "❌ Stop loss level was touched"}. The bot books it on its next run (up to 30 min).</div>` : "") +
       `<div id="qro" class="st" style="height:18px;margin:6px 0">hover the chart for candle details</div>${bigChart(k, t, closed ? { px: t.exit, t: t.t1, col: win ? GREEN : RED, lab: t.reason === "TIME" ? "TIME EXIT" : t.reason + " HIT" } : null, live)}` +
@@ -172,6 +172,11 @@
   };
   const closeModal = () => { MO = null; const m = $("qmodal"); if (m) m.style.display = "none"; document.body.style.overflow = ""; };
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && MO) closeModal(); });
+  SP.snapModal = () => {
+    const t = MO && (Q.open.find((x) => x.id === MO.id) || Q.closed.find((x) => x.id === MO.id)), sym = t ? t.sym.replace("USDT", "") : "trade";
+    return { target: () => $("qmodal-b"), name: "trade-" + sym.toLowerCase(), link: () => location.origin + "/#trade=" + (MO ? MO.id : ""), text: () => `Spyder Trench quant bot paper trade: ${sym} ${t ? t.side.toUpperCase() : ""}` };
+  };
+  SP.quantOpen = async (id) => { document.querySelector('#subtabs [data-u="quant"]')?.click(); await loadQ(); await loadKs(); openModal(id); };
   $("s-quant").addEventListener("click", (e) => { const c = e.target.closest("[data-q]"); if (c) openModal(c.dataset.q.slice(2)); });
 
   // ---------------- Learn ----------------
