@@ -324,3 +324,10 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 - `meme-token/quant-bot.js` is a paper-only quant bot (no keys, no real orders). It runs inside `meme-token.yml` every 30 min. Strategies: momentum breakout, mean reversion (RSI + Bollinger, ranging markets only) and funding fade, on the top 20 Bybit perps (1h candles). Start $1000, 0.5% risk per trade, max 5 open, 3% daily loss stop, fees and slippage counted.
 - State and results live in `meme-token/site/quant.json` (committed by the workflow, served by the site). Reset the bot by deleting that file.
 - `site/quant.js` renders the **Quant Bot** tab (equity, drawdown, profit factor, per-strategy table, trades) and the **Learn** tab (lessons with calculators, interview-style questions, progress in `localStorage`).
+
+
+### 19.4g Meme Quant + pro shell
+- `meme-token/meme-quant-bot.js` runs every 5 min (`.github/workflows/meme-quant.yml`), PAPER only. State is KV key `mq` (binding PUSH): read from `/api/mq`, written with `POST /api/mq/put` + `x-run-key` (`PUSH_RUN_KEY`). Reset: delete KV key `mq`.
+- Strategies: whale follow, volume breakout, dip reclaim; GoPlus check before entry; SL, TP1 half + trail, liquidity-pull exit, time stop.
+- Website tab `Meme Quant` = `site/mquant.js` (DexScreener live P/L, GeckoTerminal candle chart popup).
+- `site/shell.js`: left sidebar, Cmd/Ctrl+K palette, status bar, settings (theme, density, ticker, accent).
