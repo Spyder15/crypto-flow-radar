@@ -25,8 +25,13 @@ const GT2DS = Object.fromEntries(Object.entries(CHAINS).map(([d, g]) => [g, d]))
 const kv = (args) => execFileSync("npx", ["--yes", "wrangler@4", "kv", "key", ...args, "--binding", "PUSH", "--remote"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], cwd: new URL(".", import.meta.url).pathname });
 const KEY = process.env.PUSH_RUN_KEY;
 async function load() {
+  if (KEY && !LOCAL) {
+    // a failed read must abort, otherwise the bot would reset to a fresh $1000 and overwrite saved state
+    const r = await fetch(`${SITE}/api/mq?t=${Date.now()}`, { headers: { "cache-control": "no-cache" } });
+    if (!r.ok) throw new Error("state load failed " + r.status);
+    const j = await r.json(); return j.cfg ? j : null;
+  }
   try {
-    if (KEY && !LOCAL) { const r = await fetch(`${SITE}/api/mq?t=${Date.now()}`, { headers: { "cache-control": "no-cache" } }); const j = await r.json(); return j.cfg ? j : null; }
     if (LOCAL) return fs.existsSync(LOCAL) ? JSON.parse(fs.readFileSync(LOCAL)) : null;
     const out = kv(["get", "mq"]); return JSON.parse(out);
   } catch { return null; }
@@ -55,7 +60,7 @@ async function universe() {
     for (const [k, t] of Object.entries(d.tokens || {})) if (GT2DS[t.net]) m.set(key(GT2DS[t.net], t.addr), { ds: GT2DS[t.net], addr: t.addr, sec: t.sec });
     for (const f of d.feed || []) {
       if (now - f.ts > 60 * 6e4) continue;
-      const w = (whales[f.token] ||= { usd: 0, ws: new Set() }); w.usd += f.usd; w.ws.add(f.w);
+      const w = (whales[String(f.token).toLowerCase()] ||= { usd: 0, ws: new Set() }); w.usd += f.usd; w.ws.add(f.w);
     }
   } catch (e) { console.log("feed failed", e.message); }
   for (const u of ["https://api.dexscreener.com/token-boosts/latest/v1", "https://api.dexscreener.com/token-boosts/top/v1"]) {
