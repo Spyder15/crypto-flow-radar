@@ -133,6 +133,17 @@ body.notape .tape{display:none}
     const M = meta(), used = new Set(), cur = curU(), fav = UI.fav.filter((u) => M[u]);
     const item = (u) => { const m = M[u]; used.add(u); const f = UI.fav.includes(u); return `<div class="it${u === cur && inMkt() ? " on" : ""}" data-go="${u}" title="${m.label}"><span class="ic">${m.ic}</span><span class="lb">${m.label}</span><span class="fv${f ? " f" : ""}" data-fav="${u}" title="Favorite">${f ? "★" : "☆"}</span></div>`; };
     let h = "";
+    if (!inMkt()) {
+      const mt = [...D.querySelectorAll("#tabs .tab")], ct = D.querySelector("#tabs .tab.on")?.dataset.t;
+      const MI = { tokens: "◉", heat: "ϟ", flow: "≋" };
+      h += `<div class="g"><div class="gt">Meme Trench</div>${mt.map((t) => `<div class="it${t.dataset.t === ct ? " on" : ""}" data-mt="${t.dataset.t}" title="${labelOf(t)}"><span class="ic">${MI[t.dataset.t] || "•"}</span><span class="lb">${labelOf(t)}</span></div>`).join("")}</div>`;
+      const ex = ["mq", "sm", "onc", "soc"].filter((u) => M[u]);
+      h += `<div class="g"><div class="gt">Meme tools</div>${ex.map((u) => `<div class="it" data-go="${u}" title="${M[u].label}"><span class="ic">${M[u].ic}</span><span class="lb">${M[u].label}</span></div>`).join("")}</div>`;
+      $("sbl").innerHTML = h;
+      sb.querySelectorAll(".sbm span").forEach((x) => x.classList.toggle("on", x.dataset.v === B.dataset.v));
+      const pt0 = $("ptitle"); if (pt0) pt0.innerHTML = `Meme Trench <small>on-chain DEX flow</small>`;
+      return;
+    }
     if (fav.length) h += `<div class="g"><div class="gt">Favorites</div>${fav.map(item).join("")}</div>`;
     const shut = UI.shut || {};
     GROUPS.forEach(([name, ic, ids]) => {
@@ -151,6 +162,7 @@ body.notape .tape{display:none}
     if (f) { const u = f.dataset.fav; UI.fav = UI.fav.includes(u) ? UI.fav.filter((x) => x !== u) : [...UI.fav, u]; save(); renderList(); return; }
     const g = e.target.closest(".gt");
     if (g && g.parentNode.dataset.g) { const n = g.parentNode.dataset.g; UI.shut = Object.assign({}, UI.shut, { [n]: !(UI.shut || {})[n] }); save(); renderList(); return; }
+    const mt = e.target.closest("[data-mt]"); if (mt) { D.querySelector(`#tabs [data-t="${mt.dataset.mt}"]`)?.click(); B.classList.remove("sbo"); return; }
     const it = e.target.closest("[data-go]"); if (it) go(it.dataset.go);
   });
   sb.querySelector(".sbm").addEventListener("click", (e) => { const v = e.target.dataset.v; if (v) { D.querySelector(`.nv[data-v="${v}"]`)?.click(); B.classList.remove("sbo"); } });
@@ -250,6 +262,7 @@ body.notape .tape{display:none}
   // keep sidebar in sync with the old tab controller
   const syncObs = new MutationObserver(() => renderList());
   syncObs.observe($("subtabs"), { attributes: true, subtree: true, attributeFilter: ["class"] });
+  if ($("tabs")) syncObs.observe($("tabs"), { attributes: true, subtree: true, attributeFilter: ["class"] });
   syncObs.observe(B, { attributes: true, attributeFilter: ["data-v"] });
   applyUI(); renderList();
 })();
