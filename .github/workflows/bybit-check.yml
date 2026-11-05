@@ -1,16 +1,26 @@
-name: Bybit check
+name: Bybit proxy deploy
 on:
   push:
     paths:
       - ".github/workflows/bybit-check.yml"
+      - "meme-token/bybit-proxy/**"
   workflow_dispatch:
 jobs:
-  check:
+  deploy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: meme-token/bybit-proxy
     steps:
-      - run: |
-          P="/v5/market/kline?category=linear&symbol=BTCUSDT&interval=60&limit=2"
-          for u in https://meme-trench.spyder-radar.workers.dev/api/bybit https://api.bybit.com https://api.bytick.com https://api.bybit.nl https://api.bybit.kz https://api.byhkbit.com; do
-            echo "== $u"; curl -s -D - -o /tmp/b "$u$P" | grep -iE "^HTTP|cf-ray|x-cache|server" ; head -c 120 /tmp/b; echo
-          done
-          echo "== okx"; curl -s -o /dev/null -w "%{http_code}\n" "https://www.okx.com/api/v5/public/instruments?instType=SWAP"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Deploy proxy worker
+        run: npx --yes wrangler@4 deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_SECRET_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Test from this runner
+        run: |
+          sleep 10
+          curl -s -D - "https://bybit-proxy.spyder-radar.workers.dev/v5/market/kline?category=linear&symbol=BTCUSDT&interval=60&limit=2" | grep -iE "^HTTP|cf-ray|retCode|error" | head -5
