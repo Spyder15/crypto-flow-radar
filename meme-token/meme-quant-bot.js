@@ -23,20 +23,26 @@ const CHAINS = { solana: "solana", ethereum: "eth", base: "base", bsc: "bsc", ar
 const GT2DS = Object.fromEntries(Object.entries(CHAINS).map(([d, g]) => [g, d]));
 
 const kv = (args) => execFileSync("npx", ["--yes", "wrangler@4", "kv", "key", ...args, "--binding", "PUSH", "--remote"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], cwd: new URL(".", import.meta.url).pathname });
-function load() {
+const KEY = process.env.PUSH_RUN_KEY;
+async function load() {
   try {
+    if (KEY && !LOCAL) { const r = await fetch(`${SITE}/api/mq?t=${Date.now()}`, { headers: { "cache-control": "no-cache" } }); const j = await r.json(); return j.cfg ? j : null; }
     if (LOCAL) return fs.existsSync(LOCAL) ? JSON.parse(fs.readFileSync(LOCAL)) : null;
     const out = kv(["get", "mq"]); return JSON.parse(out);
   } catch { return null; }
 }
-function save(s) {
+async function save(s) {
   const body = JSON.stringify(s);
   if (LOCAL) { fs.writeFileSync(LOCAL, body); return; }
+  if (KEY) {
+    const r = await fetch(`${SITE}/api/mq/put`, { method: "POST", headers: { "x-run-key": KEY }, body });
+    if (!r.ok) throw new Error("state save failed " + r.status); return;
+  }
   const f = "/tmp/mq-out.json"; fs.writeFileSync(f, body); kv(["put", "mq", "--path", f]);
 }
 
 const now = Date.now();
-const S = load() || { cfg: C, cash: C.start, open: [], closed: [], curve: [], cool: {}, sec: {}, day: { d: "", pnl: 0 }, seq: 0 };
+const S = (await load()) || { cfg: C, cash: C.start, open: [], closed: [], curve: [], cool: {}, sec: {}, day: { d: "", pnl: 0 }, seq: 0 };
 S.cfg = C; S.sec ||= {}; S.cool ||= {};
 const key = (ds, addr) => `${ds}:${addr}`.toLowerCase();
 
@@ -164,5 +170,5 @@ for (const k of Object.keys(S.sec)) if (now - S.sec[k].at > 24 * 36e5) delete S.
 S.closed = S.closed.slice(0, 300);
 S.curve.push([now, +equity().toFixed(2)]); S.curve = S.curve.slice(-1200);
 S.equity = +equity().toFixed(2); S.upd = now;
-save(S);
+await save(S);
 console.log(`equity ${S.equity} cash ${S.cash.toFixed(2)} open ${S.open.length} closed ${S.closed.length}`);

@@ -26,6 +26,11 @@ export default {
       const body = (await env.PUSH.get("mq")) || "{}";
       return new Response(body, { headers: { "content-type": "application/json", "cache-control": "public, max-age=20" } });
     }
+    if (u.pathname === "/api/mq/put" && req.method === "POST") {
+      if (!env.PUSH_RUN_KEY || req.headers.get("x-run-key") !== env.PUSH_RUN_KEY) return new Response("{}", { status: 403 });
+      const body = await req.text(); if (body.length > 900000) return new Response("{}", { status: 413 });
+      await env.PUSH.put("mq", body); return new Response('{"ok":1}');
+    }
     if (u.pathname === "/api/liqhist") return liqHist(req, env);
     if (u.pathname.startsWith("/api/push/")) return pushApi(req, env, u.pathname);
     if (u.pathname === "/api/etf-eth") {
