@@ -3,6 +3,12 @@ on:
   schedule:
     - cron: "*/30 * * * *"
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "meme-token/site/**"
+      - "meme-token/worker.js"
+      - ".github/workflows/meme-token.yml"
 permissions:
   contents: write
 concurrency: meme-trench
