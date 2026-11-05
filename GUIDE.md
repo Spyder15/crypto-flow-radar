@@ -321,7 +321,7 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 - Free-tier me real-time ki limits: GeckoTerminal ~30/min, DexScreener ~300/min (pairs), GoPlus rate-limited. Zyada speed ke liye paid RPC/WebSocket chahiye.
 
 ### 19.4f Quant Bot and Learn tabs
-- `meme-token/quant-bot.js` is a paper-only quant bot (no keys, no real orders). It runs inside `meme-token.yml` every 30 min. Strategies: momentum breakout, mean reversion (RSI + Bollinger, ranging markets only) and funding fade, on the top 40 Bybit perps + gold, silver, oil, forex, index perps (XAU, XAG, CL, EURUSD, GBPUSD, USDJPY, QQQ, SPY, SPX) (1h candles). Start $1000, 0.5% risk per trade, max 10 open, 3% daily loss stop, fees and slippage counted.
+- `meme-token/quant-bot.js` is a paper-only quant bot (no keys, no real orders). It runs inside `meme-token.yml` every 30 min. Strategies: momentum breakout, mean reversion (RSI + Bollinger, ranging markets only) and funding fade, on the top 40 Bybit perps (1h candles). Start $1000, 0.5% risk per trade, max 10 open, 3% daily loss stop, fees and slippage counted.
 - State and results live in `meme-token/site/quant.json` (committed by the workflow, served by the site). Reset the bot by deleting that file.
 - `site/quant.js` renders the **Quant Bot** tab (equity, drawdown, profit factor, per-strategy table, trades) and the **Learn** tab (lessons with calculators, interview-style questions, progress in `localStorage`).
 
@@ -402,3 +402,11 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 ### 24.1 Recent incidents (2026-11-05)
 - **Meme quant bot first run failed** (commit `52a3994`): KV write path fixed in `6827320` (run-key endpoint `POST /api/mq/put`). Runs #2-#4 passed.
 - **Cloudflare KV 50% daily alert**: 5-min bot wrote KV too often. Fixed in `bb43e2c` (write only on trade change, else max once per 15 min). Limit resets 00:00 UTC. Agar phir bhi high ho to Workers Paid ($5/month).
+
+### 24.2 Quant bot upgrades (2026-11-06)
+- **Trailing stop**: +1R par stop breakeven, phir best price se 1R peeche trail (`TRAIL` exit). Card pe SL wahi rehta hai.
+- **Funding accrual**: har trade ka funding cost/credit PnL me jodta hai.
+- **Side cap**: max 6 trades ek hi direction me (crypto saath me chalta hai).
+- **Auto-disable**: strategy ke last 30 closed me (min 20) PF < 0.8 ho to naye trades band (`off` in quant.json).
+- **Backtest**: `cd meme-token && node quant-backtest.mjs 4000 30` (real signal logic, 1h, fees+slippage). Result (~5 mahine, 30+ symbols): crypto lagbhag breakeven (PF ~0.9-1.3, SOL/UNI/WLD positive), **gold/silver/oil/forex/index me PF 0.1-0.6 (loss)**, isliye `MACRO` list khaali hai. Overall strategy abhi profitable proven nahi.
+- Real trading abhi off, paper only.

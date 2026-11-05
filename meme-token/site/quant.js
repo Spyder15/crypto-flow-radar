@@ -73,7 +73,7 @@
     return `<div class="lsn qc" data-q="o:${t.id}"><div><b>${esc(t.sym.replace("USDT", ""))}</b> <b class="${t.side === "long" ? "up" : "dn"}">${t.side.toUpperCase()}</b> <span class="st">${NAME[t.strat]} · ${ago(t.t0)} ago · ${esc(t.why)}</span> <span class="chip" style="float:right">🔍 open full chart</span></div><div>${head}</div>${warn}${bar}${lvls(t)}</div>`;
   };
   const closedCard = (t) => {
-    const win = t.pnl > 0, lab = t.reason === "TP" ? "✅ TAKE PROFIT HIT" : t.reason === "SL" ? "❌ STOP LOSS HIT" : "⏱ TIME EXIT";
+    const win = t.pnl > 0, lab = t.reason === "TP" ? "✅ TAKE PROFIT HIT" : t.reason === "SL" ? "❌ STOP LOSS HIT" : t.reason === "TRAIL" ? "🔒 TRAILING STOP HIT" : "⏱ TIME EXIT";
     return `<div class="lsn qc" data-q="c:${t.id}"><div><b>${esc(t.sym.replace("USDT", ""))}</b> <b class="${t.side === "long" ? "up" : "dn"}">${t.side.toUpperCase()}</b> <span class="st">${NAME[t.strat]} · closed ${ago(t.t1)} ago</span> <span class="chip" style="float:right">🔍 open full chart</span></div><div class="${win ? "up" : "dn"}" style="font-size:16px;font-weight:700">${lab}: ${win ? "+" : "-"}$${Math.abs(t.pnl).toFixed(2)} (${t.r >= 0 ? "+" : ""}${t.r}R)</div>${lvls(t)}</div>`;
   };
 
@@ -217,7 +217,7 @@
     const px_ = closed ? t.exit : live, pnl = px_ == null ? null : closed ? t.pnl : dir * (live - t.entry) * t.qty - t.qty * (t.entry + live) * fee / 2;
     const r = pnl == null ? null : pnl / t.risk, hit = closed ? "" : touched(k15, t), win = pnl != null && pnl >= 0;
     const rr = Math.abs(t.tp - t.entry) / Math.abs(t.entry - t.sl), notional = t.qty * t.entry;
-    const lab = closed ? (t.reason === "TP" ? "✅ TAKE PROFIT HIT" : t.reason === "SL" ? "❌ STOP LOSS HIT" : "⏱ TIME EXIT") : win ? "🟢 IN PROFIT" : "🔴 IN LOSS";
+    const lab = closed ? (t.reason === "TP" ? "✅ TAKE PROFIT HIT" : t.reason === "SL" ? "❌ STOP LOSS HIT" : t.reason === "TRAIL" ? "🔒 TRAILING STOP HIT" : "⏱ TIME EXIT") : win ? "🟢 IN PROFIT" : "🔴 IN LOSS";
     const cell = (a, b, cl = "") => `<div class="qk"><span>${a}</span><b class="${cl}">${b}</b></div>`;
     CX = { t, closed, k: ck, ex: closed ? { px: t.exit, t: t.t1, col: win ? GREEN : RED, lab: t.reason === "TIME" ? "TIME EXIT" : t.reason + " HIT" } : null };
     box.innerHTML = `<div class="qh"><div><b style="font-size:20px">${esc(t.sym.replace("USDT", ""))}/USDT</b> <b class="${dir > 0 ? "up" : "dn"}" style="font-size:15px">${t.side.toUpperCase()}</b> <span class="st">${NAME[t.strat]} · perp · ${CH.tf}</span> ${closed ? "" : '<span class="qlive">● LIVE</span>'}</div><span data-snap-ignore><span class="chip" data-snap="modal" title="Chart snapshot">📷 Snapshot</span> <button id="qclose" class="chip">✕ Close</button></span></div>` +
