@@ -7,10 +7,10 @@
     ["Derivatives & liquidity", "◈", ["deriv", "liq", "lmap", "lhist", "fmap", "bas", "opt", "flow"]],
     ["Whales & on-chain", "◉", ["hlw", "hype", "onc", "sm", "gas", "soc"]],
     ["Macro & research", "◍", ["mac", "cyc", "brief", "views", "ask"]],
-    ["Trading desk", "◆", ["pf", "paper", "quant", "bt", "rules", "multi", "jrn", "calc"]],
+    ["Trading desk", "◆", ["pf", "paper", "quant", "mq", "bt", "rules", "multi", "jrn", "calc"]],
     ["Learn", "◇", ["learn"]],
   ];
-  const ICON = { over: "▦", scr: "☰", deriv: "∿", mov: "⇅", chain: "⌗", hlw: "≈", liq: "◎", hype: "ϟ", opt: "Σ", onc: "⬡", cyc: "◔", mac: "⊕", jrn: "✎", map: "▩", soc: "✦", flow: "≋", lmap: "▤", cmp: "⇄", gas: "⛁", pf: "◐", fmap: "▥", bas: "±", sm: "★", bt: "↺", rules: "⚑", multi: "⊞", brief: "☼", views: "◫", ask: "?", coin: "◌", hist: "◷", lhist: "◴", calc: "∑", paper: "✎", quant: "⚙", learn: "✧", watch: "☆" };
+  const ICON = { over: "▦", scr: "☰", deriv: "∿", mov: "⇅", chain: "⌗", hlw: "≈", liq: "◎", hype: "ϟ", opt: "Σ", onc: "⬡", cyc: "◔", mac: "⊕", jrn: "✎", map: "▩", soc: "✦", flow: "≋", lmap: "▤", cmp: "⇄", gas: "⛁", pf: "◐", fmap: "▥", bas: "±", sm: "★", bt: "↺", rules: "⚑", multi: "⊞", brief: "☼", views: "◫", ask: "?", coin: "◌", hist: "◷", lhist: "◴", calc: "∑", paper: "✎", quant: "⚙", mq: "☄", learn: "✧", watch: "☆" };
   const read = () => { try { return JSON.parse(localStorage.getItem("spy.ui")) || {}; } catch { return {}; } };
   const UI = Object.assign({ collapsed: false, density: "cozy", accent: "amber", tape: true, fav: [] }, read());
   const save = () => { try { localStorage.setItem("spy.ui", JSON.stringify(UI)); } catch { /* storage full or blocked */ } };
