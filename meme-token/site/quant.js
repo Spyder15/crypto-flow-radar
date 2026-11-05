@@ -58,6 +58,7 @@
     }
     return "";
   };
+  const lvls = (t) => `<div class="st" style="margin-top:4px">Entry ${fnum(t.entry)} · SL ${fnum(t.sl)} · TP ${fnum(t.tp)} · RR 1:${(Math.abs(t.tp - t.entry) / Math.abs(t.entry - t.sl)).toFixed(1)}</div>`;
   const openCard = (t) => {
     const k = KC["o" + t.id], live = k && k.length ? k[k.length - 1].c : null, dir = t.side === "long" ? 1 : -1;
     const hit = touched(k, t);
@@ -69,11 +70,11 @@
       bar = `<div style="position:relative;height:8px;border-radius:4px;background:linear-gradient(90deg,${RED},#555 ${((t.entry - t.sl) / (t.tp - t.sl) * 100).toFixed(1)}%,${GREEN});margin:8px 0 2px"><span style="position:absolute;left:${pos}%;top:-4px;width:4px;height:16px;background:#fff;border:1px solid #000"></span></div><div class="st" style="display:flex;justify-content:space-between"><span>SL ${fnum(t.sl)}</span><span>TP ${fnum(t.tp)}</span></div>`;
     }
     const warn = hit ? `<div class="${hit === "TP" ? "up" : "dn"}" style="font-weight:700;margin:4px 0">${hit === "TP" ? "✅ TAKE PROFIT touched" : "❌ STOP LOSS touched"}, the bot books it at its next run (up to 30 min)</div>` : "";
-    return `<div class="lsn qc" data-q="o:${t.id}"><div><b>${esc(t.sym.replace("USDT", ""))}</b> <b class="${t.side === "long" ? "up" : "dn"}">${t.side.toUpperCase()}</b> <span class="st">${NAME[t.strat]} · ${ago(t.t0)} ago · ${esc(t.why)}</span> <span class="chip" style="float:right">🔍 open full chart</span></div><div>${head}</div>${warn}${bar}${chart(k, t, null, 90)}</div>`;
+    return `<div class="lsn qc" data-q="o:${t.id}"><div><b>${esc(t.sym.replace("USDT", ""))}</b> <b class="${t.side === "long" ? "up" : "dn"}">${t.side.toUpperCase()}</b> <span class="st">${NAME[t.strat]} · ${ago(t.t0)} ago · ${esc(t.why)}</span> <span class="chip" style="float:right">🔍 open full chart</span></div><div>${head}</div>${warn}${bar}${lvls(t)}</div>`;
   };
   const closedCard = (t) => {
     const win = t.pnl > 0, lab = t.reason === "TP" ? "✅ TAKE PROFIT HIT" : t.reason === "SL" ? "❌ STOP LOSS HIT" : "⏱ TIME EXIT";
-    return `<div class="lsn qc" data-q="c:${t.id}"><div><b>${esc(t.sym.replace("USDT", ""))}</b> <b class="${t.side === "long" ? "up" : "dn"}">${t.side.toUpperCase()}</b> <span class="st">${NAME[t.strat]} · closed ${ago(t.t1)} ago</span> <span class="chip" style="float:right">🔍 open full chart</span></div><div class="${win ? "up" : "dn"}" style="font-size:16px;font-weight:700">${lab}: ${win ? "+" : "-"}$${Math.abs(t.pnl).toFixed(2)} (${t.r >= 0 ? "+" : ""}${t.r}R)</div>${chart(KC["c" + t.id], t, { px: t.exit, t: t.t1, col: win ? GREEN : RED, lab: t.reason }, 90)}</div>`;
+    return `<div class="lsn qc" data-q="c:${t.id}"><div><b>${esc(t.sym.replace("USDT", ""))}</b> <b class="${t.side === "long" ? "up" : "dn"}">${t.side.toUpperCase()}</b> <span class="st">${NAME[t.strat]} · closed ${ago(t.t1)} ago</span> <span class="chip" style="float:right">🔍 open full chart</span></div><div class="${win ? "up" : "dn"}" style="font-size:16px;font-weight:700">${lab}: ${win ? "+" : "-"}$${Math.abs(t.pnl).toFixed(2)} (${t.r >= 0 ? "+" : ""}${t.r}R)</div>${lvls(t)}</div>`;
   };
 
   // ---------------- Quant (bot results) ----------------
@@ -101,7 +102,7 @@
       `<div class="wh2" style="margin-top:12px">Equity curve</div>${line(Q.curve.map((p) => p[1]))}` +
       '<div class="mlegend">Fake money on Bybit public prices. Fees 0.11% round trip and 0.05% slippage are counted. Stops are checked on 15-minute candles, and if stop and target touch in one candle the stop wins (pessimistic). A few days of results prove nothing, so wait for 50+ trades before trusting any number.</div>') +
       panel("By strategy", "momentum breakout · RSI + Bollinger mean reversion (ranging markets only) · funding fade", `<div class="tw"><table><thead><tr><th>Strategy</th><th>Trades</th><th>Win</th><th>Profit factor</th><th>Expectancy</th><th>PnL</th></tr></thead><tbody>${byS}</tbody></table></div>`, "margin-top:12px") +
-      panel("Live trades", "real-time profit / loss on 15m candles, refreshed every 15s · green zone = target, red zone = stop", open, "margin-top:12px") +
+      panel("Live trades", "real-time profit / loss, refreshed every 15s · click a trade to open its chart", open, "margin-top:12px") +
       (Q.closed.length ? panel("Latest results", "chart of how each trade ended: SL or TP hit", Q.closed.slice(0, 6).map(closedCard).join(""), "margin-top:12px") : "") +
       panel("Closed trades", "last 30", hist, "margin-top:12px");
   };

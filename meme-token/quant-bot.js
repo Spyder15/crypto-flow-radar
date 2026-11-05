@@ -6,6 +6,7 @@ import fs from "node:fs";
 const FILE = new URL("./site/quant.json", import.meta.url);
 const CFG = { start: 1000, riskPct: 0.5, maxOpen: 10, maxLev: 5, fee: 0.0011, slip: 0.0005, dayStopPct: 3, topN: 40, fundTh: 0.05 };
 const HOSTS = ["https://api.bybit.com", "https://api.bytick.com", "https://api.bybitglobal.com"];
+const MACRO = ["XAUUSDT", "XAGUSDT", "CLUSDT", "EURUSDUSDT", "GBPUSDUSDT", "USDJPYUSDT", "QQQUSDT", "SPYUSDT", "SPXUSDT"];
 const HOLD_H = { mom: 48, mr: 24, fund: 24 };
 
 async function get(path) {
@@ -71,9 +72,11 @@ function close(st, t, px, reason, now) {
 
 async function main() {
   const st = load(), now = Date.now();
-  const tk = (await get("/v5/market/tickers?category=linear")).list.filter((t) => t.symbol.endsWith("USDT"))
+  const all = (await get("/v5/market/tickers?category=linear")).list.filter((t) => t.symbol.endsWith("USDT"))
     .map((t) => ({ sym: t.symbol, vol: +t.turnover24h, fund: t.fundingRate === "" ? null : +t.fundingRate * 100, px: +t.lastPrice }))
-    .sort((a, b) => b.vol - a.vol).slice(0, CFG.topN);
+    .sort((a, b) => b.vol - a.vol);
+  // gold, silver, oil, forex and index perps are always scanned next to the top crypto by volume
+  const tk = [...new Map([...all.slice(0, CFG.topN), ...all.filter((t) => MACRO.includes(t.sym))].map((t) => [t.sym, t])).values()];
   const px = Object.fromEntries(tk.map((t) => [t.sym, t.px]));
 
   // 1) manage open trades using 15m candles since the last check (stop hit first if both touch in one candle)
