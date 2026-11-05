@@ -47,7 +47,7 @@ body.sb header .nav{display:none}
 #sbl .nores{padding:16px;color:var(--mut);text-align:center;font-size:11.5px}
 #sbar .sbf{border-top:1px solid var(--line);padding:8px 12px;display:flex;gap:6px;align-items:center;font-size:11px;color:var(--mut)}
 #sbar .sbf .gb{cursor:pointer;padding:5px 8px;border:1px solid var(--line);border-radius:var(--rad);flex:1;text-align:center;font-weight:600}#sbar .sbf .gb:hover{border-color:var(--acc);color:var(--txt)}
-body.sbc #sbar .lb,body.sbc #sbar .gt,body.sbc #sbar .sbh span,body.sbc #sbar .fv,body.sbc #sbk kbd,body.sbc #sbk span,body.sbc #sbar .sbm,body.sbc #sbar .sbf .gb span{display:none}
+body.sbc #sbar .lb,body.sbc #sbar .gt,body.sbc #sbar .sbh span,body.sbc #sbar .fv,body.sbc #sbk kbd,body.sbc #sbk span+span,body.sbc #sbar .sbh b,body.sbc #sbar .sbm,body.sbc #sbar .sbf .gb span{display:none}
 body.sbc #sbl .gt{height:1px;padding:0;margin:8px 10px;background:var(--line)}body.sbc #sbl .gt:after{display:none}body.sbc #sbl .g.shut .it{display:flex}
 body.sbc #sbl .it{justify-content:center;padding:8px 0}body.sbc #sbar .sbh{justify-content:center;padding:12px 0}body.sbc #sbar .sbh i{margin:0}body.sbc #sbk{justify-content:center;margin:8px 10px}
 #ptitle{font-weight:700;font-size:14px;letter-spacing:.02em;display:flex;align-items:center;gap:8px}#ptitle small{color:var(--mut);font-weight:500;font-size:11px}
@@ -92,7 +92,7 @@ body.notape .tape{display:none}
  body.sb header,body.sb .tape,body.sb footer,body.sb #v-mkt.wrap,body.sb #v-meme .wrap{margin-left:0}
  body.sb #v-mkt.wrap,body.sb #v-meme .wrap{padding-left:10px;padding-right:10px}
  #sbar{width:260px;transform:translateX(-100%)}body.sbo #sbar{transform:none;box-shadow:0 0 40px rgba(0,0,0,.4)}
- body.sbc #sbar .lb,body.sbc #sbar .gt,body.sbc #sbar .sbh span,body.sbc #sbar .fv,body.sbc #sbk span,body.sbc #sbar .sbm{display:revert}
+ body.sbc #sbar .lb,body.sbc #sbar .gt,body.sbc #sbar .sbh span,body.sbc #sbar .fv,body.sbc #sbk span+span,body.sbc #sbar .sbh b,body.sbc #sbar .sbm{display:revert}
  body.sbc #sbl .it{justify-content:flex-start;padding:6px 8px}
  #hmb{display:inline-block}#stat{left:0}#stat .hd{display:none}
  #sbov{position:fixed;inset:0;z-index:7;background:rgba(0,0,0,.45)}body.sbo #sbov{display:block}
