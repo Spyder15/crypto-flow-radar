@@ -321,7 +321,7 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 - Free-tier me real-time ki limits: GeckoTerminal ~30/min, DexScreener ~300/min (pairs), GoPlus rate-limited. Zyada speed ke liye paid RPC/WebSocket chahiye.
 
 ### 19.4f Quant Bot and Learn tabs
-- `meme-token/quant-bot.js` is a paper-only quant bot (no keys, no real orders). It runs inside `meme-token.yml` every 30 min. Strategies: momentum breakout, mean reversion (RSI + Bollinger, ranging markets only) and funding fade, on the top 20 Bybit perps (1h candles). Start $1000, 0.5% risk per trade, max 5 open, 3% daily loss stop, fees and slippage counted.
+- `meme-token/quant-bot.js` is a paper-only quant bot (no keys, no real orders). It runs inside `meme-token.yml` every 30 min. Strategies: momentum breakout, mean reversion (RSI + Bollinger, ranging markets only) and funding fade, on the top 40 Bybit perps (1h candles). Start $1000, 0.5% risk per trade, max 10 open, 3% daily loss stop, fees and slippage counted.
 - State and results live in `meme-token/site/quant.json` (committed by the workflow, served by the site). Reset the bot by deleting that file.
 - `site/quant.js` renders the **Quant Bot** tab (equity, drawdown, profit factor, per-strategy table, trades) and the **Learn** tab (lessons with calculators, interview-style questions, progress in `localStorage`).
 
@@ -350,7 +350,7 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 - Market Flow terminal (~38 tabs): Overview, Screener, Movers, Treemap, Chains, Coin, Compare, History, Watchlist, Derivatives, Liq Map/History, Funding Map, Basis & L/S, Options, Orderflow, HL Whales, HYPE, On-Chain, Smart Money, Gas/Network, Social, Macro, Cycles, Daily Brief, Views, Ask, Portfolio, Paper, Quant Bot, Meme Quant, Backtest, Alert Rules, Multi-chart, Journal, Calc, Learn.
 - 16 features + ETH ETF flows, Buildix-style pro tabs, light/dark theme, embed widgets, shareable links, PWA + web push (VAPID, KV `PUSH`).
 - Bug fixes: OKX liquidations, KV write audit (free limit 1000 writes/day), sw cache.
-- **Quant Bot tab** (`quant-bot.js`, 30 min): paper, Bybit top 20 perps, momentum / mean reversion / funding fade, $1000, 0.5% risk, fees+slippage. State `site/quant.json`.
+- **Quant Bot tab** (`quant-bot.js`, 30 min): paper, Bybit top 40 perps, momentum / mean reversion / funding fade, $1000, 0.5% risk, fees+slippage. State `site/quant.json`.
 - **Quant chart popup** (`site/quant.js`): TradingView-style, har timeframe (1m..1D), zoom/pan, volume, MA, candle/line, crosshair, SL/TP/entry lines, "Fit trade", Snapshot (html2canvas) + share text.
 - **Pro shell** (`site/shell.js`): left sidebar (6 groups, favorites, collapse), Cmd/Ctrl+K palette, settings (theme, density, ticker, accent), status bar (sessions, clock), mobile drawer. MEME mode me sidebar meme pages dikhata hai (Tokens, Heating up, Inflow/Outflow, Meme Quant, Smart Money, On-Chain, Social).
 - **Meme Quant** (`meme-quant-bot.js`, har 5 min, `.github/workflows/meme-quant.yml`): paper $1000, 4% per trade, max 8 open, 5% daily stop. Strategies: whale follow, volume breakout, dip reclaim. GoPlus rug check, SL 15%, TP1 half +30% then trail, liquidity-pull exit, time stop. State KV `mq`: read `/api/mq`, write `POST /api/mq/put` + `x-run-key`. Tab `site/mquant.js`: live P/L, candle chart popup, exit markers, snapshot.

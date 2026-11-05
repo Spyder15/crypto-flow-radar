@@ -4,7 +4,7 @@
 import fs from "node:fs";
 
 const FILE = new URL("./site/quant.json", import.meta.url);
-const CFG = { start: 1000, riskPct: 0.5, maxOpen: 5, maxLev: 5, fee: 0.0011, slip: 0.0005, dayStopPct: 3, topN: 20, fundTh: 0.05 };
+const CFG = { start: 1000, riskPct: 0.5, maxOpen: 10, maxLev: 5, fee: 0.0011, slip: 0.0005, dayStopPct: 3, topN: 40, fundTh: 0.05 };
 const HOSTS = ["https://api.bybit.com", "https://api.bytick.com", "https://api.bybitglobal.com"];
 const HOLD_H = { mom: 48, mr: 24, fund: 24 };
 

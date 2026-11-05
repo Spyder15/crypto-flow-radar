@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payment receipt</title>
+<style>@media print { button { display: none } body { background: #fff } .card { box-shadow: none } }</style>
+</head>
+<body>
+<main>
+  <h1>Payment receipt</h1>
+  <section class="card" id="box">Loading…</section>
+  <button id="print" class="full" hidden>Print / save as PDF</button>
+  <button id="share" class="full alt" hidden>Share</button>
+</main>
+<script src="/ethers.js"></script>
+<script src="/common.js"></script>
+<script>
+(async () => {
+  const q = new URLSearchParams(location.search);
+  const id = q.get('id');
+  const box = $('box');
+  try {
+    const ctx = await boot('payerKey');
+    const o = await ctx.escrow.orders(id);
+    const a = await authParams(ctx.wallet, 'receipt', id);
+    const r = await api(`/api/receipt?id=${id}&ts=${a.ts}&sig=${a.sig}`);
+    if (STATUS[Number(o.status)] !== 'Released') throw new Error('Not completed');
+    const rows = [
+      ['Status', 'Paid ✓'],
+      ['Merchant', `${r.merchant.name || ''} (${r.merchant.upi || ''})`],
+      ['Amount received', fmtInr(o.inrPaise)],
+      ['USDC paid', fmtUsdc(o.amount) + ' USDC'],
+      ['UPI reference (UTR)', r.utr],
+      ['Paid by', o.payer],
+      ['Provider', o.lp],
+      ['Order', `#${id} · escrow ${ctx.cfg.escrow}`],
+      ['Settled', new Date(Number(o.provenAt) * 1000).toLocaleString()],
+    ];
+    box.textContent = '';
+    for (const [k, v] of rows) {
+      const row = document.createElement('div'); row.className = 'row';
+      const a = document.createElement('span'); a.className = 'muted'; a.textContent = k;
+      const b = document.createElement('b'); b.textContent = v; b.style.wordBreak = 'break-all'; b.style.textAlign = 'right';
+      row.append(a, b); box.append(row);
+    }
+    $('print').hidden = false; $('print').onclick = () => print();
+    const text = rows.map(([k, v]) => `${k}: ${v}`).join('\n');
+    $('share').hidden = false;
+    $('share').onclick = () => (navigator.share ? navigator.share({ title: 'Payment receipt', text }) : navigator.clipboard.writeText(text).then(() => alert('Receipt copied')));
+  } catch (e) { box.textContent = 'Receipt unavailable: ' + e.message; }
+})();
+</script>
+</body>
+</html>

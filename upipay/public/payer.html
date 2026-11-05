@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pay with USDC</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#fffce9">
+<link rel="icon" href="/icon.svg">
+</head>
+<body>
+<main>
+  <div style="display:flex;justify-content:space-between;align-items:center"><h1 id="hi">Pay anywhere with USDC</h1><button id="menuBtn" style="font-size:22px;padding:6px 14px" title="Menu">☰</button></div>
+
+  <section class="card dark">
+    <div class="muted">USDC BALANCE · <span id="addr"></span></div>
+    <div class="big" id="bal">0.00</div>
+    <div class="muted" id="rate"></div>
+    <button id="faucet" class="alt full">Get test USDC</button>
+  </section>
+
+  <section class="card" id="streakCard">
+    <div class="muted">DAILY STREAK · pay daily to keep it alive</div>
+    <div class="big" id="streakN">0</div>
+    <div id="week" style="display:flex;gap:6px;margin-top:6px"></div>
+    <div class="muted" id="points"></div>
+  </section>
+
+  <section id="scanCard" class="card">
+    <button id="scan" class="full dark">Scan UPI QR</button>
+    <video id="vid" playsinline hidden></video>
+    <label for="paste">…or paste a UPI id / upi:// link</label>
+    <input id="paste" placeholder="shop@upi or upi://pay?pa=shop@upi&am=150">
+    <button id="go" class="full">Continue</button>
+    <div id="scanErr" class="err"></div>
+    <div id="saved" style="margin-top:10px"></div>
+  </section>
+
+  <section id="confirm" class="card" hidden>
+    <div class="muted">Paying</div>
+    <div id="mName" style="font-weight:700;font-size:20px"></div>
+    <div class="muted" id="mUpi"></div>
+    <label for="inr">Amount (₹)</label>
+    <input id="inr" type="number" min="1" step="0.01">
+    <div style="margin-top:10px">You pay <b id="usdcAmt">0.00</b> USDC</div>
+    <div class="muted">Merchant receives exactly the ₹ amount via UPI. Your USDC stays in escrow until the payout is proven; no proof in time means a full refund.</div>
+    <button id="pay" class="full">Pay</button>
+    <div id="payErr" class="err"></div>
+  </section>
+
+  <section class="card">
+    <strong>My orders</strong>
+    <div id="orders" class="muted">No orders yet</div>
+  </section>
+</main>
+<script src="/ethers.js"></script>
+<script src="/jsqr.js"></script>
+<script src="/emv.js"></script>
+<script src="/common.js"></script>
+<script>
+let ctx, merchant = null;
+const KEY = 'payerKey';
+const myOrders = async () => {
+  const logs = await ctx.escrow.queryFilter(ctx.escrow.filters.OrderCreated(null, ctx.wallet.address), ctx.cfg.fromBlock || 0);
+  return logs.map((l) => l.args.id.toString()).reverse();
+};
+
+async function refreshBalance() {
+  $('bal').textContent = fmtUsdc(await ctx.usdc.balanceOf(ctx.wallet.address));
+}
+
+function showConfirm(m) {
+  merchant = m;
+  $('confirm').hidden = false;
+  $('mName').textContent = m.name === m.upi ? 'Name not verified' : m.name;
+  $('mUpi').textContent = m.upi + (m.name === m.upi ? ' · double-check this id; scan the merchant QR to see their name' : '');
+  $('inr').value = m.inr || '';
+  $('inr').disabled = !!m.inr;
+  updateQuote();
+  $('confirm').scrollIntoView({ behavior: 'smooth' });
+}
+
+function updateQuote() {
+  const inr = parseFloat($('inr').value);
+  $('usdcAmt').textContent = inr > 0 ? fmtUsdc(quoteUsdc(inr, ctx.cfg.rate)) : '0.00';
+}
+
+async function handleText(text) {
+  const emv = Emv.parseEmv(text);
+  if (emv && emv.scheme !== 'UPI') {
+    $('scanErr').textContent = `${emv.scheme} QR detected${emv.name ? ' for ' + emv.name : ''}${emv.amount ? ` (${emv.amount} ${emv.currency})` : ''}. Payouts on this rail are not live yet; UPI only for now.`;
+    return false;
+  }
+  const m = parseUpi(text);
+  if (!m) { $('scanErr').textContent = 'Not a UPI QR'; return false; }
+  $('scanErr').textContent = '';
+  showConfirm(m);
+  return true;
+}
+
+async function scanLoop() {
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+  const v = $('vid'); v.srcObject = stream; v.hidden = false; await v.play();
+  const c = document.createElement('canvas'), g = c.getContext('2d', { willReadFrequently: true });
+  const stop = () => { stream.getTracks().forEach((t) => t.stop()); v.hidden = true; };
+  const tick = async () => {
+    if (v.hidden) return;
+    if (v.videoWidth) {
+      c.width = v.videoWidth; c.height = v.videoHeight; g.drawImage(v, 0, 0);
+      const hit = jsQR(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+      if (hit && await handleText(hit.data)) return stop();
+    }
+    setTimeout(tick, 250);
+  };
+  tick();
+}
+
+async function pay() {
+  $('payErr').textContent = ''; $('pay').disabled = true;
+  try {
+    const inr = parseFloat($('inr').value);
+    if (!(inr > 0)) throw new Error('Enter an amount');
+    const amount = quoteUsdc(inr, ctx.cfg.rate);
+    if ((await ctx.usdc.balanceOf(ctx.wallet.address)) < amount) throw new Error('Not enough USDC. Tap "Get test USDC" first.');
+    if ((await ctx.provider.getBalance(ctx.wallet.address)) === 0n) throw new Error('No gas. Tap "Get test USDC" first (it also sends test ETH).');
+    const paise = BigInt(Math.round(inr * 100));
+    await (await ctx.usdc.approve(ctx.cfg.escrow, amount)).wait();
+    const rc = await (await ctx.escrow.createOrder(amount, paise, ethers.id(merchant.upi))).wait();
+    const ev = rc.logs.map((l) => { try { return ctx.escrow.interface.parseLog(l); } catch { return null; } }).find((e) => e && e.name === 'OrderCreated');
+    const id = ev.args.id.toString();
+    await api('/api/meta', { id, upi: merchant.upi, name: merchant.name });
+    rememberMerchant(merchant); beep();
+    $('confirm').hidden = true;
+    await refreshBalance(); await renderOrders();
+  } catch (e) { $('payErr').textContent = e.info?.error?.message || e.shortMessage || e.message; }
+  $('pay').disabled = false;
+}
+
+// ---- Side menu, wallet sheet, settings, help (modelled on goat.cash) ----
+function sheet(title, build) {
+  const o = document.createElement('div');
+  o.style.cssText = 'position:fixed;inset:0;z-index:50;background:#0006;display:flex;justify-content:center;align-items:flex-end';
+  const c = document.createElement('div');
+  c.style.cssText = 'background:var(--bg);width:100%;max-width:480px;max-height:90vh;overflow:auto;border-radius:24px 24px 0 0;border:2px solid var(--ink);padding:18px';
+  const h = document.createElement('div'); h.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:10px';
+  const t = document.createElement('strong'); t.textContent = title; t.style.fontSize = '20px';
+  const x = document.createElement('button'); x.textContent = '✕'; x.style.padding = '4px 12px'; x.onclick = () => o.remove();
+  h.append(t, x); c.append(h); build(c, () => o.remove()); o.append(c);
+  o.onclick = (e) => e.target === o && o.remove();
+  document.body.append(o);
+}
+function item(parent, label, sub, fn, right = '›') {
+  const b = document.createElement('button');
+  b.style.cssText = 'display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;margin-bottom:10px;background:#fff';
+  const l = document.createElement('span'); l.textContent = label;
+  if (sub) { const m = document.createElement('div'); m.className = 'muted'; m.style.fontWeight = '400'; m.textContent = sub; l.append(m); }
+  const r = document.createElement('span'); r.textContent = right;
+  b.append(l, r); b.onclick = fn; parent.append(b); return r;
+}
+function initMenu() {
+  $('menuBtn').onclick = () => sheet('Menu', (c, close) => {
+    item(c, '👛 Wallet', '', () => { close(); walletSheet(); });
+    item(c, '🎧 Help & Support', '', () => { close(); helpSheet(); });
+    item(c, '⚙️ Settings', '', () => { close(); settingsSheet(); });
+    item(c, '👤 Profile & history', '', () => { location.href = '/profile'; });
+    const p = getProfile(ctx.wallet.address);
+    const i = document.createElement('div'); i.className = 'card'; i.style.marginTop = '14px';
+    i.textContent = `${p.name || 'Wallet'} · ${short(ctx.wallet.address)}`; c.append(i);
+    item(c, 'Logout (lock)', '', () => logout(ctx.keyName), '⇥');
+  });
+}
+const short = (a) => a.slice(0, 6) + '…' + a.slice(-4);
+function walletSheet() {
+  sheet('Wallet', async (c, close) => {
+    const head = document.createElement('div'); head.className = 'card dark';
+    head.innerHTML = '<div class="muted">Base · USDC</div><div class="big" id="wsBal">…</div><div class="muted" id="wsAddr" style="word-break:break-all"></div>';
+    c.append(head); head.querySelector('#wsAddr').textContent = ctx.wallet.address;
+    head.querySelector('#wsBal').textContent = fmtUsdc(await ctx.usdc.balanceOf(ctx.wallet.address)) + ' USDC';
+    item(c, 'Send', 'Transfer USDC to another address', () => { close(); sendSheet(); }, '↗');
+    item(c, 'Receive', 'Copy your address', async () => { await navigator.clipboard.writeText(ctx.wallet.address); alert('Address copied. Send USDC on this network only.'); }, '↙');
+    item(c, 'Buy', ctx.cfg.faucet ? 'Testnet: get free test USDC' : 'Not available yet', async () => { if (!ctx.cfg.faucet) return; await api('/api/faucet', { address: ctx.wallet.address }); close(); refreshBalance(); }, '+');
+    item(c, 'Transactions', 'Payment history', () => { location.href = '/profile'; });
+    item(c, 'Manage wallet', 'Backup phrase, password', () => { location.href = '/profile'; });
+  });
+}
+function sendSheet() {
+  sheet('Send USDC', (c, close) => {
+    c.insertAdjacentHTML('beforeend', '<label>To address</label><input id="sTo" placeholder="0x…"><label>Amount (USDC)</label><input id="sAmt" type="number" step="0.01"><button id="sGo" class="full">Send</button><div id="sErr" class="err"></div>');
+    c.querySelector('#sGo').onclick = async () => {
+      const err = c.querySelector('#sErr'); err.textContent = '';
+      try {
+        const to = c.querySelector('#sTo').value.trim(), amt = parseFloat(c.querySelector('#sAmt').value);
+        if (!ethers.isAddress(to)) throw new Error('Invalid address');
+        if (!(amt > 0)) throw new Error('Enter an amount');
+        const a = BigInt(Math.round(amt * 1e6));
+        if ((await ctx.usdc.balanceOf(ctx.wallet.address)) < a) throw new Error('Not enough USDC');
+        if (!confirm(`Send ${amt} USDC to ${to}? This cannot be undone.`)) return;
+        await (await ctx.usdc.transfer(to, a)).wait();
+        beep(); close(); refreshBalance();
+      } catch (e) { err.textContent = e.shortMessage || e.message; }
+    };
+  });
+}
+function helpSheet() {
+  sheet('Help & Support', (c) => {
+    c.insertAdjacentHTML('beforeend', `<div class="card"><strong>Payment stuck?</strong><div class="muted">If no LP accepts, tap Cancel on the order for a full refund. If the LP does not pay in time you are refunded plus their stake. If the merchant says they were not paid, tap Dispute within the window; an arbiter decides.</div></div>
+      <div class="card"><strong>Lost access?</strong><div class="muted">Import your 12-word recovery phrase on the start screen. Nobody can recover it for you.</div></div>`);
+    item(c, 'Chat with us', 'Not connected in this build', () => {});
+  });
+}
+function settingsSheet() {
+  sheet('Settings', (c, close) => {
+    item(c, 'Currency', 'Only INR payouts are live', () => {}, prefs().currency);
+    item(c, 'Language', 'More languages coming', () => {}, 'English');
+    const snd = item(c, 'Sounds', '', () => { setPrefs({ sounds: !prefs().sounds }); snd.textContent = prefs().sounds ? 'On' : 'Off'; if (prefs().sounds) beep(); }, prefs().sounds ? 'On' : 'Off');
+    item(c, 'Reset to defaults', 'Clears settings and saved merchants (wallet is kept)', () => {
+      if (!confirm('Reset settings and saved merchants?')) return;
+      localStorage.removeItem('prefs'); setProfile(ctx.wallet.address, { saved: [], recents: [] }); close(); renderSaved();
+    });
+  });
+}
+
+function rememberMerchant(m) {
+  const p = getProfile(ctx.wallet.address);
+  const rest = (p.recents || []).filter((r) => r.upi !== m.upi);
+  setProfile(ctx.wallet.address, { recents: [{ upi: m.upi, name: m.name }, ...rest].slice(0, 8) });
+  renderSaved();
+}
+function renderSaved() {
+  const p = getProfile(ctx.wallet.address), box = $('saved');
+  const list = [...(p.saved || []), ...(p.recents || []).filter((r) => !(p.saved || []).some((x) => x.upi === r.upi))];
+  box.textContent = '';
+  if (!list.length) return;
+  const h = document.createElement('div'); h.className = 'muted'; h.textContent = 'Saved & recent'; box.append(h);
+  for (const m of list.slice(0, 6)) {
+    const b = document.createElement('button');
+    b.textContent = (m.label || (m.name !== m.upi ? m.name : m.upi)); b.title = m.upi;
+    b.style.cssText = 'margin:6px 6px 0 0;padding:6px 12px;font-size:14px';
+    b.onclick = () => showConfirm({ upi: m.upi, name: m.name || m.upi, inr: null });
+    box.append(b);
+  }
+}
+
+function showRate() {
+  $('rate').textContent = `1 USDC ≈ ₹${ctx.cfg.rate} (${ctx.cfg.rateSource}, incl. ${ctx.cfg.spreadPct}% spread)`;
+}
+async function refreshConfig() {
+  try { ctx.cfg = await api('/api/config'); showRate(); updateQuote(); } catch {}
+}
+async function loadStreak() {
+  try {
+    const s = await api(`/api/streak?address=${ctx.wallet.address}`);
+    $('streakN').textContent = s.current + (s.current === 1 ? ' day' : ' days');
+    const w = $('week'); w.textContent = '';
+    ['M', 'T', 'W', 'T', 'F', 'S', 'S'].forEach((d, i) => {
+      const e = document.createElement('div');
+      e.textContent = s.week[i] === 'paid' ? '★' : s.week[i] === 'missed' ? '✕' : d;
+      e.style.cssText = `width:34px;height:34px;border-radius:50%;display:grid;place-items:center;border:2px solid #111;background:${s.week[i] === 'paid' ? '#9be7a8' : '#fff'};${i === s.today ? 'outline:2px solid #ee8f5f;' : ''}`;
+      w.append(e);
+    });
+    $('points').textContent = `${s.points} points earned · 7 days in a row = 10 points${s.paidToday ? ' · paid today ✓' : ''}`;
+  } catch {}
+}
+
+const btn = (label, fn, cls = '') => {
+  const b = document.createElement('button'); b.textContent = label; b.className = cls;
+  b.style.marginLeft = '8px'; b.style.padding = '6px 12px';
+  b.onclick = async () => { b.disabled = true; try { await fn(); await refreshBalance(); await renderOrders(); loadStreak(); } catch (e) { b.disabled = false; alert(e.info?.error?.message || e.shortMessage || e.message); } };
+  return b;
+};
+
+async function renderOrders() {
+  const ids = await myOrders();
+  if (!ids.length) return;
+  if (!window.disputeWindow) window.disputeWindow = Number(await ctx.escrow.disputeWindow());
+  const box = $('orders'); box.textContent = '';
+  const now = Date.now() / 1000;
+  for (const id of ids) {
+    const o = await ctx.escrow.orders(id);
+    const st = STATUS[Number(o.status)];
+    const row = document.createElement('div'); row.className = 'row';
+    const left = document.createElement('div');
+    left.textContent = `${fmtInr(o.inrPaise)} · ${fmtUsdc(o.amount)} USDC`;
+    const hint = document.createElement('div'); hint.className = 'muted';
+    const right = document.createElement('div');
+    const pill = document.createElement('span'); pill.className = 'pill ' + st; pill.textContent = st;
+    right.append(pill);
+    const left_s = Math.max(0, Number(o.provenAt) + window.disputeWindow - now);
+    let receipt = null;
+    if (['Proven', 'Released', 'Disputed'].includes(st)) { try { const a = await authParams(ctx.wallet, 'receipt', id); receipt = await api(`/api/receipt?id=${id}&ts=${a.ts}&sig=${a.sig}`); } catch {} }
+    if (st === 'Open') { hint.textContent = 'Waiting for a provider…'; right.append(btn('Cancel', async () => (await ctx.escrow.refund(id)).wait())); }
+    else if (st === 'Accepted') {
+      hint.textContent = 'Provider is paying the merchant…';
+      if (now > Number(o.acceptedAt) + 900) right.append(btn('Refund', async () => (await ctx.escrow.refund(id)).wait()));
+    } else if (st === 'Proven') {
+      hint.textContent = `Provider says merchant was paid (UTR ${receipt ? receipt.utr : '…'}). Check with the merchant. Auto-confirms in ${Math.ceil(left_s)}s unless you dispute.`;
+      right.append(btn('Merchant got it ✓', async () => (await ctx.escrow.confirm(id)).wait()));
+      if (left_s > 0) right.append(btn('Dispute', async () => (await ctx.escrow.dispute(id)).wait(), 'alt'));
+    } else if (st === 'Disputed') hint.textContent = 'Dispute open. An arbiter will decide; your USDC is frozen until then.';
+    else if (st === 'Released') {
+      hint.textContent = `Merchant paid ✓${receipt ? ' · UTR ' + receipt.utr : ''}`;
+      const a = document.createElement('a'); a.href = `/receipt?id=${id}`; a.target = '_blank'; a.textContent = 'Receipt'; a.style.marginLeft = '8px';
+      right.append(a);
+    }
+    else if (st === 'Refunded') hint.textContent = 'Refunded';
+    left.append(hint);
+    row.append(left, right); box.append(row);
+  }
+}
+
+(async () => {
+  ctx = await boot(KEY);
+  $('addr').textContent = ctx.wallet.address.slice(0, 6) + '…' + ctx.wallet.address.slice(-4);
+  const prof = getProfile(ctx.wallet.address);
+  $('hi').textContent = prof.name ? `Hi ${prof.name}` : 'Pay anywhere with USDC';
+  $('menuBtn').textContent = prof.avatar || '☰';
+  initMenu();
+  renderSaved();
+  showRate();
+  $('faucet').hidden = !ctx.cfg.faucet;
+  loadStreak();
+  await refreshBalance(); await renderOrders();
+  $('faucet').onclick = async () => { $('faucet').disabled = true; try { await api('/api/faucet', { address: ctx.wallet.address }); await refreshBalance(); } catch (e) { alert(e.message); } $('faucet').disabled = false; };
+  $('scan').onclick = () => scanLoop().catch((e) => { $('scanErr').textContent = 'Camera unavailable: ' + e.message; });
+  $('go').onclick = () => handleText($('paste').value);
+  $('inr').oninput = updateQuote;
+  $('pay').onclick = pay;
+  setInterval(() => renderOrders().catch(() => {}), 4000);
+  setInterval(refreshConfig, 30000);
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>

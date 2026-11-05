@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Merchant Settlement</title>
+<style>
+  :root { --bg:#fffce9; --green:#285548; --mint:#eefadf; --ink:#111; --purple:#a393f5; --orange:#ee8f5f; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.4 system-ui,sans-serif; }
+  main { max-width:480px; margin:0 auto; padding:20px 16px 60px; }
+  h1 { font-size:24px; margin:0 0 16px; }
+  .card { border:2px solid var(--ink); border-radius:24px; box-shadow:4px 4px 0 var(--ink); padding:18px; margin-bottom:18px; background:var(--mint); }
+  .card.dark { background:var(--green); color:#fff; }
+  label { display:block; font-size:12px; letter-spacing:.05em; text-transform:uppercase; opacity:.8; margin:10px 0 4px; }
+  input { width:100%; padding:12px; border:2px solid var(--ink); border-radius:14px; font-size:16px; background:#fff; }
+  button { width:100%; margin-top:14px; padding:14px; border:2px solid var(--ink); border-radius:999px; background:var(--purple); font-weight:700; font-size:16px; cursor:pointer; box-shadow:3px 3px 0 var(--ink); }
+  button.alt { background:var(--orange); }
+  .qr { background:#fff; border-radius:16px; padding:8px; margin:12px auto; max-width:260px; }
+  .qr img { width:100%; display:block; }
+  .pill { display:inline-block; padding:3px 12px; border-radius:999px; border:2px solid var(--ink); font-size:13px; font-weight:700; background:#fff; color:var(--ink); }
+  .pill.settled { background:#9be7a8; } .pill.confirming { background:#ffe08a; }
+  .pill.underpaid, .pill.refund_due { background:#ffb38a; } .pill.rejected, .pill.expired { background:#e5e5e5; }
+  .big { font-size:40px; font-weight:800; margin:4px 0; }
+  .row { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-top:1px dashed #0003; gap:8px; }
+  .muted { opacity:.7; font-size:13px; } .err { color:#b00020; font-weight:600; }
+  .steps { display:flex; gap:6px; margin:10px 0; } .steps span { flex:1; height:8px; border-radius:4px; background:#fff4; } .steps span.on { background:#9be7a8; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Merchant Settlement</h1>
+
+  <section class="card">
+    <label for="merchant">Your Base address</label>
+    <input id="merchant" placeholder="0x…" autocomplete="off">
+    <label for="amount">Amount (USDC)</label>
+    <input id="amount" type="number" min="0.01" step="0.01" placeholder="10.00">
+    <button id="create">Create payment request</button>
+    <div id="formErr" class="err"></div>
+  </section>
+
+  <section id="active" class="card dark" hidden>
+    <span id="status" class="pill"></span>
+    <div class="big" id="activeAmt"></div>
+    <div class="steps"><span id="s1"></span><span id="s2"></span><span id="s3"></span></div>
+    <div class="qr"><img id="qr" alt="Payment QR"></div>
+    <div class="muted" id="countdown"></div>
+    <div class="muted" id="detail"></div>
+    <label for="tx">Payer's transaction hash</label>
+    <input id="tx" placeholder="0x…">
+    <button id="claim" class="alt">Verify payment</button>
+    <div id="claimErr" class="err"></div>
+  </section>
+
+  <section class="card">
+    <strong>Recent requests</strong>
+    <div id="list"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = (u) => (Number(u) / 1e6).toFixed(2);
+const REASONS = {
+  wrong_token: 'Wrong token sent', wrong_recipient: 'Sent to a different address', wrong_token_or_recipient: 'No USDC transfer to you in this tx',
+  no_transfer_found: 'Transaction not found or failed', transfer_already_used: 'This transfer already paid another request',
+  paid_after_expiry: 'Paid after expiry, refund due', short_by: 'Underpaid',
+};
+let current = null, timer = null;
+
+$('merchant').value = localStorage.getItem('merchant') || '';
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || 'request failed');
+  return j;
+}
+
+function render(r) {
+  current = r;
+  $('active').hidden = false;
+  const s = $('status'); s.textContent = r.status.replace('_', ' '); s.className = 'pill ' + r.status;
+  $('activeAmt').textContent = fmt(r.amount) + ' USDC';
+  $('qr').src = `/requests/${r.id}/qr.svg`;
+  const stage = { pending: 1, confirming: 2, settled: 3 }[r.status] || 0;
+  ['s1', 's2', 's3'].forEach((id, i) => $(id).className = i < stage ? 'on' : '');
+  let d = REASONS[r.reason] || '';
+  if (r.status === 'confirming') d = `${r.confirmations} confirmation(s)…`;
+  if (r.shortBy) d += ` by ${fmt(r.shortBy)} USDC`;
+  if (r.status === 'settled' && BigInt(r.refund || 0) > 0n) d = `Overpaid, refund ${fmt(r.refund)} USDC to payer`;
+  if (r.status === 'refund_due') d += ` (${fmt(r.refund)} USDC)`;
+  $('detail').textContent = d;
+  clearInterval(timer);
+  const live = ['pending', 'confirming'].includes(r.status);
+  const tick = () => {
+    const left = Math.max(0, Math.round((r.expiresAt - Date.now()) / 1000));
+    $('countdown').textContent = live ? `Expires in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : '';
+  };
+  tick();
+  if (live) timer = setInterval(async () => {
+    tick();
+    try { const n = await api(`/requests/${r.id}`); if (n.status !== r.status || n.confirmations !== r.confirmations) { render(n); loadList(); } } catch {}
+  }, 4000);
+  $('claim').disabled = !live && r.status !== 'underpaid';
+}
+
+async function loadList() {
+  const m = $('merchant').value.trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(m)) return;
+  const items = await api(`/requests?merchant=${m}`);
+  const box = $('list'); box.textContent = '';
+  for (const r of items) {
+    const row = document.createElement('div'); row.className = 'row';
+    const left = document.createElement('span'); left.textContent = fmt(r.amount) + ' USDC';
+    const pill = document.createElement('span'); pill.className = 'pill ' + r.status; pill.textContent = r.status.replace('_', ' ');
+    row.append(left, pill); row.onclick = () => render(r); row.style.cursor = 'pointer';
+    box.append(row);
+  }
+}
+
+$('create').onclick = async () => {
+  $('formErr').textContent = '';
+  const merchant = $('merchant').value.trim();
+  try {
+    const r = await api('/requests', { method: 'POST', body: JSON.stringify({ merchant, amountUsd: $('amount').value }) });
+    localStorage.setItem('merchant', merchant);
+    render(r); loadList();
+  } catch (e) { $('formErr').textContent = e.message; }
+};
+
+$('claim').onclick = async () => {
+  $('claimErr').textContent = '';
+  try { render(await api(`/requests/${current.id}/claim`, { method: 'POST', body: JSON.stringify({ txHash: $('tx').value.trim() }) })); loadList(); }
+  catch (e) { $('claimErr').textContent = e.message; }
+};
+
+loadList();
+</script>
+</body>
+</html>

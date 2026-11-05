@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arbiter (dev)</title>
+</head>
+<body>
+<main>
+  <h1>Arbiter · disputed orders</h1>
+  <section class="card"><div id="list" class="muted">None</div></section>
+</main>
+<script src="/ethers.js"></script>
+<script src="/common.js"></script>
+<script>
+let ctx;
+async function render() {
+  const n = Number(await ctx.escrow.nextId());
+  const box = $('list'); box.textContent = '';
+  for (let id = n - 1; id >= 1; id--) {
+    const o = await ctx.escrow.orders(id);
+    if (Number(o.status) !== 6) continue;
+    const row = document.createElement('div'); row.className = 'row'; row.style.display = 'block';
+    const t = document.createElement('div'); t.textContent = `#${id} · ${fmtInr(o.inrPaise)} · ${fmtUsdc(o.amount)} USDC · UTR hash ${o.utrHash.slice(0, 12)}…`;
+    const mk = (label, payLp, cls) => {
+      const b = document.createElement('button'); b.textContent = label; b.className = cls; b.style.margin = '8px 8px 0 0';
+      b.onclick = async () => { b.disabled = true; try { if (ctx.cfg.devArbiter) await api('/api/resolve', { id: String(id), payLp }); else await (await ctx.escrow.resolve(id, payLp)).wait(); render(); } catch (e) { alert(e.message); b.disabled = false; } };
+      return b;
+    };
+    row.append(t, mk('Pay LP (merchant was paid)', true, ''), mk('Refund payer', false, 'alt'));
+    box.append(row);
+  }
+  if (!box.children.length) box.textContent = 'None';
+}
+(async () => { ctx = await boot('arbiterKey'); await render(); setInterval(() => render().catch(() => {}), 4000); })();
+</script>
+</body>
+</html>

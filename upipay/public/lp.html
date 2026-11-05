@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LP console</title>
+</head>
+<body>
+<main>
+  <h1>Liquidity provider console</h1>
+  <section class="card dark">
+    <div class="muted">USDC WALLET · <span id="addr"></span></div>
+    <div class="big" id="bal">0.00</div>
+    <div class="muted">Stake: <b id="stakeFree">0.00</b> USDC free · <span id="req"></span></div>
+    <input id="stakeAmt" type="number" min="0.01" step="0.01" placeholder="Amount (USDC)" style="margin-top:10px">
+    <div style="display:flex;gap:8px">
+      <button id="dep" class="full">Deposit stake</button>
+      <button id="wd" class="full alt">Withdraw</button>
+    </div>
+    <button id="faucet" class="full dark">Get test USDC + ETH</button>
+    <div class="muted">Stake is slashed to the payer if you miss the pay window or lose a dispute.</div>
+  </section>
+
+  <section class="card">
+    <strong>Open orders</strong>
+    <div id="open" class="muted">None</div>
+  </section>
+
+  <section class="card">
+    <strong>My active payouts</strong>
+    <div id="mine" class="muted">None</div>
+  </section>
+</main>
+<script src="/ethers.js"></script>
+<script src="/common.js"></script>
+<script>
+let ctx, stakeBps = 0n;
+const act = async (btn, fn) => { btn.disabled = true; try { await fn(); } catch (e) { alert(e.info?.error?.message || e.shortMessage || e.message); } btn.disabled = false; render(true); };
+const me = () => ctx.wallet.address.toLowerCase();
+
+async function render(force) {
+  if (!force && document.activeElement && document.activeElement.tagName === 'INPUT') return;
+  const free = await ctx.escrow.stake(ctx.wallet.address);
+  $('bal').textContent = fmtUsdc(await ctx.usdc.balanceOf(ctx.wallet.address));
+  $('stakeFree').textContent = fmtUsdc(free);
+  $('req').textContent = `${Number(stakeBps) / 100}% of each order is locked`;
+  const n = Number(await ctx.escrow.nextId());
+  const open = $('open'), mine = $('mine');
+  open.textContent = ''; mine.textContent = '';
+  for (let id = n - 1; id >= 1; id--) {
+    const o = await ctx.escrow.orders(id);
+    const st = Number(o.status);
+    const mineOrder = o.lp.toLowerCase() === me();
+    if (st === 1) {
+      const lock = (o.amount * stakeBps) / 10000n;
+      const row = document.createElement('div'); row.className = 'row';
+      const t = document.createElement('div');
+      t.textContent = `${fmtInr(o.inrPaise)} → earn ${fmtUsdc(o.amount)} USDC (locks ${fmtUsdc(lock)})`;
+      const b = document.createElement('button'); b.textContent = 'Accept';
+      if (free < lock) { b.disabled = true; b.title = 'Deposit more stake first'; }
+      b.onclick = () => act(b, async () => { await (await ctx.escrow.acceptOrder(id)).wait(); });
+      row.append(t, b); open.append(row);
+    } else if (st === 2 && mineOrder) {
+      const card = document.createElement('div'); card.className = 'row'; card.style.display = 'block';
+      let m = {};
+      try { const a = await authParams(ctx.wallet, 'meta', id); m = await api(`/api/meta?id=${id}&ts=${a.ts}&sig=${a.sig}`); } catch {}
+      const t = document.createElement('div');
+      t.append(`Pay ${fmtInr(o.inrPaise)} to `);
+      const s = document.createElement('b'); s.textContent = m.upi || '(loading)'; t.append(s);
+      const name = document.createElement('div'); name.className = 'muted'; name.textContent = m.name && m.name !== m.upi ? m.name : 'Name not verified'; t.append(name);
+      const utr = document.createElement('input'); utr.placeholder = 'UPI reference (UTR)';
+      const b = document.createElement('button'); b.className = 'full'; b.textContent = 'I paid, submit proof';
+      b.onclick = () => act(b, async () => {
+        const a = await authParams(ctx.wallet, 'proof', id);
+        const p = await api('/api/proof', { id: String(id), utr: utr.value.trim(), ...a });
+        await (await ctx.escrow.submitProof(id, p.utrHash, p.sig)).wait();
+      });
+      card.append(t, utr, b); mine.append(card);
+    } else if (st === 5 && mineOrder) {
+      const row = document.createElement('div'); row.className = 'row';
+      const t = document.createElement('div'); t.textContent = `${fmtUsdc(o.amount)} USDC pending (dispute window / payer confirmation)`;
+      const b = document.createElement('button'); b.textContent = 'Claim';
+      b.onclick = () => act(b, async () => { await (await ctx.escrow.claim(id)).wait(); });
+      row.append(t, b); mine.append(row);
+    } else if (st === 6 && mineOrder) {
+      const row = document.createElement('div'); row.className = 'row'; row.textContent = `Order #${id}: payer disputed. Waiting for arbiter.`; mine.append(row);
+    }
+  }
+  if (!open.children.length) open.textContent = 'None';
+  if (!mine.children.length) mine.textContent = 'None';
+}
+
+(async () => {
+  ctx = await boot('lpKey');
+  stakeBps = await ctx.escrow.stakeBps();
+  $('addr').textContent = ctx.wallet.address.slice(0, 6) + '…' + ctx.wallet.address.slice(-4);
+  $('faucet').hidden = !ctx.cfg.faucet;
+  $('faucet').onclick = () => act($('faucet'), () => api('/api/faucet', { address: ctx.wallet.address }));
+  const amt = () => { const v = parseFloat($('stakeAmt').value); if (!(v > 0)) throw new Error('Enter an amount'); return BigInt(Math.round(v * 1e6)); };
+  $('dep').onclick = () => act($('dep'), async () => { const a = amt(); await (await ctx.usdc.approve(ctx.cfg.escrow, a)).wait(); await (await ctx.escrow.depositStake(a)).wait(); $('stakeAmt').value = ''; });
+  $('wd').onclick = () => act($('wd'), async () => { await (await ctx.escrow.withdrawStake(amt())).wait(); $('stakeAmt').value = ''; });
+  await render(true);
+  setInterval(() => render().catch(() => {}), 4000);
+})();
+</script>
+</body>
+</html>

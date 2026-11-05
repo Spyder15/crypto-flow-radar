@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Profile</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg">
+</head>
+<body>
+<main>
+  <a href="/">← Back</a>
+  <section class="card dark" style="margin-top:12px">
+    <div style="display:flex;gap:14px;align-items:center">
+      <div id="av" style="font-size:48px;cursor:pointer" title="Tap to change"></div>
+      <div style="min-width:0"><input id="nm" maxlength="30" placeholder="Your name" style="font-weight:700"><div class="muted" id="addr" style="word-break:break-all;margin-top:6px"></div></div>
+    </div>
+    <div class="big" id="bal">0.00</div><div class="muted">USDC · <span id="eth"></span> ETH (gas)</div>
+    <button id="copy" class="full alt">Copy address</button>
+  </section>
+
+  <section class="card">
+    <strong>Activity</strong>
+    <div class="muted" id="stats"></div>
+    <div id="hist" class="muted">Loading…</div>
+  </section>
+
+  <section class="card">
+    <strong>Saved merchants</strong>
+    <div id="saved" class="muted">None yet. Merchants you pay are remembered automatically.</div>
+    <label>Add UPI id</label><input id="newUpi" placeholder="shop@upi">
+    <label>Label</label><input id="newLabel" placeholder="e.g. Chai wala" maxlength="30">
+    <button id="add" class="full">Save merchant</button><div id="addErr" class="err"></div>
+  </section>
+
+  <section class="card">
+    <strong>Security</strong>
+    <div class="muted" id="secInfo"></div>
+    <div id="secBox"></div>
+    <div id="secOut" style="margin-top:10px;word-break:break-all;font-weight:700"></div>
+    <div id="secErr" class="err"></div>
+    <button id="lock" class="full dark">Lock</button>
+    <button id="wipe" class="full alt">Remove wallet from this device</button>
+  </section>
+</main>
+<script src="/ethers.js"></script>
+<script src="/common.js"></script>
+<script>
+const KEY = 'payerKey';
+let ctx;
+const short = (a) => a.slice(0, 6) + '…' + a.slice(-4);
+const vaultJson = () => localStorage.getItem(vaultKey(KEY));
+const ask = (m) => prompt(m) || '';
+
+function renderHead() {
+  const p = getProfile(ctx.wallet.address);
+  $('av').textContent = p.avatar || '👤';
+  $('nm').value = p.name || '';
+}
+
+async function loadBalances() {
+  $('bal').textContent = fmtUsdc(await ctx.usdc.balanceOf(ctx.wallet.address));
+  $('eth').textContent = Number(ethers.formatEther(await ctx.provider.getBalance(ctx.wallet.address))).toFixed(4);
+}
+
+async function loadHistory() {
+  const logs = await ctx.escrow.queryFilter(ctx.escrow.filters.OrderCreated(null, ctx.wallet.address), ctx.cfg.fromBlock || 0);
+  const box = $('hist'); box.textContent = '';
+  let paid = 0n, usdc = 0n, n = 0;
+  for (const l of logs.slice().reverse()) {
+    const o = await ctx.escrow.orders(l.args.id);
+    const st = STATUS[Number(o.status)];
+    if (st === 'Released') { paid += o.inrPaise; usdc += o.amount; n++; }
+    const row = document.createElement('div'); row.className = 'row';
+    const left = document.createElement('div');
+    left.textContent = `#${l.args.id} · ${fmtInr(o.inrPaise)} · ${fmtUsdc(o.amount)} USDC `;
+    const pill = document.createElement('span'); pill.className = 'pill ' + st; pill.textContent = st; left.append(pill);
+    row.append(left);
+    if (st === 'Released') { const a = document.createElement('a'); a.href = `/receipt?id=${l.args.id}`; a.textContent = 'Receipt'; row.append(a); }
+    box.append(row);
+  }
+  if (!logs.length) box.textContent = 'No payments yet';
+  $('stats').textContent = `${n} completed · ${fmtInr(paid)} paid · ${fmtUsdc(usdc)} USDC spent`;
+}
+
+function renderSaved() {
+  const p = getProfile(ctx.wallet.address), box = $('saved');
+  const list = p.saved || [];
+  if (!list.length) return;
+  box.textContent = '';
+  list.forEach((m, i) => {
+    const row = document.createElement('div'); row.className = 'row';
+    const t = document.createElement('div'); t.textContent = `${m.label || m.name} · ${m.upi}`;
+    const x = document.createElement('button'); x.textContent = '✕'; x.style.padding = '4px 10px';
+    x.onclick = () => { setProfile(ctx.wallet.address, { saved: list.filter((_, j) => j !== i) }); location.reload(); };
+    row.append(t, x); box.append(row);
+  });
+}
+
+function renderSecurity() {
+  const box = $('secBox'); box.textContent = '';
+  const mk = (label, fn, cls = '') => { const b = document.createElement('button'); b.className = 'full ' + cls; b.textContent = label; b.onclick = async () => { $('secErr').textContent = ''; $('secOut').textContent = ''; try { await fn(); } catch (e) { $('secErr').textContent = e.message; } }; box.append(b); };
+  if (!vaultJson()) {
+    $('secInfo').textContent = 'This wallet is stored unencrypted from an older version. Protect it with a password.';
+    mk('Set a password', async () => {
+      const pw = ask('New password (min 8 chars):');
+      if (pw.length < 8) throw new Error('Password too short');
+      await saveVault(KEY, new ethers.Wallet(ctx.wallet.privateKey), pw);
+      location.reload();
+    });
+    return;
+  }
+  $('secInfo').textContent = 'Encrypted with your password on this device. The recovery phrase is the only backup; we cannot recover it.';
+  const decrypt = async () => {
+    try { return await ethers.Wallet.fromEncryptedJson(vaultJson(), ask('Enter your password:')); } catch { throw new Error('Wrong password'); }
+  };
+  mk('Show recovery phrase', async () => {
+    const w = await decrypt();
+    $('secOut').textContent = w.mnemonic ? w.mnemonic.phrase : 'No phrase: this wallet was imported from a private key.';
+  });
+  mk('Show private key', async () => { $('secOut').textContent = (await decrypt()).privateKey; }, 'alt');
+  mk('Change password', async () => {
+    const w = await decrypt();
+    const np = ask('New password (min 8 chars):');
+    if (np.length < 8) throw new Error('Password too short');
+    localStorage.setItem(vaultKey(KEY), await w.encrypt(np));
+    $('secOut').textContent = 'Password changed ✓';
+  }, 'alt');
+}
+
+(async () => {
+  ctx = await boot(KEY);
+  $('addr').textContent = ctx.wallet.address;
+  renderHead(); renderSaved(); renderSecurity();
+  $('nm').onchange = () => setProfile(ctx.wallet.address, { name: $('nm').value.trim() });
+  $('av').onclick = () => {
+    const p = getProfile(ctx.wallet.address);
+    setProfile(ctx.wallet.address, { avatar: AVATARS[(AVATARS.indexOf(p.avatar) + 1) % AVATARS.length] });
+    renderHead();
+  };
+  $('copy').onclick = () => navigator.clipboard.writeText(ctx.wallet.address).then(() => { $('copy').textContent = 'Copied ✓'; });
+  $('add').onclick = () => {
+    const upi = $('newUpi').value.trim();
+    if (!parseUpi(upi)) { $('addErr').textContent = 'Not a valid UPI id'; return; }
+    const p = getProfile(ctx.wallet.address);
+    const saved = (p.saved || []).filter((m) => m.upi !== upi);
+    setProfile(ctx.wallet.address, { saved: [{ upi, name: upi, label: $('newLabel').value.trim() }, ...saved] });
+    location.reload();
+  };
+  $('lock').onclick = () => logout(KEY);
+  $('wipe').onclick = () => {
+    if (!confirm('This deletes the wallet from this device. Without your recovery phrase the funds are lost. Continue?')) return;
+    localStorage.removeItem(vaultKey(KEY)); localStorage.removeItem(KEY); sessionStorage.removeItem(sessKey(KEY));
+    location.href = '/';
+  };
+  await loadBalances(); await loadHistory();
+  setInterval(() => loadBalances().catch(() => {}), 5000);
+})();
+</script>
+</body>
+</html>
