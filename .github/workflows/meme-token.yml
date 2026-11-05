@@ -8,6 +8,7 @@ on:
     paths:
       - "meme-token/site/**"
       - "meme-token/worker.js"
+      - "meme-token/quant-bot.js"
       - ".github/workflows/meme-token.yml"
 permissions:
   contents: write
