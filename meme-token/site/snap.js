@@ -57,7 +57,7 @@
   function openMenu(btn) {
     closeMenu();
     menu = document.createElement("div"); menu.id = "snapm";
-    menu.style.cssText = "position:fixed;z-index:150;min-width:230px;background:var(--bg,#10141b);color:var(--fg,#e6e9ef);border:1px solid var(--line,#2b3340);border-radius:12px;padding:8px;box-shadow:0 12px 40px rgba(0,0,0,.55);font-size:14px";
+    menu.style.cssText = "position:fixed;z-index:150;min-width:230px;background:var(--panel,#fff);color:var(--txt,#1e2330);border:1px solid var(--line,#2b3340);border-radius:12px;padding:8px;box-shadow:0 12px 40px rgba(0,0,0,.55);font-size:14px";
     menu.innerHTML = '<div style="font-size:11px;letter-spacing:.08em;opacity:.6;padding:6px 10px">CHART SNAPSHOT</div>' + ITEMS.map(([k, i, l]) => `<div data-a="${k}" style="display:flex;gap:12px;align-items:center;padding:9px 10px;border-radius:8px;cursor:pointer"><span style="width:18px;text-align:center">${i}</span>${l}</div>`).join("");
     document.body.appendChild(menu);
     const r = btn.getBoundingClientRect(), mw = menu.offsetWidth, mh = menu.offsetHeight;
@@ -91,7 +91,7 @@
   // floating camera button (every page)
   const fb = document.createElement("div");
   fb.id = "snapb"; fb.setAttribute("data-snap", "page"); fb.setAttribute("data-snap-ignore", ""); fb.title = "Chart snapshot";
-  fb.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:60;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;background:var(--bg,#10141b);border:1px solid var(--line,#2b3340);box-shadow:0 4px 16px rgba(0,0,0,.4)";
+  fb.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:60;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;background:var(--panel,#fff);color:var(--txt,#1e2330);border:1px solid var(--line,#2b3340);box-shadow:0 4px 16px rgba(0,0,0,.4)";
   fb.textContent = "📷";
   document.body.appendChild(fb);
 
