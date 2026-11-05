@@ -205,7 +205,7 @@
     host.innerHTML = `<svg id="qsvg" viewBox="0 0 ${CW} ${CH_}" style="width:100%;height:auto;display:block;cursor:crosshair;touch-action:none;user-select:none">${o}</svg>`;
   }
 
-  const tfBar = () => `<div class="qtb">${Object.keys(TF).map((k) => `<span class="chip${CH.tf === k ? " on" : ""}" data-tf="${k}">${k}</span>`).join("")}<span class="qsep"></span><span class="chip${CH.type === "c" ? " on" : ""}" data-ct="c">Candles</span><span class="chip${CH.type === "l" ? " on" : ""}" data-ct="l">Line</span><span class="chip${CH.ma ? " on" : ""}" data-ma="1">MA 20/50</span><span class="chip" data-fit="1">⤢ Fit trade</span><span class="st" style="margin-left:auto">scroll = zoom · drag = move · double-click = fit</span></div>`;
+  const tfBar = () => `<div class="qtb">${Object.keys(TF).map((k) => `<span class="chip${CH.tf === k ? " on" : ""}" data-qtf="${k}">${k}</span>`).join("")}<span class="qsep"></span><span class="chip${CH.type === "c" ? " on" : ""}" data-ct="c">Candles</span><span class="chip${CH.type === "l" ? " on" : ""}" data-ct="l">Line</span><span class="chip${CH.ma ? " on" : ""}" data-ma="1">MA 20/50</span><span class="chip" data-fit="1">⤢ Fit trade</span><span class="st" style="margin-left:auto">scroll = zoom · drag = move · double-click = fit</span></div>`;
 
   const renderModal = () => {
     const box = $("qmodal-b"); if (!box || !MO || !Q || CH.drag) return;
@@ -249,8 +249,8 @@
       document.body.appendChild(m);
       m.addEventListener("click", (e) => {
         if (e.target === m || e.target.id === "qclose") return closeModal();
-        const d = e.target.closest("[data-tf],[data-ct],[data-ma],[data-fit]"); if (!d) return;
-        if (d.dataset.tf) { CH.tf = d.dataset.tf; CH.fit = true; CH.off = 0; saveCH(); renderModal(); refresh(); return; }
+        const d = e.target.closest("[data-qtf],[data-ct],[data-ma],[data-fit]"); if (!d) return;
+        if (d.dataset.qtf) { CH.tf = d.dataset.qtf; CH.fit = true; CH.off = 0; saveCH(); renderModal(); refresh(); return; }
         if (d.dataset.ct) CH.type = d.dataset.ct; else if (d.dataset.ma) CH.ma = !CH.ma; else if (d.dataset.fit) CH.fit = true;
         saveCH(); renderModal();
       });
