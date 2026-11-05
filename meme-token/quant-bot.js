@@ -65,7 +65,7 @@ function close(st, t, px, reason, now) {
   st.equity += pnl;
   const day = new Date(now).toISOString().slice(0, 10);
   st.days[day] = (st.days[day] || 0) + pnl;
-  st.closed.unshift({ id: t.id, sym: t.sym, side: t.side, strat: t.strat, entry: t.entry, exit: px, pnl: +pnl.toFixed(2), r: +(pnl / t.risk).toFixed(2), reason, t0: t.t0, t1: now });
+  st.closed.unshift({ id: t.id, sym: t.sym, side: t.side, strat: t.strat, entry: t.entry, exit: px, sl: t.sl, tp: t.tp, pnl: +pnl.toFixed(2), r: +(pnl / t.risk).toFixed(2), reason, t0: t.t0, t1: now });
   st.closed = st.closed.slice(0, 300);
 }
 

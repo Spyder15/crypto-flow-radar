@@ -1,7 +1,7 @@
 // Quant tab (results of the paper quant bot) and Learn tab (lessons, calculators, interview-style questions).
 (() => {
   const SP = window.SP, X = SP && SP.x; if (!X || !SP.xr) return;
-  const { LS, kc, panel, fnum, lazy } = X;
+  const { LS, kc, panel, fnum, lazy, jget } = X;
   const R = SP.xr, L = SP.xl;
   const usd = (v) => (v == null || !isFinite(v) ? "-" : (v < 0 ? "-$" : "$") + fnum(Math.abs(v)));
   const sg = (v, d = 2) => (v == null || !isFinite(v) ? "-" : `<span class="${v >= 0 ? "up" : "dn"}">${v >= 0 ? "+" : "-"}${fnum(Math.abs(v), d)}</span>`);
@@ -14,13 +14,75 @@
     return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px;display:block"><polyline fill="none" stroke="${c}" stroke-width="1.6" vector-effect="non-scaling-stroke" points="${v.map((y, i) => `${(i / (v.length - 1) * w).toFixed(1)},${(h - 4 - (y - mn) / r * (h - 8)).toFixed(1)}`).join(" ")}"/></svg>`;
   };
 
+
+  // ---------------- live candles + trade charts ----------------
+  const KC = {}, GREEN = "#2fd27a", RED = "#ff4d4d";
+  async function fetchK(sym, iv, st, en) {
+    const bb = (r) => r.result.list.slice().reverse().map((x) => ({ t: +x[0], o: +x[1], h: +x[2], l: +x[3], c: +x[4] }));
+    try {
+      const r = await jget(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${sym}&interval=${iv}&start=${st}${en ? "&end=" + en : ""}&limit=1000`);
+      if (r.retCode !== 0) throw 0; return bb(r);
+    } catch {
+      const r = await jget(`https://fapi.binance.com/fapi/v1/klines?symbol=${sym}&interval=${iv === 60 ? "1h" : iv + "m"}&startTime=${st}${en ? "&endTime=" + en : ""}&limit=1000`);
+      return r.map((x) => ({ t: +x[0], o: +x[1], h: +x[2], l: +x[3], c: +x[4] }));
+    }
+  }
+  async function loadKs() {
+    if (!Q) return;
+    const jobs = [];
+    for (const t of Q.open) jobs.push(fetchK(t.sym, 15, t.t0 - 6 * 36e5).then((k) => { KC["o" + t.id] = k; }).catch(() => {}));
+    for (const t of Q.closed.slice(0, 6)) {
+      if (KC["c" + t.id]) continue;
+      const iv = t.t1 - t.t0 > 40 * 36e5 ? 60 : 15;
+      jobs.push(fetchK(t.sym, iv, t.t0 - 4 * 36e5, t.t1 + 4 * 36e5).then((k) => { KC["c" + t.id] = k; }).catch(() => {}));
+    }
+    await Promise.all(jobs); R.quant();
+  }
+  const chart = (k, t, ex) => {
+    if (!k || k.length < 2) return '<div class="st" style="padding:10px">chart loading…</div>';
+    const W = 600, H = 180, lv = [t.entry, t.sl, t.tp].filter(isFinite);
+    const hi = Math.max(...k.map((c) => c.h), ...lv), lo = Math.min(...k.map((c) => c.l), ...lv), pd = (hi - lo) * 0.06;
+    const y = (v) => H - 8 - (v - lo + pd) / (hi - lo + 2 * pd) * (H - 16), bw = W / k.length;
+    const xi = (ts) => { const i = k.findIndex((c) => c.t + (k[1].t - k[0].t) > ts); return (Math.max(i, 0) + 0.5) * bw; };
+    const ln = (v, col, lab) => isFinite(v) ? `<line x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="${col}" stroke-dasharray="5 4" stroke-width="1"/><text x="${W - 4}" y="${y(v) - 3}" text-anchor="end" fill="${col}" font-size="11">${lab} ${fnum(v)}</text>` : "";
+    const zone = (a, b, col) => isFinite(b) ? `<rect x="0" width="${W}" y="${Math.min(y(a), y(b))}" height="${Math.abs(y(a) - y(b))}" fill="${col}" opacity=".08"/>` : "";
+    const cs = k.map((c, i) => { const x = (i + 0.5) * bw, col = c.c >= c.o ? GREEN : RED; return `<line x1="${x}" x2="${x}" y1="${y(c.h)}" y2="${y(c.l)}" stroke="${col}"/><rect x="${x - Math.max(bw * 0.3, 0.8)}" width="${Math.max(bw * 0.6, 1.6)}" y="${Math.min(y(c.o), y(c.c))}" height="${Math.max(Math.abs(y(c.o) - y(c.c)), 1)}" fill="${col}"/>`; }).join("");
+    const ex_ = ex ? `<circle cx="${xi(ex.t)}" cy="${y(ex.px)}" r="5" fill="${ex.col}" stroke="#fff" stroke-width="1.5"/><text x="${Math.min(xi(ex.t), W - 60)}" y="${Math.max(y(ex.px) - 9, 11)}" fill="${ex.col}" font-size="11" font-weight="700">${ex.lab}</text>` : "";
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${zone(t.entry, t.tp, GREEN)}${zone(t.entry, t.sl, RED)}${cs}${ln(t.tp, GREEN, "TP")}${ln(t.sl, RED, "SL")}${ln(t.entry, "#9aa4b2", "ENTRY")}<line x1="${xi(t.t0)}" x2="${xi(t.t0)}" y1="0" y2="${H}" stroke="#9aa4b2" stroke-dasharray="2 3"/>${ex_}</svg>`;
+  };
+  const touched = (k, t) => {
+    for (const c of k || []) {
+      if (c.t + 9e5 <= t.t0) continue;
+      if (t.side === "long" ? c.l <= t.sl : c.h >= t.sl) return "SL";
+      if (t.side === "long" ? c.h >= t.tp : c.l <= t.tp) return "TP";
+    }
+    return "";
+  };
+  const openCard = (t) => {
+    const k = KC["o" + t.id], live = k && k.length ? k[k.length - 1].c : null, dir = t.side === "long" ? 1 : -1;
+    const hit = touched(k, t);
+    let head = '<span class="st">waiting for live price…</span>', bar = "";
+    if (live != null) {
+      const pnl = dir * (live - t.entry) * t.qty - t.qty * (t.entry + live) * (Q.cfg.fee || 0.0011) / 2, r = pnl / t.risk;
+      const pos = Math.max(0, Math.min(100, (live - t.sl) / (t.tp - t.sl) * 100));
+      head = `<span class="${pnl >= 0 ? "up" : "dn"}" style="font-size:18px;font-weight:700">${pnl >= 0 ? "🟢 PROFIT" : "🔴 LOSS"} ${pnl >= 0 ? "+" : "-"}$${Math.abs(pnl).toFixed(2)} (${r >= 0 ? "+" : ""}${r.toFixed(2)}R)</span> <span class="st">live ${fnum(live)}</span>`;
+      bar = `<div style="position:relative;height:8px;border-radius:4px;background:linear-gradient(90deg,${RED},#555 ${((t.entry - t.sl) / (t.tp - t.sl) * 100).toFixed(1)}%,${GREEN});margin:8px 0 2px"><span style="position:absolute;left:${pos}%;top:-4px;width:4px;height:16px;background:#fff;border:1px solid #000"></span></div><div class="st" style="display:flex;justify-content:space-between"><span>SL ${fnum(t.sl)}</span><span>TP ${fnum(t.tp)}</span></div>`;
+    }
+    const warn = hit ? `<div class="${hit === "TP" ? "up" : "dn"}" style="font-weight:700;margin:4px 0">${hit === "TP" ? "✅ TAKE PROFIT touched" : "❌ STOP LOSS touched"}, the bot books it at its next run (up to 30 min)</div>` : "";
+    return `<div class="lsn"><div><b>${esc(t.sym.replace("USDT", ""))}</b> <b class="${t.side === "long" ? "up" : "dn"}">${t.side.toUpperCase()}</b> <span class="st">${NAME[t.strat]} · ${ago(t.t0)} ago · ${esc(t.why)}</span></div><div>${head}</div>${warn}${bar}${chart(k, t, null)}</div>`;
+  };
+  const closedCard = (t) => {
+    const win = t.pnl > 0, lab = t.reason === "TP" ? "✅ TAKE PROFIT HIT" : t.reason === "SL" ? "❌ STOP LOSS HIT" : "⏱ TIME EXIT";
+    return `<div class="lsn"><div><b>${esc(t.sym.replace("USDT", ""))}</b> <b class="${t.side === "long" ? "up" : "dn"}">${t.side.toUpperCase()}</b> <span class="st">${NAME[t.strat]} · closed ${ago(t.t1)} ago</span></div><div class="${win ? "up" : "dn"}" style="font-size:16px;font-weight:700">${lab}: ${win ? "+" : "-"}$${Math.abs(t.pnl).toFixed(2)} (${t.r >= 0 ? "+" : ""}${t.r}R)</div>${chart(KC["c" + t.id], t, { px: t.exit, t: t.t1, col: win ? GREEN : RED, lab: t.reason })}</div>`;
+  };
+
   // ---------------- Quant (bot results) ----------------
   let Q = null, qErr = "";
   const loadQ = async () => {
     try { const r = await fetch("/quant.json?t=" + Math.floor(Date.now() / 6e4)); if (!r.ok) throw 0; Q = await r.json(); qErr = ""; } catch { qErr = "Quant bot data is not available yet."; }
-    R.quant();
+    R.quant(); loadKs();
   };
-  L.quant = () => lazy("quant", loadQ, 6e4);
+  L.quant = () => { lazy("quant", loadQ, 6e4); lazy("quantk", loadKs, 15e3); };
   const stats = (rows) => {
     const n = rows.length, w = rows.filter((t) => t.pnl > 0), l = rows.filter((t) => t.pnl <= 0);
     const gw = w.reduce((s, t) => s + t.pnl, 0), gl = -l.reduce((s, t) => s + t.pnl, 0);
@@ -32,14 +94,15 @@
     const c = Q.cfg, eq = Q.curve.length ? Q.curve[Q.curve.length - 1][1] : Q.equity, st = stats(Q.closed);
     const dd = (() => { let pk = c.start, m = 0; for (const [, v] of Q.curve) { pk = Math.max(pk, v); m = Math.min(m, (v / pk - 1) * 100); } return m; })();
     const byS = Object.keys(NAME).map((k) => { const s = stats(Q.closed.filter((t) => t.strat === k)); return `<tr><td><b>${NAME[k]}</b></td><td>${s.n}</td><td>${s.win == null ? "-" : s.win.toFixed(0) + "%"}</td><td>${s.pf == null ? "-" : s.pf === Infinity ? "∞" : s.pf.toFixed(2)}</td><td>${s.exp == null ? "-" : sg(s.exp)}R</td><td>${sg(s.pnl)}</td></tr>`; }).join("");
-    const open = Q.open.length ? `<div class="tw"><table><thead><tr><th>Coin</th><th>Side</th><th>Strategy</th><th>Entry</th><th>SL</th><th>TP</th><th>Why</th><th>Age</th></tr></thead><tbody>${Q.open.map((t) => `<tr><td><b>${esc(t.sym.replace("USDT", ""))}</b></td><td class="${t.side === "long" ? "up" : "dn"}"><b>${t.side.toUpperCase()}</b></td><td>${NAME[t.strat]}</td><td>${fnum(t.entry)}</td><td>${fnum(t.sl)}</td><td>${fnum(t.tp)}</td><td class="st">${esc(t.why)}</td><td>${ago(t.t0)}</td></tr>`).join("")}</tbody></table></div>` : '<div class="st" style="padding:10px">No open trades. The bot waits for a clean setup.</div>';
+    const open = Q.open.length ? Q.open.map(openCard).join("") : '<div class="st" style="padding:10px">No open trades. The bot waits for a clean setup.</div>';
     const hist = Q.closed.length ? `<div class="tw"><table><thead><tr><th>Coin</th><th>Side</th><th>Strategy</th><th>Entry</th><th>Exit</th><th>Result</th><th>PnL</th><th>R</th><th>Closed</th></tr></thead><tbody>${Q.closed.slice(0, 30).map((t) => `<tr><td><b>${esc(t.sym.replace("USDT", ""))}</b></td><td class="${t.side === "long" ? "up" : "dn"}">${t.side.toUpperCase()}</td><td>${NAME[t.strat]}</td><td>${fnum(t.entry)}</td><td>${fnum(t.exit)}</td><td>${esc(t.reason)}</td><td>${sg(t.pnl)}</td><td>${sg(t.r)}</td><td>${ago(t.t1)} ago</td></tr>`).join("")}</tbody></table></div>` : '<div class="st" style="padding:10px">No closed trades yet.</div>';
-    el.innerHTML = panel("Quant bot", `paper account · ${usd(c.start)} start · risk ${c.riskPct}% per trade · updated ${ago(Q.upd)} ago`,
+    el.innerHTML = '<style>.lsn{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}</style>' + panel("Quant bot", `paper account · ${usd(c.start)} start · risk ${c.riskPct}% per trade · updated ${ago(Q.upd)} ago`,
       `<div class="mk7">${kc("Equity", usd(eq), sg((eq / c.start - 1) * 100) + "% vs start", eq >= c.start ? "up" : "dn")}${kc("Max drawdown", dd.toFixed(2) + "%", "on the equity curve", dd < -5 ? "dn" : "")}${kc("Win rate", st.win == null ? "-" : st.win.toFixed(0) + "%", st.n + " closed trades")}${kc("Profit factor", st.pf == null ? "-" : st.pf === Infinity ? "∞" : st.pf.toFixed(2), "gross win ÷ gross loss")}${kc("Expectancy", st.exp == null ? "-" : st.exp.toFixed(2) + "R", "avg result per trade")}${kc("Status", Q.halted ? "HALTED" : "RUNNING", Q.halted || "open " + Q.open.length + " / " + c.maxOpen, Q.halted ? "dn" : "up")}</div>` +
       `<div class="wh2" style="margin-top:12px">Equity curve</div>${line(Q.curve.map((p) => p[1]))}` +
       '<div class="mlegend">Fake money on Bybit public prices. Fees 0.11% round trip and 0.05% slippage are counted. Stops are checked on 15-minute candles, and if stop and target touch in one candle the stop wins (pessimistic). A few days of results prove nothing, so wait for 50+ trades before trusting any number.</div>') +
       panel("By strategy", "momentum breakout · RSI + Bollinger mean reversion (ranging markets only) · funding fade", `<div class="tw"><table><thead><tr><th>Strategy</th><th>Trades</th><th>Win</th><th>Profit factor</th><th>Expectancy</th><th>PnL</th></tr></thead><tbody>${byS}</tbody></table></div>`, "margin-top:12px") +
-      panel("Open trades", "top 20 Bybit perps by volume, 1h candles, max " + c.maxOpen + " at once", open, "margin-top:12px") +
+      panel("Live trades", "real-time profit / loss on 15m candles, refreshed every 15s · green zone = target, red zone = stop", open, "margin-top:12px") +
+      (Q.closed.length ? panel("Latest results", "chart of how each trade ended: SL or TP hit", Q.closed.slice(0, 6).map(closedCard).join(""), "margin-top:12px") : "") +
       panel("Closed trades", "last 30", hist, "margin-top:12px");
   };
 
