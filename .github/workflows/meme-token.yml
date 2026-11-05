@@ -27,6 +27,7 @@ jobs:
       - run: node whale-buys.js
       - run: node hl-snapshot.js
       - run: node quant-bot.js
+        continue-on-error: true
       - name: Deploy website
         run: npx --yes wrangler@4 deploy
         env:
