@@ -1,0 +1,16 @@
+name: Bybit check
+on:
+  push:
+    paths:
+      - ".github/workflows/bybit-check.yml"
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          P="/v5/market/kline?category=linear&symbol=BTCUSDT&interval=60&limit=2"
+          for u in https://meme-trench.spyder-radar.workers.dev/api/bybit https://api.bybit.com https://api.bytick.com https://api.bybit.nl https://api.bybit.kz https://api.byhkbit.com; do
+            echo "== $u"; curl -s -D - -o /tmp/b "$u$P" | grep -iE "^HTTP|cf-ray|x-cache|server" ; head -c 120 /tmp/b; echo
+          done
+          echo "== okx"; curl -s -o /dev/null -w "%{http_code}\n" "https://www.okx.com/api/v5/public/instruments?instType=SWAP"
