@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 
 const FILE = new URL("./site/quant.json", import.meta.url);
 const CFG = { start: 1000, riskPct: 0.5, maxOpen: 10, maxSide: 6, maxLev: 5, fee: 0.0011, slip: 0.0005, dayStopPct: 3, topN: 40, fundTh: 0.05 };
-const HOSTS = ["https://meme-trench.spyder-radar.workers.dev/api/bybit", "https://api.bybit.com", "https://api.bytick.com", "https://api.bybitglobal.com"];
+const HOSTS = ["https://bybit-proxy.spyder-radar.workers.dev", "https://api.bybit.com", "https://api.bytick.com", "https://api.bybitglobal.com"];
 // Backtest (quant-backtest.mjs): gold/silver/oil/forex/index perps lose with these crypto-tuned strategies (PF 0.1-0.6), so they are off.
 // Add symbols like "XAUUSDT" here to always scan them again.
 const MACRO = [];

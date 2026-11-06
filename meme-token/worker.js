@@ -22,7 +22,6 @@ export default {
       if (!env.PUSH_RUN_KEY || req.headers.get("x-run-key") !== env.PUSH_RUN_KEY) return new Response("{}", { status: 403 });
       await checkRules(env, u.origin); return new Response('{"ok":1}');
     }
-    if (u.pathname.startsWith("/api/bybit/")) return bybitProxy(u);
     if (u.pathname === "/api/mq") {
       const body = (await env.PUSH.get("mq")) || "{}";
       return new Response(body, { headers: { "content-type": "application/json", "cache-control": "public, max-age=20" } });
@@ -169,17 +168,4 @@ async function liqHist(req, env) {
   const b = [...map.values()].filter((x) => x.t > now - KEEP * BUCKET).sort((a, z) => a.t - z.t);
   await env.PUSH.put("liqh", JSON.stringify({ at: now, b }));
   return new Response('{"ok":1}', { headers: J });
-}
-
-// Read-only Bybit market data proxy: GitHub Actions IPs get 403 from Bybit, Cloudflare edge does not.
-async function bybitProxy(u) {
-  const path = u.pathname.slice("/api/bybit".length);
-  if (!/^\/v5\/market\/(tickers|kline)$/.test(path)) return new Response("{}", { status: 404 });
-  for (const h of ["https://api.bybit.com", "https://api.bytick.com", "https://api.bybitglobal.com", "https://api.bybit.nl"]) {
-    try {
-      const r = await fetch(h + path + u.search, { headers: { "user-agent": "Mozilla/5.0", accept: "application/json" } });
-      if (r.ok) return new Response(await r.text(), { headers: { "content-type": "application/json", "cache-control": "public, max-age=15" } });
-    } catch { /* try next host */ }
-  }
-  return new Response("{}", { status: 502 });
 }
