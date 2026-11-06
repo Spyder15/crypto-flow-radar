@@ -23,13 +23,16 @@ export default {
       await checkRules(env, u.origin); return new Response('{"ok":1}');
     }
     if (u.pathname === "/api/mq") {
-      const body = (await env.PUSH.get("mq")) || "{}";
-      return new Response(body, { headers: { "content-type": "application/json", "cache-control": "public, max-age=20" } });
+      // edge-cache the KV read so many visitors cost one KV read per minute
+      const cache = caches.default, key = new Request(u.origin + "/api/mq?edge"), hit = await cache.match(key);
+      if (hit) return hit;
+      const res = new Response((await env.PUSH.get("mq")) || "{}", { headers: { "content-type": "application/json", "cache-control": "public, max-age=60" } });
+      await cache.put(key, res.clone()); return res;
     }
     if (u.pathname === "/api/mq/put" && req.method === "POST") {
       if (!env.PUSH_RUN_KEY || req.headers.get("x-run-key") !== env.PUSH_RUN_KEY) return new Response("{}", { status: 403 });
       const body = await req.text(); if (body.length > 900000) return new Response("{}", { status: 413 });
-      await env.PUSH.put("mq", body); return new Response('{"ok":1}');
+      await env.PUSH.put("mq", body); await caches.default.delete(new Request(u.origin + "/api/mq?edge")); return new Response('{"ok":1}');
     }
     if (u.pathname === "/api/liqhist") return liqHist(req, env);
     if (u.pathname.startsWith("/api/push/")) return pushApi(req, env, u.pathname);
@@ -149,14 +152,16 @@ async function macro(origin) {
 }
 
 
-// Liquidation history: browsers upload completed 5-minute buckets; one KV write per 5 min at most (free tier limit is ~1000 writes/day).
-const BUCKET = 3e5, KEEP = 288;
+// Liquidation history: browsers upload completed 5-minute buckets in batches; one KV write per 15 min at most (free tier limit is ~1000 writes/day).
+const BUCKET = 3e5, KEEP = 288, WRITE_GAP = 9e5;
 async function liqHist(req, env) {
   if (!env.PUSH) return new Response('{"b":[]}', { headers: J });
+  const cache = caches.default, ck = new Request(new URL(req.url).origin + "/api/liqhist?edge");
+  if (req.method !== "POST") { const hit = await cache.match(ck); if (hit) return hit; }
   const raw = await env.PUSH.get("liqh"), cur = raw ? JSON.parse(raw) : { at: 0, b: [] };
-  if (req.method !== "POST") return new Response(JSON.stringify({ b: cur.b }), { headers: { ...J, "cache-control": "public, max-age=30" } });
+  if (req.method !== "POST") { const res = new Response(JSON.stringify({ b: cur.b }), { headers: { ...J, "cache-control": "public, max-age=120" } }); await cache.put(ck, res.clone()); return res; }
   let body; try { body = await req.json(); } catch (e) { return new Response("{}", { status: 400, headers: J }); }
-  const now = Date.now(); if (now - cur.at < BUCKET - 5e3) return new Response('{"ok":0}', { headers: J });
+  const now = Date.now(); if (now - cur.at < WRITE_GAP - 5e3) return new Response('{"ok":0}', { headers: J });
   const num = (v) => (isFinite(v) && v >= 0 ? Math.min(Math.round(v), 1e10) : 0), map = new Map(cur.b.map((x) => [x.t, x]));
   for (const x of (Array.isArray(body.b) ? body.b : []).slice(0, 24)) {
     const t = Math.floor(+x.t / BUCKET) * BUCKET; if (!(t > now - KEEP * BUCKET) || t > now - BUCKET) continue;
@@ -166,6 +171,6 @@ async function liqHist(req, env) {
     else { o.l = Math.max(o.l, n.l); o.s = Math.max(o.s, n.s); for (const k in c) { const p = o.c[k] || [0, 0]; o.c[k] = [Math.max(p[0], c[k][0]), Math.max(p[1], c[k][1])]; } }
   }
   const b = [...map.values()].filter((x) => x.t > now - KEEP * BUCKET).sort((a, z) => a.t - z.t);
-  await env.PUSH.put("liqh", JSON.stringify({ at: now, b }));
+  await env.PUSH.put("liqh", JSON.stringify({ at: now, b })); await cache.delete(ck);
   return new Response('{"ok":1}', { headers: J });
 }

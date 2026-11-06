@@ -177,7 +177,7 @@ for (const k of Object.keys(S.sec)) if (now - S.sec[k].at > 24 * 36e5) delete S.
 S.closed = S.closed.slice(0, 300);
 S.curve.push([now, +equity().toFixed(2)]); S.curve = S.curve.slice(-1200);
 S.equity = +equity().toFixed(2);
-// KV free tier = 1000 writes/day: write on trade changes, otherwise at most every 15 min
-const changed = fp(S) !== S._fp || !S.upd || now - S.upd >= 15 * 6e4;
+// KV free tier = 1000 writes/day: write on trade changes, otherwise at most every 30 min
+const changed = fp(S) !== S._fp || !S.upd || now - S.upd >= 30 * 6e4;
 if (changed) { S.upd = now; delete S._fp; await save(S); } else console.log("no change, KV write skipped");
 console.log(`equity ${S.equity} cash ${S.cash.toFixed(2)} open ${S.open.length} closed ${S.closed.length}`);

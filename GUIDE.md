@@ -397,7 +397,7 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 - Free limits: Cloudflare KV 1000 writes/day (Meme Quant ~288/day), 5 crons, 50 subrequests; GeckoTerminal ~30/min; GitHub Actions minutes.
 - Snapshot "Post to X" image attach nahi karta (X ki limit).
 - Quant bot me funding accrual nahi.
-- Meme Quant KV write sirf trade change par, warna max 15 min me ek (KV 1000 writes/day bachane ke liye). Site me 'updated' 15 min tak purana dikh sakta hai.
+- Meme Quant KV write sirf trade change par, warna max 30 min me ek (KV 1000 writes/day bachane ke liye). Site me 'updated' 30 min tak purana dikh sakta hai.
 
 ### 24.1 Recent incidents (2026-11-05)
 - **Meme quant bot first run failed** (commit `52a3994`): KV write path fixed in `6827320` (run-key endpoint `POST /api/mq/put`). Runs #2-#4 passed.
@@ -410,3 +410,4 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 - **Auto-disable**: strategy ke last 30 closed me (min 20) PF < 0.8 ho to naye trades band (`off` in quant.json).
 - **Backtest**: `cd meme-token && node quant-backtest.mjs 4000 30` (real signal logic, 1h, fees+slippage). Result (~5 mahine, 30+ symbols): crypto lagbhag breakeven (PF ~0.9-1.3, SOL/UNI/WLD positive), **gold/silver/oil/forex/index me PF 0.1-0.6 (loss)**, isliye `MACRO` list khaali hai. Overall strategy abhi profitable proven nahi.
 - Real trading abhi off, paper only.
+- **KV round 2 (2026-11-06)**: `/api/mq` aur `/api/liqhist` GET ab edge-cache (1-2 min) hote hain, to visitors KV reads nahi badhate. `liqhist` write max 15 min me ek (batch upload), Meme Quant heartbeat write 30 min. Writes ab lagbhag ~50 (mq) + ~96 (liqh) /din + push/trade changes.
