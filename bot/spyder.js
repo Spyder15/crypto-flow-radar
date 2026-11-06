@@ -4,7 +4,7 @@ import { klines, klines15 } from "./data.js";
 import { renderChart } from "./chart.js";
 import { spyderSignal, evaluate } from "./spyder-strategy.js";
 
-const HOUR = 36e5, RR = 2, MAX_DAY = 8, MAX_OPEN = 12;
+const HOUR = 36e5, RR = 1, MAX_DAY = 8, MAX_OPEN = 12;
 const fmt = (x) => (x >= 100 ? x.toFixed(2) : x >= 1 ? x.toFixed(3) : x >= 0.01 ? x.toFixed(5) : x.toPrecision(4));
 const R = (x) => (x > 0 ? "+" : "") + x.toFixed(1) + "R";
 const FOOT = "<i>🧪 Experimental Spyder strategy. Paper-tracked, backtest was negative after fees. Not financial advice.</i>";

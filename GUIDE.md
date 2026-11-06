@@ -303,7 +303,7 @@ Market Flow me sub-tabs: Overview | Derivatives | Movers | Chains & ETF | Watchl
 | Part | Kya karta hai | Kahan chalta hai | Deploy |
 |---|---|---|---|
 | Bot 1 (`wrangler.jsonc`) | Main strategy (CHoCH/BOS) + Spyder, crypto, Telegram signals, live.html | Cloudflare PURANA account, `crypto-flow-radar.live-scanner.workers.dev` | `npx wrangler deploy` (purane account login) |
-| Bot 2 (`wrangler.markets.jsonc`) | Sirf Spyder, 24 markets symbols (gold, forex, stocks), RR 1:2, charts | Cloudflare NAYA account (syndicatecrypto1), `spyder-radar.workers.dev` | `npx wrangler deploy -c wrangler.markets.jsonc` |
+| Bot 2 (`wrangler.markets.jsonc`) | Sirf Spyder, 24 markets symbols (gold, forex, stocks), RR 1:1, charts | Cloudflare NAYA account (syndicatecrypto1), `spyder-radar.workers.dev` | `npx wrangler deploy -c wrangler.markets.jsonc` |
 | `paper-bot/` | Bybit paper trading ($100, 1% risk, 3% DD halt) | GitHub Actions har 15 min (`paper-bot.yml`), state `paper-bot/state.json` | auto |
 | `meme-token/` | SPYDER TRENCH website | GitHub Actions snapshot + Cloudflare worker `meme-trench` (naya account) + browser live scan | auto / `npx wrangler deploy` |
 
