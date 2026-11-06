@@ -27,7 +27,7 @@ const KEY = process.env.PUSH_RUN_KEY;
 async function load() {
   if (KEY && !LOCAL) {
     // a failed read must abort, otherwise the bot would reset to a fresh $1000 and overwrite saved state
-    const r = await fetch(`${SITE}/api/mq?t=${Date.now()}`, { headers: { "cache-control": "no-cache" } });
+    const r = await fetch(`${SITE}/api/mq?fresh=1&t=${Date.now()}`, { headers: { "cache-control": "no-cache" } });
     if (!r.ok) throw new Error("state load failed " + r.status);
     const j = await r.json(); return j.cfg ? j : null;
   }

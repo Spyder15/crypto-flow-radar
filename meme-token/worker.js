@@ -24,10 +24,12 @@ export default {
     }
     if (u.pathname === "/api/mq") {
       // edge-cache the KV read so many visitors cost one KV read per minute
-      const cache = caches.default, key = new Request(u.origin + "/api/mq?edge"), hit = await cache.match(key);
+      // the bot reads with ?fresh=1 (never cached) so it can never save over a stale copy; max staleness for the site is 20s
+      const fresh = u.searchParams.has("fresh"), cache = caches.default, key = new Request(u.origin + "/api/mq?edge"), hit = fresh ? null : await cache.match(key);
       if (hit) return hit;
-      const res = new Response((await env.PUSH.get("mq")) || "{}", { headers: { "content-type": "application/json", "cache-control": "public, max-age=60" } });
-      await cache.put(key, res.clone()); return res;
+      const res = new Response((await env.PUSH.get("mq")) || "{}", { headers: { "content-type": "application/json", "cache-control": fresh ? "no-store" : "public, max-age=20" } });
+      if (!fresh) await cache.put(key, res.clone());
+      return res;
     }
     if (u.pathname === "/api/mq/put" && req.method === "POST") {
       if (!env.PUSH_RUN_KEY || req.headers.get("x-run-key") !== env.PUSH_RUN_KEY) return new Response("{}", { status: 403 });
