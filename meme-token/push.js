@@ -44,6 +44,7 @@ export async function sendPush(sub, payload, env) {
 
 const sid = async (endpoint) => b64u(await crypto.subtle.digest("SHA-256", enc.encode(endpoint)));
 const J = { "content-type": "application/json" };
+const PUSHHOST = /^https:\/\/([\w-]+\.)*(googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)\//;
 const HOOK = /^https:\/\/(discord(app)?\.com\/api\/webhooks\/\d+\/[\w-]+|hooks\.slack\.com\/services\/[\w/]+)$/;
 const METRICS = ["price", "chg24", "fund", "rsi", "vsma"];
 // Keep an index of subscriber ids so the checker only needs KV reads (the free tier allows few list/write ops per day).
@@ -63,7 +64,7 @@ export async function pushApi(req, env, path) {
     return new Response('{"ok":1}', { headers: J });
   }
   const s = b.sub, hook = typeof b.hook === "string" && HOOK.test(b.hook) ? b.hook : null, cid = typeof b.cid === "string" ? b.cid.slice(0, 40) : "";
-  const hasSub = s?.endpoint?.startsWith("https://") && s.keys?.p256dh && s.keys?.auth;
+  const hasSub = s?.endpoint?.length < 600 && PUSHHOST.test(s.endpoint) && s.keys?.p256dh && s.keys?.auth;
   if (!hasSub && !(hook && cid)) return new Response("{}", { status: 400, headers: J });
   const rules = (Array.isArray(b.rules) ? b.rules : []).slice(0, 20).filter((r) => r && typeof r.s === "string" && METRICS.includes(r.m) && [">", "<"].includes(r.op) && isFinite(r.v)).map((r) => ({ id: r.id, s: r.s.slice(0, 12), m: r.m, op: r.op, v: +r.v, once: !!r.once }));
   const id = await sid(hasSub ? s.endpoint : "hook:" + cid), old = JSON.parse((await env.PUSH.get(id)) || "{}");

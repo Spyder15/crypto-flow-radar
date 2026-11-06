@@ -162,6 +162,7 @@ async function liqHist(req, env) {
   if (req.method !== "POST") { const hit = await cache.match(ck); if (hit) return hit; }
   const raw = await env.PUSH.get("liqh"), cur = raw ? JSON.parse(raw) : { at: 0, b: [] };
   if (req.method !== "POST") { const res = new Response(JSON.stringify({ b: cur.b }), { headers: { ...J, "cache-control": "public, max-age=120" } }); await cache.put(ck, res.clone()); return res; }
+  const org = req.headers.get("origin"); if (org && org !== new URL(req.url).origin) return new Response("{}", { status: 403, headers: J });
   let body; try { body = await req.json(); } catch (e) { return new Response("{}", { status: 400, headers: J }); }
   const now = Date.now(); if (now - cur.at < WRITE_GAP - 5e3) return new Response('{"ok":0}', { headers: J });
   const num = (v) => (isFinite(v) && v >= 0 ? Math.min(Math.round(v), 1e10) : 0), map = new Map(cur.b.map((x) => [x.t, x]));
