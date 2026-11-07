@@ -110,11 +110,11 @@ export async function track(env, notify) {
     try { cs = await klines15(t.sym, Math.max(t.t0, (t.cursor || 0) + 1)); } catch (e) { errors.push(e.message); continue; }
     cs = cs.filter((c) => c.t >= t.t0 && c.t > (t.cursor || 0) && c.t + 15 * 60e3 <= now);
     if (!cs.length) continue;
-    const events = evaluate(t, cs);
+    const was = t.cursor || 0, events = evaluate(t, cs);
     for (const [i, ev] of events.entries()) {
       try { calls += 2; t.msg = (await notify(t, ev, trackInfo(t, events, i))) || t.msg; } catch (e) { errors.push("notify " + e.message); (t.pending = t.pending || []).push(ev); }
     }
-    if (t.closed) { await recordClosed(env, t); if (t.pending?.length) await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 }); else await env.TRADES.delete(key); } else await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 });
+    if (t.closed) { await recordClosed(env, t); if (t.pending?.length) await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 }); else await env.TRADES.delete(key); } else if (events.length || t.cursor - was >= 6 * 36e5) await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 }); // evaluate is idempotent: only persist on events or every ~6h (KV writes)
     if (events.length) done.push(`${t.sym} ${events.map((e) => e.type).join(",")}`);
   }
   // KV free tier: ~1000 writes/day. Healthy runs refresh the heartbeat at most every 25 min (watchdog threshold is 45).

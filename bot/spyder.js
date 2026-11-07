@@ -49,14 +49,14 @@ export async function spyderTrack(env, send, maxCalls = 20) {
     let cs; try { calls++; cs = await klines15(t.sym, Math.max(t.t0, (t.cursor || 0) + 1)); } catch (e) { errors.push(e.message); continue; }
     cs = cs.filter((c) => c.t >= t.t0 && c.t > (t.cursor || 0) && c.t + 15 * 60e3 <= now);
     if (!cs.length) continue;
-    const ev = evaluate(t, cs);
+    const was = t.cursor || 0, ev = evaluate(t, cs);
     if (ev) {
       try {
         let chart = null;
         try { calls += 2; const k = await klines(t.sym, "1h"), d = k.slice(0, -1).map((x) => ({ t: +x[0], o: +x[1], h: +x[2], l: +x[3], c: +x[4] })); chart = await chartFor(d, t, { title: ev.type === "TP" ? "TARGET HIT" : "STOP LOSS HIT", tpHit: 0, slCur: null, marks: [{ t: t.cursor, y: ev.price, text: ev.type === "TP" ? "✔ TARGET" : "✖ SL" }] }); } catch (e) { /* text only */ }
         calls++; await send(eventText(t, ev), t.msg, chart);
       } catch (e) { errors.push("notify " + e.message); continue; } }
-    calls++; if (t.closed) { await record(env, t); await env.TRADES.delete(name); calls += 2; done.push(`${t.sym} ${t.outcome}`); } else await env.TRADES.put(name, JSON.stringify(t), { expirationTtl: 20 * 86400 });
+    calls++; if (t.closed) { await record(env, t); await env.TRADES.delete(name); calls += 2; done.push(`${t.sym} ${t.outcome}`); } else if (ev || t.cursor - was >= 6 * 36e5) await env.TRADES.put(name, JSON.stringify(t), { expirationTtl: 20 * 86400 }); // only persist on events or every ~6h (KV writes)
   }
   console.log("spyder track", JSON.stringify({ done, errors }));
   return { done, errors: errors.slice(0, 5) };
