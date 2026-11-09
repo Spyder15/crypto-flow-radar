@@ -1,155 +1,155 @@
 {
- "updated": "2026-11-08T03:08:02.070Z",
+ "updated": "2026-11-09T03:08:15.943Z",
  "wallets": [
   {
    "a": "0x5b5d51203a0f9079f8aeb098a6523a13f298c060",
    "name": null,
-   "month": 84631797,
-   "all": 232478175
+   "month": 103880561,
+   "all": 247950514
   },
   {
    "a": "0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00",
    "name": null,
-   "month": 19139054,
-   "all": 222882941
+   "month": 21761947,
+   "all": 224382804
   },
   {
    "a": "0xb83de012dba672c76a7dbbbf3e459cb59d7d6e36",
    "name": null,
-   "month": 67323309,
-   "all": 175866292
+   "month": 82610163,
+   "all": 184538054
   },
   {
    "a": "0x7fdafde5cfb5465924316eced2d3715494c517d1",
    "name": "BobbyBigSize",
-   "month": 23706525,
-   "all": 162620561
+   "month": 27065668,
+   "all": 164423688
   },
   {
    "a": "0x880ac484a1743862989a441d6d867238c7aa311c",
    "name": "x.com/SilkBtc",
-   "month": 2259109,
-   "all": 121422604
+   "month": 2969632,
+   "all": 121673026
   },
   {
    "a": "0x45d26f28196d226497130c4bac709d808fed4029",
    "name": null,
-   "month": 17848768,
-   "all": 72893584
+   "month": 21855935,
+   "all": 76228811
   },
   {
    "a": "0xd47587702a91731dc1089b5db0932cf820151a91",
    "name": null,
-   "month": 7895402,
-   "all": 72411214
+   "month": 8813055,
+   "all": 72947279
+  },
+  {
+   "a": "0x7dacca323e44f168494c779bb5e7483c468ef410",
+   "name": null,
+   "month": 671081,
+   "all": 62724983
   },
   {
    "a": "0x023a3d058020fb76cca98f01b3c48c8938a22355",
    "name": "Auros",
-   "month": 5686951,
-   "all": 58123976
+   "month": 6314467,
+   "all": 58687366
   },
   {
    "a": "0x939f95036d2e7b6d7419ec072bf9d967352204d2",
    "name": null,
-   "month": 2063303,
-   "all": 51283744
+   "month": 2144662,
+   "all": 51318847
   },
   {
    "a": "0xfc667adba8d4837586078f4fdcdc29804337ca06",
    "name": null,
-   "month": 23037022,
-   "all": 47915142
+   "month": 24807544,
+   "all": 48445704
+  },
+  {
+   "a": "0x856c35038594767646266bc7fd68dc26480e910d",
+   "name": null,
+   "month": 66779,
+   "all": 47114814
   },
   {
    "a": "0x418aa6bf98a2b2bc93779f810330d88cde488888",
    "name": null,
-   "month": 2518279,
-   "all": 36983595
+   "month": 3367422,
+   "all": 37661998
   },
   {
    "a": "0x807a2e2e469df84b299da5f90f15dda4380daca1",
    "name": null,
-   "month": 40138,
-   "all": 33387315
+   "month": 44410,
+   "all": 33005000
   },
   {
    "a": "0x99967871e6c4f9a5185abc57edede9e9540191f6",
    "name": null,
-   "month": 4587198,
-   "all": 28508668
+   "month": 4592652,
+   "all": 28745065
   },
   {
    "a": "0xcac19662ec88d23fa1c81ac0e8570b0cf2ff26b3",
    "name": null,
-   "month": 1932518,
-   "all": 27909531
+   "month": 2342022,
+   "all": 28095191
   },
   {
    "a": "0xd4c1f7e8d876c4749228d515473d36f919583d1d",
    "name": null,
-   "month": 5619710,
-   "all": 26582787
+   "month": 6628502,
+   "all": 27389156
   },
   {
    "a": "0x6859da14835424957a1e6b397d8026b1d9ff7e1e",
    "name": null,
-   "month": 2221554,
-   "all": 25991355
+   "month": 2972622,
+   "all": 26507024
   },
   {
    "a": "0xe86b057f5eb764c9738d6b0d38170befd0723664",
    "name": null,
-   "month": 2403446,
-   "all": 24469332
+   "month": 2576851,
+   "all": 24723945
   },
   {
    "a": "0xc926ddba8b7617dbc65712f20cf8e1b58b8598d3",
    "name": null,
-   "month": 3759000,
-   "all": 23842289
-  },
-  {
-   "a": "0xdafc555a97b358bc09fccf4c0e583c1ec5838b16",
-   "name": "Prison Su Zhu",
-   "month": 317816,
-   "all": 23079199
-  },
-  {
-   "a": "0xbf732ea04197942783e34730ed6e0f6099575d58",
-   "name": null,
-   "month": 1533827,
-   "all": 22960268
+   "month": 3498792,
+   "all": 23565837
   },
   {
    "a": "0xfc27136e42af1732ddc9ce2605ea9bff1b959d9d",
    "name": "John Wick",
-   "month": 17893299,
-   "all": 22531401
+   "month": 19383932,
+   "all": 23443904
   },
   {
-   "a": "0xf5d81a135f756ca16544e53c20fc20643ec3ad53",
-   "name": null,
-   "month": 28671936,
-   "all": 20784869
+   "a": "0xdafc555a97b358bc09fccf4c0e583c1ec5838b16",
+   "name": "Prison Su Zhu",
+   "month": 358669,
+   "all": 23038564
   },
   {
-   "a": "0x3fc56e944aa7b1594c85861b2d46a07f82a2c0c1",
+   "a": "0xbf732ea04197942783e34730ed6e0f6099575d58",
    "name": null,
-   "month": 1959457,
-   "all": 20480659
+   "month": 939934,
+   "all": 22208977
   },
   {
    "a": "0xb695651daa495f59dd2725c6fe98322d8b51a92d",
    "name": null,
-   "month": 20350888,
-   "all": 19772552
+   "month": 22874564,
+   "all": 21291597
   },
   {
-   "a": "0x8cc94dc843e1ea7a19805e0cca43001123512b6a",
+   "a": "0x3fc56e944aa7b1594c85861b2d46a07f82a2c0c1",
    "name": null,
-   "month": 4079103,
-   "all": 19426291
+   "month": 2217603,
+   "all": 20674324
   }
  ]
 }
