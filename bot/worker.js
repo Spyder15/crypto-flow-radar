@@ -132,8 +132,10 @@ export default {
   scheduled(e, env, ctx) {
     if (e.cron === "*/5 * * * *") {
       const m = new Date(e.scheduledTime).getUTCMinutes();
+      const whaleAlertsEnabled = env.ENABLE_WHALE_ALERTS === "1";
       if (m % 15 === 0) ctx.waitUntil(track(env, (t, ev, info) => notifyUpdate(env, t, ev, info)).then((r) => console.log("track", JSON.stringify(r))));
-      if (m % 15 !== 0 && env.CRYPTO_EXTRAS !== "0") ctx.waitUntil(whaleWatch(env, (text) => tg(env, text)).catch(() => {}));
+      // Whale wallet alerts are disabled by default; enable explicitly via ENABLE_WHALE_ALERTS=1 if desired.
+      if (m % 15 !== 0 && whaleAlertsEnabled) ctx.waitUntil(whaleWatch(env, (text) => tg(env, text)).catch(() => {}));
       if (m % 15 === 7) ctx.waitUntil(watchdog(env, (text) => tg(env, text)).catch(() => {}));
       if (m % 15 === 5 && m !== 5) ctx.waitUntil(spyderTrack(env, (text, reply, chart) => tg(env, text, chart, reply)).catch(() => {}));
       if (m % 15 === 10 && env.CRYPTO_EXTRAS !== "0") ctx.waitUntil(ideaTrack(env, (text) => tg(env, text)).catch(() => {}));
