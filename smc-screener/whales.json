@@ -1,155 +1,155 @@
 {
- "updated": "2026-11-20T03:07:32.593Z",
+ "updated": "2026-11-21T03:07:15.916Z",
  "wallets": [
   {
    "a": "0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00",
    "name": null,
-   "month": 29819300,
-   "all": 232106904
+   "month": 35263847,
+   "all": 234051465
   },
   {
    "a": "0x7fdafde5cfb5465924316eced2d3715494c517d1",
    "name": "BobbyBigSize",
-   "month": 40140042,
-   "all": 178556075
-  },
-  {
-   "a": "0x880ac484a1743862989a441d6d867238c7aa311c",
-   "name": "x.com/SilkBtc",
-   "month": 5404428,
-   "all": 123013067
+   "month": 49353867,
+   "all": 184069151
   },
   {
    "a": "0x45d26f28196d226497130c4bac709d808fed4029",
    "name": null,
-   "month": 42297298,
-   "all": 98876122
+   "month": 51875900,
+   "all": 104714850
   },
   {
    "a": "0xd47587702a91731dc1089b5db0932cf820151a91",
    "name": null,
-   "month": 12681224,
-   "all": 79779592
+   "month": 15423554,
+   "all": 81481720
   },
   {
    "a": "0x7dacca323e44f168494c779bb5e7483c468ef410",
    "name": null,
-   "month": 2673675,
-   "all": 62390599
+   "month": 3484593,
+   "all": 62399601
   },
   {
    "a": "0x8e096995c3e4a3f0bc5b3ea1cba94de2aa4d70c9",
    "name": "憨巴小龙",
-   "month": 1372728,
-   "all": 60845832
+   "month": 2576065,
+   "all": 62001908
   },
   {
    "a": "0x77375a8c9d13bf79afb2a87f1b0ac1dfd5f5bf66",
    "name": null,
-   "month": 2859697,
-   "all": 57334262
+   "month": 3311570,
+   "all": 57971639
   },
   {
    "a": "0xfc667adba8d4837586078f4fdcdc29804337ca06",
    "name": null,
-   "month": 19726032,
-   "all": 53042582
-  },
-  {
-   "a": "0x010461c14e146ac35fe42271bdc1134ee31c703a",
-   "name": null,
-   "month": 62464,
-   "all": 46203953
+   "month": 24632008,
+   "all": 56873128
   },
   {
    "a": "0xf5d81a135f756ca16544e53c20fc20643ec3ad53",
    "name": null,
-   "month": 44773224,
-   "all": 42416253
+   "month": 54927152,
+   "all": 52584244
+  },
+  {
+   "a": "0x010461c14e146ac35fe42271bdc1134ee31c703a",
+   "name": null,
+   "month": 70992,
+   "all": 46199231
   },
   {
    "a": "0xb695651daa495f59dd2725c6fe98322d8b51a92d",
    "name": null,
-   "month": 39808462,
-   "all": 40173274
+   "month": 47800413,
+   "all": 45445907
   },
   {
    "a": "0xfc27136e42af1732ddc9ce2605ea9bff1b959d9d",
-   "name": "John Wick",
-   "month": 33158785,
-   "all": 39045516
+   "name": null,
+   "month": 39094319,
+   "all": 43434154
   },
   {
    "a": "0x15a4f009bb324a3fb9e36137136b201e3fe0dfdb",
    "name": null,
-   "month": 9131486,
-   "all": 36536937
+   "month": 10643835,
+   "all": 40179788
   },
   {
    "a": "0xdf954bbe619273a56e0cfa90dad8382195dc7d72",
    "name": null,
-   "month": 38374612,
-   "all": 31752931
+   "month": 45692756,
+   "all": 37274889
   },
   {
    "a": "0xcac19662ec88d23fa1c81ac0e8570b0cf2ff26b3",
    "name": null,
-   "month": 4565214,
-   "all": 30502599
+   "month": 6808967,
+   "all": 31849888
   },
   {
    "a": "0x6859da14835424957a1e6b397d8026b1d9ff7e1e",
    "name": null,
-   "month": 6286701,
-   "all": 29886113
-  },
-  {
-   "a": "0xd4c1f7e8d876c4749228d515473d36f919583d1d",
-   "name": null,
-   "month": 8467957,
-   "all": 29225089
-  },
-  {
-   "a": "0x99967871e6c4f9a5185abc57edede9e9540191f6",
-   "name": null,
-   "month": 2614489,
-   "all": 29205723
+   "month": 7875449,
+   "all": 30786114
   },
   {
    "a": "0xfe7ce058edc7cfcde9ef8262ba51f8d4796ab7ae",
    "name": null,
-   "month": 23865831,
-   "all": 25917322
+   "month": 29436670,
+   "all": 30664514
   },
   {
-   "a": "0xe86b057f5eb764c9738d6b0d38170befd0723664",
+   "a": "0xd4c1f7e8d876c4749228d515473d36f919583d1d",
    "name": null,
-   "month": 2766857,
-   "all": 25395972
+   "month": 10269481,
+   "all": 29997203
+  },
+  {
+   "a": "0x99967871e6c4f9a5185abc57edede9e9540191f6",
+   "name": null,
+   "month": 3064261,
+   "all": 29557654
   },
   {
    "a": "0x218a65e21eddeece7a9df38c6bbdd89f692b7da2",
    "name": null,
-   "month": 21688955,
-   "all": 24614317
+   "month": 25464960,
+   "all": 27295815
   },
   {
-   "a": "0x3fc56e944aa7b1594c85861b2d46a07f82a2c0c1",
+   "a": "0xe86b057f5eb764c9738d6b0d38170befd0723664",
    "name": null,
-   "month": 4176169,
-   "all": 22650925
-  },
-  {
-   "a": "0x8cc94dc843e1ea7a19805e0cca43001123512b6a",
-   "name": null,
-   "month": 5962901,
-   "all": 22466561
+   "month": 3111819,
+   "all": 25480671
   },
   {
    "a": "0xca4903c207a0df58bf37d4bc8bbc5210726f53c8",
    "name": null,
-   "month": 18846105,
-   "all": 22066440
+   "month": 22376857,
+   "all": 24724480
+  },
+  {
+   "a": "0x8cc94dc843e1ea7a19805e0cca43001123512b6a",
+   "name": null,
+   "month": 6830072,
+   "all": 23181876
+  },
+  {
+   "a": "0x3fc56e944aa7b1594c85861b2d46a07f82a2c0c1",
+   "name": null,
+   "month": 5020479,
+   "all": 23039913
+  },
+  {
+   "a": "0x3dc908374e11623d8eb9f07dfc7a2e5e803a54b0",
+   "name": null,
+   "month": 23580472,
+   "all": 21287534
   }
  ]
 }
