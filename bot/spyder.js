@@ -3,6 +3,7 @@
 import { klines, klines15 } from "./data.js";
 import { renderChart } from "./chart.js";
 import { spyderSignal, evaluate } from "./spyder-strategy.js";
+import { addOpenKey, openKeys, removeOpenKey } from "./open-index.js";
 
 const HOUR = 36e5, RR = 1, MAX_DAY = 8, MAX_OPEN = 12;
 const fmt = (x) => (x >= 100 ? x.toFixed(2) : x >= 1 ? x.toFixed(3) : x >= 0.01 ? x.toFixed(5) : x.toPrecision(4));
@@ -27,25 +28,29 @@ export async function spyderCheck(env, sym, d, send) {
   const s = spyderSignal(d); if (!s) return 0;
   const seen = `sp:s:${sym}:${s.t}`, day = new Date().toISOString().slice(0, 10); let calls = 1;
   if (await env.TRADES.get(seen)) return calls;
-  calls++; if ((await env.TRADES.list({ prefix: `sp:o:${sym}:`, limit: 1 })).keys.length) return calls;
+  const keys = await openKeys(env, "sp:o:index", "sp:o:");
+  calls++; if (keys.some((key) => key.startsWith(`sp:o:${sym}:`))) return calls;
   calls++; if ((+(await env.TRADES.get("sp:d:" + day)) || 0) >= MAX_DAY) return calls;
-  calls++; if ((await env.TRADES.list({ prefix: "sp:o:", limit: MAX_OPEN })).keys.length >= MAX_OPEN) return calls;
+  calls++; if (keys.length >= MAX_OPEN) return calls;
   const risk = Math.abs(s.entry - s.sl), t = { sym, side: s.side, entry: s.entry, sl: s.sl, rr: RR, tp: s.side === "LONG" ? s.entry + RR * risk : s.entry - RR * risk, riskPct: (risk / s.entry) * 100, t0: s.t + HOUR, cursor: 0 };
   calls += 2; const chart = await chartFor(d, t, null);
   calls++; t.msg = await send(entryText(t), null, chart); // a failed send throws: nothing is saved, so no phantom trade
   await env.TRADES.put(seen, "1", { expirationTtl: 6 * 3600 });
   await env.TRADES.put("sp:d:" + day, String((+(await env.TRADES.get("sp:d:" + day)) || 0) + 1), { expirationTtl: 2 * 86400 });
-  await env.TRADES.put(`sp:o:${sym}:${t.t0}`, JSON.stringify(t), { expirationTtl: 20 * 86400 });
+  const key = `sp:o:${sym}:${t.t0}`;
+  await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 20 * 86400 });
+  await addOpenKey(env, "sp:o:index", "sp:o:", key);
   return calls + 3;
 }
 
 // Checks open Spyder trades against closed 15m candles. A trade is saved only after its Telegram message went out, so a failed one is retried next run.
 export async function spyderTrack(env, send, maxCalls = 20) {
   const now = Date.now(), done = [], errors = []; let calls = 1;
-  for (const { name } of (await env.TRADES.list({ prefix: "sp:o:" })).keys) {
+  for (const name of await openKeys(env, "sp:o:index", "sp:o:")) {
     if (calls + 3 > maxCalls) break;
-    const t = await env.TRADES.get(name, "json"); calls++; if (!t) continue;
-    if (now - t.t0 > 7 * 864e5) { await record(env, { ...t, outcome: "EXPIRED", r: null }); await env.TRADES.delete(name); calls += 3; continue; }
+    const t = await env.TRADES.get(name, "json"); calls++;
+    if (!t) { await removeOpenKey(env, "sp:o:index", "sp:o:", name); continue; }
+    if (now - t.t0 > 7 * 864e5) { await record(env, { ...t, outcome: "EXPIRED", r: null }); await env.TRADES.delete(name); await removeOpenKey(env, "sp:o:index", "sp:o:", name); calls += 3; continue; }
     let cs; try { calls++; cs = await klines15(t.sym, Math.max(t.t0, (t.cursor || 0) + 1)); } catch (e) { errors.push(e.message); continue; }
     cs = cs.filter((c) => c.t >= t.t0 && c.t > (t.cursor || 0) && c.t + 15 * 60e3 <= now);
     if (!cs.length) continue;
@@ -56,7 +61,9 @@ export async function spyderTrack(env, send, maxCalls = 20) {
         try { calls += 2; const k = await klines(t.sym, "1h"), d = k.slice(0, -1).map((x) => ({ t: +x[0], o: +x[1], h: +x[2], l: +x[3], c: +x[4] })); chart = await chartFor(d, t, { title: ev.type === "TP" ? "TARGET HIT" : "STOP LOSS HIT", tpHit: 0, slCur: null, marks: [{ t: t.cursor, y: ev.price, text: ev.type === "TP" ? "✔ TARGET" : "✖ SL" }] }); } catch (e) { /* text only */ }
         calls++; await send(eventText(t, ev), t.msg, chart);
       } catch (e) { errors.push("notify " + e.message); continue; } }
-    calls++; if (t.closed) { await record(env, t); await env.TRADES.delete(name); calls += 2; done.push(`${t.sym} ${t.outcome}`); } else if (ev || t.cursor - was >= 6 * 36e5) await env.TRADES.put(name, JSON.stringify(t), { expirationTtl: 20 * 86400 }); // only persist on events or every ~6h (KV writes)
+    calls++;
+    if (t.closed) { await record(env, t); await env.TRADES.delete(name); await removeOpenKey(env, "sp:o:index", "sp:o:", name); calls += 2; done.push(`${t.sym} ${t.outcome}`); }
+    else if (ev || t.cursor - was >= 6 * 36e5) await env.TRADES.put(name, JSON.stringify(t), { expirationTtl: 20 * 86400 }); // only persist on events or every ~6h (KV writes)
   }
   console.log("spyder track", JSON.stringify({ done, errors }));
   return { done, errors: errors.slice(0, 5) };

@@ -1,6 +1,7 @@
 // Trade tracking: KV holds open trades; a 15m cron walks candles and posts TP/SL updates; weekly report from closed trades.
 import { fmt } from "./chart.js";
 import { klines15 } from "./data.js";
+import { openKeys, removeOpenKey } from "./open-index.js";
 
 // 15m and sub-6/8 signals only came from manual format tests; keep them out of the stats
 export const isLive = (t) => t.tf !== "15m" && t.passed >= 6;
@@ -60,12 +61,13 @@ export function trackInfo(t, events, i) {
 }
 
 export async function loadOpen(env) {
-  const out = []; let cursor;
-  do {
-    const l = await env.TRADES.list({ prefix: "o:", cursor });
-    for (const k of l.keys) { const v = await env.TRADES.get(k.name, "json"); if (v) out.push([k.name, v]); }
-    cursor = l.list_complete ? undefined : l.cursor;
-  } while (cursor);
+  const keys = await openKeys(env, "o:index", "o:");
+  const out = [];
+  for (const key of keys) {
+    const trade = await env.TRADES.get(key, "json");
+    if (trade) out.push([key, trade]);
+    else await removeOpenKey(env, "o:index", "o:", key);
+  }
   return out;
 }
 
@@ -96,14 +98,18 @@ export async function weekly(env, days = 7, now = Date.now()) {
 export async function track(env, notify) {
   const now = Date.now(), done = [], errors = []; let calls = 0;
   for (const [key, t] of await loadOpen(env)) {
-    if (t.closed && !t.pending?.length) { await env.TRADES.delete(key); continue; }
-    if (now - t.t0 > (MAX_AGE[t.tf] || 7 * DAY)) { t.closed = true; t.outcome = "EXPIRED"; t.r = null; await recordClosed(env, t); await env.TRADES.delete(key); done.push(key + " expired"); continue; }
+    if (t.closed && !t.pending?.length) { await env.TRADES.delete(key); await removeOpenKey(env, "o:index", "o:", key); continue; }
+    if (now - t.t0 > (MAX_AGE[t.tf] || 7 * DAY)) { t.closed = true; t.outcome = "EXPIRED"; t.r = null; await recordClosed(env, t); await env.TRADES.delete(key); await removeOpenKey(env, "o:index", "o:", key); done.push(key + " expired"); continue; }
     if (calls > 36) break; // free plan: 50 subrequests per run
     if (t.pending?.length) { // alerts that failed to send earlier: retry text-only
       const left = [];
       for (const ev of t.pending) { try { calls++; t.msg = (await notify(t, ev, null)) || t.msg; } catch (e) { errors.push("retry " + e.message); left.push(ev); } }
       t.pending = left.length ? left : undefined;
-      if (t.closed) { if (t.pending) await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 }); else await env.TRADES.delete(key); continue; }
+      if (t.closed) {
+        if (t.pending) await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 });
+        else { await env.TRADES.delete(key); await removeOpenKey(env, "o:index", "o:", key); }
+        continue;
+      }
       await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 });
     }
     calls += 2; let cs; // candles + chart data
@@ -114,7 +120,11 @@ export async function track(env, notify) {
     for (const [i, ev] of events.entries()) {
       try { calls += 2; t.msg = (await notify(t, ev, trackInfo(t, events, i))) || t.msg; } catch (e) { errors.push("notify " + e.message); (t.pending = t.pending || []).push(ev); }
     }
-    if (t.closed) { await recordClosed(env, t); if (t.pending?.length) await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 }); else await env.TRADES.delete(key); } else if (events.length || t.cursor - was >= 6 * 36e5) await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 }); // evaluate is idempotent: only persist on events or every ~6h (KV writes)
+    if (t.closed) {
+      await recordClosed(env, t);
+      if (t.pending?.length) await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 });
+      else { await env.TRADES.delete(key); await removeOpenKey(env, "o:index", "o:", key); }
+    } else if (events.length || t.cursor - was >= 6 * 36e5) await env.TRADES.put(key, JSON.stringify(t), { expirationTtl: 33 * 86400 }); // evaluate is idempotent: only persist on events or every ~6h (KV writes)
     if (events.length) done.push(`${t.sym} ${events.map((e) => e.type).join(",")}`);
   }
   // KV free tier: ~1000 writes/day. Healthy runs refresh the heartbeat at most every 25 min (watchdog threshold is 45).

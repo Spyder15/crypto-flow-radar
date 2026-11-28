@@ -6,6 +6,7 @@ import { TF_MS, CHECKS, buildRow, findSignals, confirmations, trendScore } from 
 import { renderChart, fmt } from "./chart.js";
 import { spyderCheck, spyderTrack, spyderStats, spyderSample } from "./spyder.js";
 import { tickers, klines, openInterest } from "./data.js";
+import { addOpenKey, openKeys } from "./open-index.js";
 
 // Per-timeframe strategies, picked from the backtest (bot/README.md).
 const STRAT = { "1h": {}, "4h": { fib: { minLeg: 4 } }, "1d": {} };
@@ -94,7 +95,7 @@ export async function run(env, { force = false, batch = 0, minConf, tf: tfArg, t
       if (test && sent.length >= 2) break; // test mode: at most 2 samples
       if (env.TRADES && !test && (await env.TRADES.get(seen))) continue; // already posted for this candle
       if (env.TRADES && !test) {
-        if ((await env.TRADES.list({ prefix: `o:${s.sym}:`, limit: 1 })).keys.length) { errors.push(s.sym + " skipped: trade already open"); continue; }
+        if ((await openKeys(env, "o:index", "o:")).some((key) => key.startsWith(`o:${s.sym}:`))) { errors.push(s.sym + " skipped: trade already open"); continue; }
         if ((+(await env.TRADES.get("d:" + day)) || 0) >= maxDay) { errors.push("daily signal cap reached"); break; }
       }
       calls += 2; let chart = null; try { chart = await renderChart(r, s); } catch (e) { console.log("chart failed", e.message); }
@@ -104,7 +105,9 @@ export async function run(env, { force = false, batch = 0, minConf, tf: tfArg, t
         const trade = { sym: s.sym, side: s.side, tf, kind: s.kind, lvl: s.lvl, entry: s.entry, sl: s.sl, tps: s.tps, riskPct: s.riskPct, passed, t0, stage: 0, cursor: 0, msg };
         await env.TRADES.put(seen, "1", { expirationTtl: 6 * 3600 });
         await env.TRADES.put("d:" + day, String((+(await env.TRADES.get("d:" + day)) || 0) + 1), { expirationTtl: 2 * 86400 });
-        await env.TRADES.put(`o:${s.sym}:${tf}:${t0}`, JSON.stringify(trade), { expirationTtl: 33 * 86400 });
+        const key = `o:${s.sym}:${tf}:${t0}`;
+        await env.TRADES.put(key, JSON.stringify(trade), { expirationTtl: 33 * 86400 });
+        await addOpenKey(env, "o:index", "o:", key);
       }
       sent.push(`${s.sym} ${s.side} ${s.kind} ${passed}/8`);
     }
