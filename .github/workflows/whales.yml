@@ -34,10 +34,6 @@ jobs:
           git add smc-screener/whales.json
           git commit -m "Refresh whale wallet list"
           git push
-      - name: List KV namespaces
-        run: npx --yes wrangler@4.169.0 kv namespace list
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       # Deploys the worker so the bot and site pick up the new list. Needs the CLOUDFLARE_API_TOKEN repo secret.
       - name: Deploy worker
         if: ${{ env.CF_TOKEN != '' }}
