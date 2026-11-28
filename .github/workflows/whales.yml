@@ -4,6 +4,13 @@ on:
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "bot/**"
+      - "smc-screener/**"
+      - "wrangler.jsonc"
+      - ".github/workflows/whales.yml"
 
 permissions:
   contents: write
