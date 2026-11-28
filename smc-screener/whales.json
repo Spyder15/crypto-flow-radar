@@ -1,155 +1,155 @@
 {
- "updated": "2026-11-28T03:07:19.725Z",
+ "updated": "2026-11-28T14:01:41.451Z",
  "wallets": [
   {
    "a": "0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00",
    "name": null,
-   "month": 28635814,
-   "all": 233977521
+   "month": 29594879,
+   "all": 234289381
   },
   {
    "a": "0x7fdafde5cfb5465924316eced2d3715494c517d1",
    "name": "BobbyBigSize",
-   "month": 37640990,
-   "all": 183605354
+   "month": 39228829,
+   "all": 185177006
   },
   {
    "a": "0x77375a8c9d13bf79afb2a87f1b0ac1dfd5f5bf66",
    "name": null,
-   "month": 6461795,
-   "all": 59296060
+   "month": 6624207,
+   "all": 59056191
   },
   {
    "a": "0x023a3d058020fb76cca98f01b3c48c8938a22355",
    "name": "Auros",
-   "month": 4323005,
-   "all": 58947296
+   "month": 4327302,
+   "all": 58906909
   },
   {
    "a": "0x856c35038594767646266bc7fd68dc26480e910d",
    "name": null,
-   "month": 224277,
-   "all": 46686703
+   "month": 308447,
+   "all": 46267946
   },
   {
    "a": "0x15a4f009bb324a3fb9e36137136b201e3fe0dfdb",
    "name": null,
-   "month": 17682974,
-   "all": 42204727
+   "month": 18714389,
+   "all": 43236143
   },
   {
    "a": "0xe86b057f5eb764c9738d6b0d38170befd0723664",
    "name": null,
-   "month": 2227506,
-   "all": 25639285
+   "month": 2202525,
+   "all": 25614304
   },
   {
    "a": "0xc926ddba8b7617dbc65712f20cf8e1b58b8598d3",
    "name": null,
-   "month": 3380948,
-   "all": 25302283
+   "month": 2769884,
+   "all": 24597736
   },
   {
    "a": "0x31dea2516beee92135b96f464eeec3cf292a13f2",
    "name": null,
-   "month": 342107,
-   "all": 17104505
+   "month": 324004,
+   "all": 17053992
   },
   {
    "a": "0xceec48581b3145a575508719f45da07dc57fa7ce",
    "name": null,
-   "month": 4661801,
-   "all": 16158518
+   "month": 5167786,
+   "all": 16075258
+  },
+  {
+   "a": "0x5f94a51948d2376ad34a6fadfa2544e651b74b96",
+   "name": null,
+   "month": 127056,
+   "all": 15394641
   },
   {
    "a": "0xa2d1dd0f09239349354b662f75fbd81f3dbc824e",
    "name": null,
-   "month": 830,
-   "all": 15759794
+   "month": 949,
+   "all": 15326353
   },
   {
    "a": "0x2025137a136bea7446deba681cbfc7cf1970840e",
    "name": null,
-   "month": 347204,
-   "all": 13917297
+   "month": 320258,
+   "all": 13867248
   },
   {
    "a": "0x94dac1facdc4afd2614c3119447187b4143bc449",
    "name": "thank you efee",
-   "month": 143226,
-   "all": 13122104
+   "month": 161457,
+   "all": 12970278
+  },
+  {
+   "a": "0xfce053a5e461683454bf37ad66d20344c0e3f4c0",
+   "name": null,
+   "month": 2679780,
+   "all": 12358355
   },
   {
    "a": "0x71dfc07de32c2ebf1c4801f4b1c9e40b76d4a23d",
    "name": "DOXXED",
-   "month": 773987,
-   "all": 11883679
+   "month": 848317,
+   "all": 11935344
   },
   {
    "a": "0x523852be2db1a76a0e088ecbff32e849544054e5",
    "name": "perpfumbler",
-   "month": 843537,
-   "all": 10959382
+   "month": 824225,
+   "all": 10915701
   },
   {
    "a": "0xaea8e3bd369217cc6e3e6abddf0da318fba8e59b",
    "name": null,
-   "month": 1831292,
-   "all": 9705211
-  },
-  {
-   "a": "0x67fcc46ed2a63971697dad2fc7bb0091fe89e51d",
-   "name": null,
-   "month": 634230,
-   "all": 8664891
+   "month": 1908156,
+   "all": 9782075
   },
   {
    "a": "0x27c9fa86c91b84ddfa15de58c482ff662498d65d",
    "name": null,
-   "month": 3768970,
-   "all": 8092351
+   "month": 3919711,
+   "all": 8241543
   },
   {
    "a": "0xd6e1a6f7bb47aca69aaa511210227d40926ff256",
    "name": null,
-   "month": 1095129,
-   "all": 7613721
+   "month": 1141238,
+   "all": 7658891
   },
   {
    "a": "0x888e000c78b8f1aada5b3c99f880794907b76d77",
    "name": null,
-   "month": 1852800,
-   "all": 7533708
+   "month": 1858582,
+   "all": 7524185
   },
   {
    "a": "0x6891ed9ee6a9d0649ffac2bcee814e6899a0e075",
    "name": null,
-   "month": 239459,
-   "all": 6815835
-  },
-  {
-   "a": "0xd2b2a8ab7a8c903501f4db4ee45c67522a4511ed",
-   "name": null,
-   "month": 606576,
-   "all": 6765902
+   "month": 254783,
+   "all": 6756460
   },
   {
    "a": "0xd6e56265890b76413d1d527eb9b75e334c0c5b42",
    "name": null,
-   "month": 610109,
-   "all": 6627078
+   "month": 541048,
+   "all": 6558017
   },
   {
-   "a": "0x10e14ba2d77263543be1bdb2851b0933ddf4f4bd",
+   "a": "0xd2b2a8ab7a8c903501f4db4ee45c67522a4511ed",
    "name": null,
-   "month": 3657105,
-   "all": 6265689
+   "month": 546267,
+   "all": 6498753
   },
   {
-   "a": "0xd9012a0c82242b04ee09e45e98b24903f982d975",
+   "a": "0xfb1898bb5955fdd11704e397104c6a0e0725eb17",
    "name": null,
-   "month": 1514815,
-   "all": 6109800
+   "month": 7454553,
+   "all": 6452748
   }
  ]
 }
