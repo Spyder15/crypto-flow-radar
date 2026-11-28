@@ -11,6 +11,30 @@
   const when = (ms) => new Date(ms).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   const sum = (a) => a.reduce((x, y) => x + y, 0), avg = (a) => (a.length ? sum(a) / a.length : 0);
 
+  function normalizeTrade(t, closed = false) {
+    const targets = Array.isArray(t.tps) ? t.tps : [t.t1, t.t2, t.t3 ?? t.t2].filter((x) => x != null);
+    return {
+      ...t,
+      sym: t.sym ?? t.sy ?? "",
+      side: t.side ?? (t.long === true ? "LONG" : t.long === false ? "SHORT" : ""),
+      tf: t.tf ?? "1h",
+      kind: t.kind ?? "Signal",
+      tps: targets,
+      stage: t.stage ?? 0,
+      passed: t.passed ?? t.conf ?? 0,
+      opened: t.opened ?? t.t0 ?? 0,
+      closed: closed ? (t.closed ?? t.t1c ?? t.closedAt ?? t.t0 ?? 0) : t.closed,
+    };
+  }
+
+  function normalizeData(d) {
+    if (!d || !Array.isArray(d.open) || !Array.isArray(d.closed)) throw new Error("Invalid trades response");
+    return {
+      open: d.open.map((t) => normalizeTrade(t)),
+      closed: d.closed.map((t) => normalizeTrade(t, true)),
+    };
+  }
+
   function stats(closed) {
     const t = closed.filter((x) => x.r !== null).sort((a, b) => a.closed - b.closed), rs = t.map((x) => x.r);
     const wins = t.filter((x) => x.r > 0.05), loss = t.filter((x) => x.r < -0.05), be = t.length - wins.length - loss.length;
@@ -125,6 +149,12 @@
   }
   const preview = new URLSearchParams(location.search).has("preview"); // ?preview shows the last 14 days of BACKTEST trades, not live results
   let data; // kept so a resize redraws without refetching
-  fetch(preview ? "preview.json" : API).then((r) => r.json()).then((d) => { data = d; render(d); }).catch(() => { $("status").textContent = "Could not load trades."; });
+  fetch(preview ? "preview.json" : API).then((r) => {
+    if (!r.ok) throw new Error("Trades API returned " + r.status);
+    return r.json();
+  }).then(normalizeData).then((d) => { data = d; render(d); }).catch((e) => {
+    console.error("Could not load trades:", e);
+    $("status").textContent = "Could not load trades.";
+  });
   let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => data && render(data), 200); });
 })();

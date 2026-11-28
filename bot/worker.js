@@ -167,14 +167,9 @@ export default {
     if (u.pathname === "/api/ideas" && env.TRADES) return Response.json(await ideaStats(env), { headers: { "cache-control": "public, max-age=60", "access-control-allow-origin": "*" } });
     if (ok && u.pathname === "/__ideas") return Response.json(await ideaTrack(env, (text) => tg(env, text)));
     if (u.pathname === "/api/trades" && env.TRADES) {
-      const cache = caches.default, ck = new Request(u.origin + "/api/trades");
-      const hit = await cache.match(ck);
-      if (hit) return hit;
       const pub = (t) => ({ sym: t.sym, side: t.side, tf: t.tf, kind: t.kind, entry: t.entry, sl: t.sl, tps: t.tps, stage: t.stage, t0: t.t0, passed: t.passed });
       const open = (await loadOpen(env)).filter(([, t]) => isLive(t)).map(([, t]) => pub(t)), closed = ((await env.TRADES.get("closed", "json")) || []).filter(isLive);
-      const res = Response.json({ open, closed }, { headers: { "cache-control": "public, max-age=60", "access-control-allow-origin": "*" } });
-      await cache.put(ck, res.clone());
-      return res;
+      return Response.json({ open, closed }, { headers: { "cache-control": "no-store", "access-control-allow-origin": "*" } });
     }
     if (ok && u.pathname === "/__run") {
       try { return Response.json(await run(env, { force: true, tf: u.searchParams.get("tf") || undefined, batch: +u.searchParams.get("batch") || 0, minConf: +u.searchParams.get("min") || 0, test: u.searchParams.get("test") === "1" })); } catch (e) { return new Response(String(e.message), { status: 500 }); }
