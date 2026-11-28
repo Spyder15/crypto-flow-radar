@@ -32,6 +32,7 @@
     return {
       open: d.open.map((t) => normalizeTrade(t)),
       closed: d.closed.map((t) => normalizeTrade(t, true)),
+      openUnavailable: d.openUnavailable === true,
     };
   }
 
@@ -94,7 +95,7 @@
   const sideCell = (s) => ({ text: s, cls: s === "LONG" ? "good" : "bad" });
   const best = (obj, pick) => Object.entries(obj).sort((a, b) => pick * (b[1] - a[1]))[0];
 
-  function render({ open, closed }) {
+  function render({ open, closed, openUnavailable }) {
     const S = stats(closed), n = S.t.length, now = Date.now(), today = day(now);
     const wk = Object.entries(S.week).sort().pop(), month = sum(S.t.filter((x) => new Date(x.closed).getMonth() === new Date(now).getMonth() && now - x.closed < 40 * 864e5).map((x) => x.r));
     const wl = S.wins.length + S.loss.length, winPct = wl ? (100 * S.wins.length) / wl : 0, exp = n ? S.total / n : 0, wlRatio = S.avgLoss ? S.avgWin / Math.abs(S.avgLoss) : 0;
@@ -145,7 +146,7 @@
       if (S.total > 0 && n > 5) add("Your top 5 trades account for ", { b: Math.round((100 * top5) / S.total) + "%" }, " of net R" + (top5 > S.total ? " (the rest net negative)." : "."));
       if (n < 30) add("Only ", { b: String(n) }, " closed trades so far: too few to trust any of the above.");
     }
-    $("status").textContent = preview ? "BACKTEST PREVIEW: last 14 days of simulated trades, not real signals" : "Updated " + new Date().toLocaleTimeString() + " · trades tracked on 15m candles, refreshed every 15 minutes";
+    $("status").textContent = preview ? "BACKTEST PREVIEW: last 14 days of simulated trades, not real signals" : openUnavailable ? "Closed-trade stats shown · Open positions unavailable until Cloudflare KV quota resets" : "Updated " + new Date().toLocaleTimeString() + " · trades tracked on 15m candles, refreshed every 15 minutes";
   }
   const preview = new URLSearchParams(location.search).has("preview"); // ?preview shows the last 14 days of BACKTEST trades, not live results
   let data; // kept so a resize redraws without refetching

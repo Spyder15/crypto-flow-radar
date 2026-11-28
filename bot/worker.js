@@ -171,7 +171,14 @@ export default {
     if (ok && u.pathname === "/__ideas") return Response.json(await ideaTrack(env, (text) => tg(env, text)));
     if (u.pathname === "/api/trades" && env.TRADES) {
       const pub = (t) => ({ sym: t.sym, side: t.side, tf: t.tf, kind: t.kind, entry: t.entry, sl: t.sl, tps: t.tps, stage: t.stage, t0: t.t0, passed: t.passed });
-      const open = (await loadOpen(env)).filter(([, t]) => isLive(t)).map(([, t]) => pub(t)), closed = ((await env.TRADES.get("closed", "json")) || []).filter(isLive);
+      const closed = ((await env.TRADES.get("closed", "json")) || []).filter(isLive);
+      let open;
+      try { open = (await loadOpen(env)).filter(([, t]) => isLive(t)).map(([, t]) => pub(t)); }
+      catch (e) {
+        if (!(e instanceof Error) || !e.message.includes("KV list() limit exceeded for the day")) throw e;
+        console.error("Open trades unavailable until the KV list quota resets.");
+        return Response.json({ open: [], closed, openUnavailable: true }, { headers: { "cache-control": "public, max-age=30", "access-control-allow-origin": "*" } });
+      }
       return Response.json({ open, closed }, { headers: { "cache-control": "no-store", "access-control-allow-origin": "*" } });
     }
     if (ok && u.pathname === "/__run") {
